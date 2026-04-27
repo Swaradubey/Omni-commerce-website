@@ -87,8 +87,8 @@ export function DashboardSupport() {
   const fetchStats = async () => {
     setLoadingStats(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const res = await fetch('/api/support-tickets/stats', {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${baseUrl}/support-tickets/stats`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -110,8 +110,8 @@ export function DashboardSupport() {
   const fetchTickets = async () => {
     setLoadingTickets(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const res = await fetch('/api/support-tickets/zendesk', {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${baseUrl}/support-tickets/zendesk`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -137,8 +137,8 @@ export function DashboardSupport() {
   const fetchSystemTickets = async () => {
     setLoadingSystemTickets(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const res = await fetch('/api/support-tickets/admin', {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${baseUrl}/support-tickets/admin`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -159,8 +159,8 @@ export function DashboardSupport() {
 
   const handleUpdateStatus = async (ticketId: string, newStatus: string) => {
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const res = await fetch(`/api/support-tickets/${ticketId}/status`, {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${baseUrl}/support-tickets/${ticketId}/status`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
@@ -196,8 +196,8 @@ export function DashboardSupport() {
     e.preventDefault();
     setCreatingTicket(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const res = await fetch('/api/support-tickets/zendesk', {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${baseUrl}/support-tickets/zendesk`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

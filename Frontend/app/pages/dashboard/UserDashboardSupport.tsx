@@ -82,7 +82,8 @@ export function UserDashboardSupport() {
     setLoadingStats(true);
     try {
       const token = localStorage.getItem('eco_shop_token');
-      const res = await fetch('/api/support-tickets/my/stats', {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${baseUrl}/support-tickets/my/stats`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -105,7 +106,8 @@ export function UserDashboardSupport() {
     setLoadingSystemTickets(true);
     try {
       const token = localStorage.getItem('eco_shop_token');
-      const res = await fetch('/api/support-tickets/my', {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${baseUrl}/support-tickets/my`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -144,7 +146,8 @@ export function UserDashboardSupport() {
       };
 
       const token = localStorage.getItem('eco_shop_token');
-      const res = await fetch('/api/support-tickets', {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${baseUrl}/support-tickets`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

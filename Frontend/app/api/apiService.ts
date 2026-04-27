@@ -81,6 +81,13 @@ class ApiService {
       }
 
       if (!response.ok) {
+        // Safe error logging
+        console.error("Safe Error Log:", {
+          url: response.url,
+          status: response.status,
+          message: data.message || response.statusText
+        });
+        
         // Handle validation errors from backend
         if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
            throw new Error(data.errors.map((e: any) => e.msg || e.message).join(", "));

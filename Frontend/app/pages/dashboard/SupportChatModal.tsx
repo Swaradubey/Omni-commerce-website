@@ -42,7 +42,8 @@ export function SupportChatModal({ isOpen, onClose, tickets, onRefreshTickets }:
     setLoadingMessages(true);
     try {
       const token = localStorage.getItem('eco_shop_token');
-      const res = await fetch(`/api/support-tickets/zendesk/${ticketId}/comments?_t=${Date.now()}`, {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${baseUrl}/support-tickets/zendesk/${ticketId}/comments?_t=${Date.now()}`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -73,7 +74,8 @@ export function SupportChatModal({ isOpen, onClose, tickets, onRefreshTickets }:
     setSending(true);
     try {
       const token = localStorage.getItem('eco_shop_token');
-      const res = await fetch(`/api/support-tickets/zendesk/${selectedTicketId}/comments`, {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${baseUrl}/support-tickets/zendesk/${selectedTicketId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
