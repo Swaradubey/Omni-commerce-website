@@ -82,13 +82,19 @@ export function UserDashboardSupport() {
     setLoadingStats(true);
     try {
       const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
+      
+      console.log(`[Debug] Fetching user stats from: ${baseUrl}/support-tickets/my/stats`);
+      
       const res = await fetch(`${baseUrl}/support-tickets/my/stats`, {
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Authorization': `Bearer ${token}`,
         },
       });
+
+      console.log(`[Debug] User Stats Response Status: ${res.status}`);
+
       if (res.ok) {
          const data = await res.json();
          if (data.success && data.data) {
@@ -106,13 +112,19 @@ export function UserDashboardSupport() {
     setLoadingSystemTickets(true);
     try {
       const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
+      
+      console.log(`[Debug] Fetching my tickets from: ${baseUrl}/support-tickets/my`);
+      
       const res = await fetch(`${baseUrl}/support-tickets/my`, {
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Authorization': `Bearer ${token}`,
         },
       });
+
+      console.log(`[Debug] My Tickets Response Status: ${res.status}`);
+
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
@@ -146,15 +158,21 @@ export function UserDashboardSupport() {
       };
 
       const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
+      
+      console.log(`[Debug] Creating ticket at: ${baseUrl}/support-tickets`);
+      
       const res = await fetch(`${baseUrl}/support-tickets`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(payload)
       });
+
+      console.log(`[Debug] Create Ticket Response Status: ${res.status}`);
+
       const data = await res.json();
       if (data.success) {
         toast.success("Support ticket submitted successfully.");
@@ -170,6 +188,7 @@ export function UserDashboardSupport() {
         fetchStats();
         fetchMyTickets();
       } else {
+        console.error("[Debug] Create Ticket Error Response:", data.message || "Unknown error");
         toast.error(data.message || "Failed to create ticket.");
       }
     } catch(err) {

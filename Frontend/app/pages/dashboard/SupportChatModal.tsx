@@ -42,13 +42,18 @@ export function SupportChatModal({ isOpen, onClose, tickets, onRefreshTickets }:
     setLoadingMessages(true);
     try {
       const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
+      
+      console.log(`[Debug] Fetching messages for ticket ${ticketId} from: ${baseUrl}/support-tickets/zendesk/${ticketId}/comments`);
+      
       const res = await fetch(`${baseUrl}/support-tickets/zendesk/${ticketId}/comments?_t=${Date.now()}`, {
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Authorization': `Bearer ${token}`,
         },
       });
+      
+      console.log(`[Debug] Fetch Messages Response Status: ${res.status}`);
       
       const data = await res.json();
       if (res.ok && data.success) {
@@ -74,15 +79,20 @@ export function SupportChatModal({ isOpen, onClose, tickets, onRefreshTickets }:
     setSending(true);
     try {
       const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
+      
+      console.log(`[Debug] Sending message for ticket ${selectedTicketId} to: ${baseUrl}/support-tickets/zendesk/${selectedTicketId}/comments`);
+      
       const res = await fetch(`${baseUrl}/support-tickets/zendesk/${selectedTicketId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ message: cleanMessage, isPublic: true }),
       });
+      
+      console.log(`[Debug] Send Message Response Status: ${res.status}`);
       
       const data = await res.json();
       if (res.ok && data.success) {

@@ -87,18 +87,28 @@ export function DashboardSupport() {
   const fetchStats = async () => {
     setLoadingStats(true);
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('eco_shop_token');
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
+      
+      console.log(`[Debug] Fetching stats from: ${baseUrl}/support-tickets/stats`);
+      
       const res = await fetch(`${baseUrl}/support-tickets/stats`, {
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Authorization': `Bearer ${token}`,
         },
       });
+
+      console.log(`[Debug] Stats Response Status: ${res.status}`);
+      
       if (res.ok) {
          const data = await res.json();
          if (data.success && data.data) {
            setStats(data.data);
          }
+      } else {
+         const errorData = await res.json().catch(() => ({}));
+         console.error("[Debug] Stats Error Response:", errorData.message || "Unknown error");
       }
     } catch(err) {
       console.error("[Zendesk Stats Error]", err);
@@ -110,20 +120,49 @@ export function DashboardSupport() {
   const fetchTickets = async () => {
     setLoadingTickets(true);
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('eco_shop_token');
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
+      
+      console.log(`[Debug] Fetching Zendesk tickets from: ${baseUrl}/support-tickets/zendesk`);
+      
       const res = await fetch(`${baseUrl}/support-tickets/zendesk`, {
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Authorization': `Bearer ${token}`,
         },
       });
+
+      console.log(`[Debug] Zendesk Tickets Response Status: ${res.status}`);
+
       if (res.ok) {
          const data = await res.json();
-         if (data.success && data.data) {
+         console.log(`[Debug] Zendesk tickets count: ${data.data?.length || 0}`);
+         
+         if (data.success && data.data && data.data.length > 0) {
            setTickets(data.data);
+         } else {
+           console.log("[Debug] Zendesk returned empty, falling back to Admin MongoDB tickets...");
+           // Fallback to MongoDB tickets
+           const adminRes = await fetch(`${baseUrl}/support-tickets/admin`, {
+             headers: {
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${token}`,
+             },
+           });
+           
+           console.log(`[Debug] Admin Tickets Fallback Status: ${adminRes.status}`);
+           
+           if (adminRes.ok) {
+             const adminData = await adminRes.json();
+             console.log(`[Debug] Admin tickets count: ${adminData.data?.length || 0}`);
+             if (adminData.success && adminData.data) {
+               setTickets(adminData.data);
+             }
+           }
          }
       } else {
          const errorData = await res.json().catch(() => ({}));
+         console.error("[Debug] Zendesk Fetch Error Response:", errorData.message || "Unknown error");
          toast.error(errorData.message || "Failed to load Zendesk tickets.");
       }
     } catch(err) {
@@ -137,13 +176,20 @@ export function DashboardSupport() {
   const fetchSystemTickets = async () => {
     setLoadingSystemTickets(true);
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('eco_shop_token');
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
+      
+      console.log(`[Debug] Fetching system tickets from: ${baseUrl}/support-tickets/admin`);
+      
       const res = await fetch(`${baseUrl}/support-tickets/admin`, {
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Authorization': `Bearer ${token}`,
         },
       });
+
+      console.log(`[Debug] System Tickets Response Status: ${res.status}`);
+
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
@@ -159,15 +205,22 @@ export function DashboardSupport() {
 
   const handleUpdateStatus = async (ticketId: string, newStatus: string) => {
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('eco_shop_token');
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
+      
+      console.log(`[Debug] Updating ticket status: ${baseUrl}/support-tickets/${ticketId}/status to ${newStatus}`);
+      
       const res = await fetch(`${baseUrl}/support-tickets/${ticketId}/status`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ status: newStatus })
       });
+
+      console.log(`[Debug] Update Status Response Status: ${res.status}`);
+      
       const data = await res.json();
       if (data.success) {
         toast.success(`Ticket marked as ${newStatus}`);
@@ -175,6 +228,7 @@ export function DashboardSupport() {
         fetchSystemTickets();
         setIsDetailModalOpen(false);
       } else {
+        console.error("[Debug] Update Status Error Response:", data.message || "Unknown error");
         toast.error(data.message || "Failed to update status");
       }
     } catch (err) {
@@ -196,6 +250,7 @@ export function DashboardSupport() {
     e.preventDefault();
     setCreatingTicket(true);
     try {
+      const token = localStorage.getItem('eco_shop_token');
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
       const res = await fetch(`${baseUrl}/support-tickets/zendesk`, {
         method: 'POST',
