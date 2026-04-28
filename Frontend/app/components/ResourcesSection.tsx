@@ -38,7 +38,7 @@ const resourceCards: ResourceCard[] = [
     description:
       'Access an intuitive support experience with multilingual guidance across features, workflows, and integrations.',
     cta: 'Visit Help Center',
-    href: '/contact',
+    href: '/dashboard/help-center',
   },
   {
     id: 'tutorials',

@@ -509,7 +509,7 @@ function SidebarMenuButton({
   tooltip?: string | React.ComponentProps<typeof TooltipContent>;
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? Slot : "button";
-  const { isMobile, state } = useSidebar();
+  const { isMobile, state, setOpenMobile } = useSidebar();
 
   const button = (
     <Comp
@@ -523,34 +523,33 @@ function SidebarMenuButton({
         if (isMobile) {
           setOpenMobile(false);
         }
-        if (props.onClick) {
-          props.onClick(e);
-        }
+
+        props.onClick?.(e);
       }}
     />
   );
 
-  if (!tooltip) {
-    return button;
-  }
+if (!tooltip) {
+  return button;
+}
 
-  if (typeof tooltip === "string") {
-    tooltip = {
-      children: tooltip,
-    };
-  }
+if (typeof tooltip === "string") {
+  tooltip = {
+    children: tooltip,
+  };
+}
 
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent
-        side="right"
-        align="center"
-        hidden={state !== "collapsed" || isMobile}
-        {...tooltip}
-      />
-    </Tooltip>
-  );
+return (
+  <Tooltip>
+    <TooltipTrigger asChild>{button}</TooltipTrigger>
+    <TooltipContent
+      side="right"
+      align="center"
+      hidden={state !== "collapsed" || isMobile}
+      {...tooltip}
+    />
+  </Tooltip>
+);
 }
 
 function SidebarMenuAction({
@@ -562,6 +561,7 @@ function SidebarMenuAction({
   asChild?: boolean;
   showOnHover?: boolean;
 }) {
+  const { isMobile, setOpenMobile } = useSidebar();
   const Comp = asChild ? Slot : "button";
 
   return (
@@ -577,10 +577,16 @@ function SidebarMenuAction({
         "peer-data-[size=lg]/menu-button:top-2.5",
         "group-data-[collapsible=icon]:hidden",
         showOnHover &&
-          "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
+        "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
         className,
       )}
       {...props}
+      onClick={(e) => {
+        if (isMobile) {
+          setOpenMobile(false);
+        }
+        props.onClick?.(e);
+      }}
     />
   );
 }
@@ -685,6 +691,7 @@ function SidebarMenuSubButton({
   size?: "sm" | "md";
   isActive?: boolean;
 }) {
+  const { isMobile, setOpenMobile } = useSidebar();
   const Comp = asChild ? Slot : "a";
 
   return (
@@ -702,6 +709,12 @@ function SidebarMenuSubButton({
         className,
       )}
       {...props}
+      onClick={(e) => {
+        if (isMobile) {
+          setOpenMobile(false);
+        }
+        props.onClick?.(e);
+      }}
     />
   );
 }

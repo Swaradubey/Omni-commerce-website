@@ -23,6 +23,7 @@ import {
   Building2,
   CreditCard,
   Receipt,
+  Globe,
 } from 'lucide-react';
 import { useNavigate, useLocation, Outlet, Link, Navigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -82,6 +83,7 @@ const sidebarItems = [
   { title: "Customers", icon: Users, href: "/dashboard/customers", superAdminOnly: true },
   { title: "Users & roles", icon: UserCog, href: "/dashboard/users", superAdminOnly: true },
   { title: "Add Client", icon: Building2, href: "/dashboard/clients", superAdminOnly: true },
+  { title: "Add Custom Domain", icon: Globe, href: "/super-admin/custom-domain", superAdminOnly: true },
   { title: "Add Employee", icon: UserPlus, href: "/dashboard/add-employee", staffOnly: true, hideForSuperAdmin: true },
   { title: "Analytics", icon: PieChartIcon, href: "/dashboard/analytics", superAdminOnly: true },
   { title: "Admin login logs", icon: ScrollText, href: "/dashboard/admin-logs", superAdminOnly: true },
@@ -358,361 +360,360 @@ export function Dashboard() {
       >
         <ImpersonationBanner />
         <div className="flex min-h-0 flex-1 w-full">
-        {/* Sidebar */}
-        <Sidebar
-          collapsible="icon"
-          className={
-            isOverview || isInventoryOrAnalytics
-              ? 'border-r border-amber-200/35 dark:border-amber-900/25 bg-white/55 dark:bg-zinc-950/55 backdrop-blur-xl shadow-[4px_0_24px_-12px_rgba(212,175,55,0.15)]'
-              : 'border-r border-gray-200 dark:border-white/10 bg-white/50 dark:bg-black/50 backdrop-blur-xl'
-          }
-        >
-          <SidebarHeader className="h-16 flex items-center px-6">
-            <div className="flex items-center gap-3">
-              <div
-                className={
-                  isOverview
-                    ? 'w-8 h-8 rounded-xl bg-gradient-to-br from-[#d4af37] via-amber-500 to-amber-700 flex items-center justify-center text-white shadow-lg shadow-amber-900/20'
-                    : 'w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg'
-                }
-              >
-                <span className="font-bold text-lg">E</span>
-              </div>
-              <span className="font-bold text-xl tracking-tight group-data-[collapsible=icon]:hidden">Nexus</span>
-            </div>
-          </SidebarHeader>
-          <SidebarContent className="px-2 pt-4">
-            <SidebarGroup>
-              <SidebarGroupLabel
-                className={
-                  mainSidebarItems.some(item => item.href && location.pathname.startsWith(item.href))
-                    ? 'px-4 py-2 text-xs font-bold uppercase tracking-wider text-amber-900/55 dark:text-amber-200/50 group-data-[collapsible=icon]:hidden'
-                    : 'px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground group-data-[collapsible=icon]:hidden'
-                }
-              >
-                Main Menu
-              </SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu className="gap-2">
-                  {mainSidebarItems.map((item) => {
-                    const href = item.href;
-                    const isActive = href === '/dashboard' ? location.pathname === '/dashboard' : (href ? location.pathname.startsWith(href) : item.title === 'Overview' && location.pathname === '/dashboard');
-                    return (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        tooltip={item.title === 'Orders' && isSuperAdminRole(user?.role) ? 'Sale' : item.title}
-                        className={dashboardSidebarNavButtonClass(isActive, false)}
-                      >
-                        <Link to={href || '#'}>
-                          <item.icon
-                            className={`w-5 h-5 shrink-0 ${
-                              isActive
-                                ? 'text-[#b8860b] dark:text-amber-300'
-                                : ''
-                            }`}
-                          />
-                            <span className="group-data-[collapsible=icon]:hidden flex-1 min-w-0 text-left text-[16px] font-semibold tracking-wide leading-snug">
-                              {item.title === 'Orders' && isSuperAdminRole(user?.role) ? 'Sale' : item.title}</span>
-
-                            {'badge' in item &&
-                              item.badge != null &&
-                              item.badge !== '' &&
-                              (typeof item.badge === 'string' || typeof item.badge === 'number') && (
-                              <span
-                                className={
-                                  isActive
-                                    ? 'ml-auto shrink-0 w-5 h-5 rounded-full bg-gradient-to-br from-[#d4af37] to-amber-700 text-[10px] text-white flex items-center justify-center font-bold group-data-[collapsible=icon]:hidden shadow-sm'
-                                    : 'ml-auto shrink-0 w-5 h-5 rounded-full bg-muted-foreground text-[10px] text-white flex items-center justify-center font-bold group-data-[collapsible=icon]:hidden'
-                                }
-                              >
-                                {item.badge}
-                              </span>
-                            )}
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-
-            <SidebarGroup className="mt-4">
-              <SidebarGroupLabel className="sr-only">Resources</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu className="gap-2">
-                  {resourceSidebarItems.map((item) => {
-                    const isActive = item.href ? location.pathname.startsWith(item.href) : false;
-                    return (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        tooltip={item.title}
-                        className={dashboardSidebarNavButtonClass(isActive, false)}
-                      >
-                        <Link to={item.href || '#'}>
-                          <item.icon
-                            className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#b8860b] dark:text-amber-300' : ''}`}
-                          />
-                          <span className="group-data-[collapsible=icon]:hidden flex-1 min-w-0 text-left text-[16px] font-semibold tracking-wide leading-snug">
-                            {item.title}
-                          </span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-          <SidebarFooter
-            className={
-              isOverview
-                ? 'p-4 border-t border-amber-200/25 dark:border-amber-900/20'
-                : 'p-4 border-t border-gray-100 dark:border-white/5'
-            }
-          >
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all duration-300 ease-out font-medium"
-            >
-              <LogOut className="w-5 h-5" />
-              <span className="group-data-[collapsible=icon]:hidden">Sign Out</span>
-            </button>
-          </SidebarFooter>
-          <SidebarRail />
-        </Sidebar>
-
-        {/* Main Content Area */}
-        <SidebarInset
-          className={
-            isOverview || isInventoryOrAnalytics
-              ? 'flex flex-col flex-1 overflow-hidden bg-transparent'
-              : 'flex flex-col flex-1 overflow-hidden bg-white dark:bg-[#09090b]'
-          }
-        >
-          <DashboardNavbar premiumOverview={isOverview} />
-
-          <main
+          {/* Sidebar */}
+          <Sidebar
+            collapsible="icon"
             className={
               isOverview || isInventoryOrAnalytics
-                ? 'flex-1 overflow-y-auto p-5 sm:p-7 lg:p-10 custom-scrollbar dashboard-overview-fade'
-                : location.pathname.startsWith('/dashboard/products')
-                  ? 'flex-1 overflow-y-auto custom-scrollbar'
-                  : 'flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar'
+                ? 'border-r border-amber-200/35 dark:border-amber-900/25 bg-white/55 dark:bg-zinc-950/55 backdrop-blur-xl shadow-[4px_0_24px_-12px_rgba(212,175,55,0.15)]'
+                : 'border-r border-gray-200 dark:border-white/10 bg-white/50 dark:bg-black/50 backdrop-blur-xl'
             }
-            style={isOverview ? { fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif" } : undefined}
           >
-            <div className="max-w-[1600px] mx-auto space-y-8 sm:space-y-10">
-              {/* Welcome Section */}
-              {location.pathname !== '/dashboard/products' && (
-                <motion.div
-                initial={{ opacity: 0, y: -16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                className="flex flex-col md:flex-row md:items-center justify-between gap-5"
-              >
-                <div>
-                  <div
-                    className={
-                      isOverview
-                        ? 'flex items-center gap-2 text-[#9a7b28] dark:text-amber-300/90 mb-3'
-                        : 'flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-2'
-                    }
-                  >
-                    <TrendingUp className="w-4 h-4 shrink-0" />
-                    <span className="text-xs sm:text-sm font-bold uppercase tracking-[0.2em]">
-                      {location.pathname === '/dashboard' ? 'Performance Live' : 
-                       location.pathname.split('/').pop()?.replace('-', ' ')}
-                    </span>
-                  </div>
-                  <h1
-                    className={
-                      isOverview
-                        ? 'text-3xl sm:text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50 capitalize leading-tight'
-                        : 'text-3xl font-extrabold tracking-tight capitalize'
-                    }
-                  >
-                    {location.pathname === '/dashboard' ? 'Dashboard Overview' : 
-                     location.pathname.split('/').pop()?.replace('-', ' ')}
-                  </h1>
-                  <p
-                    className={
-                      isOverview
-                        ? 'text-muted-foreground mt-2 text-base max-w-xl leading-relaxed'
-                        : 'text-muted-foreground mt-1'
-                    }
-                  >
-                    {location.pathname === '/dashboard' 
-                      ? <>Welcome back, <span className="text-foreground font-semibold">{user?.name || 'Admin'}</span>. Here&apos;s what&apos;s happening today.</>
-                      : `Manage your ${location.pathname.split('/').pop()?.replace('-', ' ')} and view detailed insights.`}
-                  </p>
+            <SidebarHeader className="h-16 flex items-center px-6">
+              <div className="flex items-center gap-3">
+                <div
+                  className={
+                    isOverview
+                      ? 'w-8 h-8 rounded-xl bg-gradient-to-br from-[#d4af37] via-amber-500 to-amber-700 flex items-center justify-center text-white shadow-lg shadow-amber-900/20'
+                      : 'w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg'
+                  }
+                >
+                  <span className="font-bold text-lg">E</span>
                 </div>
+                <span className="font-bold text-xl tracking-tight group-data-[collapsible=icon]:hidden">Omni-Commerce</span>
+              </div>
+            </SidebarHeader>
+            <SidebarContent className="px-2 pt-4">
+              <SidebarGroup>
+                <SidebarGroupLabel
+                  className={
+                    mainSidebarItems.some(item => item.href && location.pathname.startsWith(item.href))
+                      ? 'px-4 py-2 text-xs font-bold uppercase tracking-wider text-amber-900/55 dark:text-amber-200/50 group-data-[collapsible=icon]:hidden'
+                      : 'px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground group-data-[collapsible=icon]:hidden'
+                  }
+                >
+                  Main Menu
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu className="gap-2">
+                    {mainSidebarItems.map((item) => {
+                      const href = item.href;
+                      const isActive = href === '/dashboard' ? location.pathname === '/dashboard' : (href ? location.pathname.startsWith(href) : item.title === 'Overview' && location.pathname === '/dashboard');
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={isActive}
+                            tooltip={item.title === 'Orders' && isSuperAdminRole(user?.role) ? 'Sale' : item.title}
+                            className={dashboardSidebarNavButtonClass(isActive, false)}
+                          >
+                            <Link to={href || '#'}>
+                              <item.icon
+                                className={`w-5 h-5 shrink-0 ${isActive
+                                  ? 'text-[#b8860b] dark:text-amber-300'
+                                  : ''
+                                  }`}
+                              />
+                              <span className="group-data-[collapsible=icon]:hidden flex-1 min-w-0 text-left text-[16px] font-semibold tracking-wide leading-snug">
+                                {item.title === 'Orders' && isSuperAdminRole(user?.role) ? 'Sale' : item.title}</span>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex -space-x-2">
-                    {[1, 2, 3, 4].map(i => (
+                              {'badge' in item &&
+                                item.badge != null &&
+                                item.badge !== '' &&
+                                (typeof item.badge === 'string' || typeof item.badge === 'number') && (
+                                  <span
+                                    className={
+                                      isActive
+                                        ? 'ml-auto shrink-0 w-5 h-5 rounded-full bg-gradient-to-br from-[#d4af37] to-amber-700 text-[10px] text-white flex items-center justify-center font-bold group-data-[collapsible=icon]:hidden shadow-sm'
+                                        : 'ml-auto shrink-0 w-5 h-5 rounded-full bg-muted-foreground text-[10px] text-white flex items-center justify-center font-bold group-data-[collapsible=icon]:hidden'
+                                    }
+                                  >
+                                    {item.badge}
+                                  </span>
+                                )}
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+
+              <SidebarGroup className="mt-4">
+                <SidebarGroupLabel className="sr-only">Resources</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu className="gap-2">
+                    {resourceSidebarItems.map((item) => {
+                      const isActive = item.href ? location.pathname.startsWith(item.href) : false;
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={isActive}
+                            tooltip={item.title}
+                            className={dashboardSidebarNavButtonClass(isActive, false)}
+                          >
+                            <Link to={item.href || '#'}>
+                              <item.icon
+                                className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#b8860b] dark:text-amber-300' : ''}`}
+                              />
+                              <span className="group-data-[collapsible=icon]:hidden flex-1 min-w-0 text-left text-[16px] font-semibold tracking-wide leading-snug">
+                                {item.title}
+                              </span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </SidebarContent>
+            <SidebarFooter
+              className={
+                isOverview
+                  ? 'p-4 border-t border-amber-200/25 dark:border-amber-900/20'
+                  : 'p-4 border-t border-gray-100 dark:border-white/5'
+              }
+            >
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all duration-300 ease-out font-medium"
+              >
+                <LogOut className="w-5 h-5" />
+                <span className="group-data-[collapsible=icon]:hidden">Sign Out</span>
+              </button>
+            </SidebarFooter>
+            <SidebarRail />
+          </Sidebar>
+
+          {/* Main Content Area */}
+          <SidebarInset
+            className={
+              isOverview || isInventoryOrAnalytics
+                ? 'flex flex-col flex-1 overflow-hidden bg-transparent'
+                : 'flex flex-col flex-1 overflow-hidden bg-white dark:bg-[#09090b]'
+            }
+          >
+            <DashboardNavbar premiumOverview={isOverview} />
+
+            <main
+              className={
+                isOverview || isInventoryOrAnalytics
+                  ? 'flex-1 overflow-y-auto p-5 sm:p-7 lg:p-10 custom-scrollbar dashboard-overview-fade'
+                  : location.pathname.startsWith('/dashboard/products')
+                    ? 'flex-1 overflow-y-auto custom-scrollbar'
+                    : 'flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar'
+              }
+              style={isOverview ? { fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif" } : undefined}
+            >
+              <div className="max-w-[1600px] mx-auto space-y-8 sm:space-y-10">
+                {/* Welcome Section */}
+                {location.pathname !== '/dashboard/products' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                    className="flex flex-col md:flex-row md:items-center justify-between gap-5"
+                  >
+                    <div>
                       <div
-                        key={i}
                         className={
                           isOverview
-                            ? 'w-9 h-9 rounded-full border-2 border-white dark:border-zinc-900 bg-gray-200 overflow-hidden shadow-md ring-1 ring-amber-200/40 dark:ring-amber-900/30'
-                            : 'w-8 h-8 rounded-full border-2 border-white dark:border-gray-900 bg-gray-200 overflow-hidden shadow-sm'
+                            ? 'flex items-center gap-2 text-[#9a7b28] dark:text-amber-300/90 mb-3'
+                            : 'flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-2'
                         }
                       >
-                        <img src={`https://i.pravatar.cc/150?u=${i + 10}`} alt="user" className="w-full h-full object-cover" />
+                        <TrendingUp className="w-4 h-4 shrink-0" />
+                        <span className="text-xs sm:text-sm font-bold uppercase tracking-[0.2em]">
+                          {location.pathname === '/dashboard' ? 'Performance Live' :
+                            location.pathname.split('/').pop()?.replace('-', ' ')}
+                        </span>
                       </div>
-                    ))}
-                    <div
-                      className={
-                        isOverview
-                          ? 'w-9 h-9 rounded-full border-2 border-white dark:border-zinc-900 bg-gradient-to-br from-amber-100 to-amber-200 text-[#8b6914] flex items-center justify-center text-[10px] font-bold shadow-md ring-1 ring-amber-300/50'
-                          : 'w-8 h-8 rounded-full border-2 border-white dark:border-gray-900 bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold shadow-sm'
-                      }
-                    >
-                      +12
-                    </div>
-                  </div>
-                  <span
-                    className={
-                      isOverview
-                        ? 'text-xs text-muted-foreground font-semibold underline-offset-4 hover:underline hover:text-[#b8860b] cursor-pointer transition-colors duration-300'
-                        : 'text-xs text-muted-foreground font-medium underline cursor-pointer'
-                    }
-                  >
-                    Live Customers
-                  </span>
-                </div>
-              </motion.div>
-              )}
-
-              <AnimatePresence mode="wait">
-                {showOverviewSkeleton ? (
-                  <motion.div
-                    key="loading"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                  >
-                    <DashboardSkeleton />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="content"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.4, ease: 'easeOut' }}
-                  >
-                    {location.pathname === '/dashboard' ? (
-                      <motion.div
-                        className="space-y-8 sm:space-y-10"
-                        initial="hidden"
-                        animate="show"
-                        variants={{
-                          hidden: { opacity: 0 },
-                          show: {
-                            opacity: 1,
-                            transition: { staggerChildren: 0.08, delayChildren: 0.05 },
-                          },
-                        }}
+                      <h1
+                        className={
+                          isOverview
+                            ? 'text-3xl sm:text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50 capitalize leading-tight'
+                            : 'text-3xl font-extrabold tracking-tight capitalize'
+                        }
                       >
-                        <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
-                          <DashboardStats
-                            analytics={overviewData}
-                            staffView={staff}
-                            error={overviewError}
-                            superAdminOverview={isSuperAdminRole(user?.role)}
-                            userOverview={
-                              isCustomerOverview
-                                ? {
+                        {location.pathname === '/dashboard' ? 'Dashboard Overview' :
+                          location.pathname.split('/').pop()?.replace('-', ' ')}
+                      </h1>
+                      <p
+                        className={
+                          isOverview
+                            ? 'text-muted-foreground mt-2 text-base max-w-xl leading-relaxed'
+                            : 'text-muted-foreground mt-1'
+                        }
+                      >
+                        {location.pathname === '/dashboard'
+                          ? <>Welcome back, <span className="text-foreground font-semibold">{user?.name || 'Admin'}</span>. Here&apos;s what&apos;s happening today.</>
+                          : `Manage your ${location.pathname.split('/').pop()?.replace('-', ' ')} and view detailed insights.`}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="flex -space-x-2">
+                        {[1, 2, 3, 4].map(i => (
+                          <div
+                            key={i}
+                            className={
+                              isOverview
+                                ? 'w-9 h-9 rounded-full border-2 border-white dark:border-zinc-900 bg-gray-200 overflow-hidden shadow-md ring-1 ring-amber-200/40 dark:ring-amber-900/30'
+                                : 'w-8 h-8 rounded-full border-2 border-white dark:border-gray-900 bg-gray-200 overflow-hidden shadow-sm'
+                            }
+                          >
+                            <img src={`https://i.pravatar.cc/150?u=${i + 10}`} alt="user" className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                        <div
+                          className={
+                            isOverview
+                              ? 'w-9 h-9 rounded-full border-2 border-white dark:border-zinc-900 bg-gradient-to-br from-amber-100 to-amber-200 text-[#8b6914] flex items-center justify-center text-[10px] font-bold shadow-md ring-1 ring-amber-300/50'
+                              : 'w-8 h-8 rounded-full border-2 border-white dark:border-gray-900 bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold shadow-sm'
+                          }
+                        >
+                          +12
+                        </div>
+                      </div>
+                      <span
+                        className={
+                          isOverview
+                            ? 'text-xs text-muted-foreground font-semibold underline-offset-4 hover:underline hover:text-[#b8860b] cursor-pointer transition-colors duration-300'
+                            : 'text-xs text-muted-foreground font-medium underline cursor-pointer'
+                        }
+                      >
+                        Live Customers
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
+
+                <AnimatePresence mode="wait">
+                  {showOverviewSkeleton ? (
+                    <motion.div
+                      key="loading"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                    >
+                      <DashboardSkeleton />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="content"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.4, ease: 'easeOut' }}
+                    >
+                      {location.pathname === '/dashboard' ? (
+                        <motion.div
+                          className="space-y-8 sm:space-y-10"
+                          initial="hidden"
+                          animate="show"
+                          variants={{
+                            hidden: { opacity: 0 },
+                            show: {
+                              opacity: 1,
+                              transition: { staggerChildren: 0.08, delayChildren: 0.05 },
+                            },
+                          }}
+                        >
+                          <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
+                            <DashboardStats
+                              analytics={overviewData}
+                              staffView={staff}
+                              error={overviewError}
+                              superAdminOverview={isSuperAdminRole(user?.role)}
+                              userOverview={
+                                isCustomerOverview
+                                  ? {
                                     metrics: userOverviewData,
                                     error: userOverviewError,
                                     pending: userOverviewPending,
                                   }
-                                : undefined
-                            }
-                          />
-                        </motion.div>
-                        <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
-                          <DashboardCharts
-                            analytics={isCustomerOverview ? userAnalyticsData : overviewData}
-                            staffView={staff || isCustomerOverview}
-                            revenueInInr={isSuperAdminRole(user?.role)}
-                          />
-                        </motion.div>
-                        {isSuperAdminRole(user?.role) && (
-                          <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
-                            <DashboardContactSummary />
+                                  : undefined
+                              }
+                            />
                           </motion.div>
-                        )}
-                        <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
-                          <DashboardQuickActions onSync={handleDashboardSync} syncing={syncing} />
-                        </motion.div>
-                        <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
-                          <DashboardRecentActivity indianRupee={isSuperAdminRole(user?.role)} />
-                        </motion.div>
-                        {isSuperAdminRole(user?.role) && (
                           <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
-                            <DashboardRecentTickets />
+                            <DashboardCharts
+                              analytics={isCustomerOverview ? userAnalyticsData : overviewData}
+                              staffView={staff || isCustomerOverview}
+                              revenueInInr={isSuperAdminRole(user?.role)}
+                            />
                           </motion.div>
-                        )}
-                      </motion.div>
-                    ) : (
-                      <Outlet />
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                          {isSuperAdminRole(user?.role) && (
+                            <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
+                              <DashboardContactSummary />
+                            </motion.div>
+                          )}
+                          <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
+                            <DashboardQuickActions onSync={handleDashboardSync} syncing={syncing} />
+                          </motion.div>
+                          <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
+                            <DashboardRecentActivity indianRupee={isSuperAdminRole(user?.role)} />
+                          </motion.div>
+                          {isSuperAdminRole(user?.role) && (
+                            <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
+                              <DashboardRecentTickets />
+                            </motion.div>
+                          )}
+                        </motion.div>
+                      ) : (
+                        <Outlet />
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-              {/* Footer */}
-              <footer
-                className={
-                  isOverview
-                    ? 'mt-14 pt-10 border-t border-amber-200/30 dark:border-amber-900/25 flex flex-col md:flex-row items-center justify-between text-muted-foreground text-sm pb-10'
-                    : 'mt-12 pt-8 border-t border-gray-100 dark:border-white/5 flex flex-col md:flex-row items-center justify-between text-muted-foreground text-sm pb-8'
-                }
-              >
-                <p>© 2026 Nexus Admin. All rights reserved.</p>
-                <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-6 mt-4 md:mt-0">
-                  <a
-                    href="#"
-                    className={
-                      isOverview
-                        ? 'transition-colors duration-300 hover:text-[#b8860b] dark:hover:text-amber-300'
-                        : 'hover:text-blue-600 transition-colors'
-                    }
-                  >
-                    Privacy Policy
-                  </a>
-                  <a
-                    href="#"
-                    className={
-                      isOverview
-                        ? 'transition-colors duration-300 hover:text-[#b8860b] dark:hover:text-amber-300'
-                        : 'hover:text-blue-600 transition-colors'
-                    }
-                  >
-                    Terms of Service
-                  </a>
-                  <a
-                    href="#"
-                    className={
-                      isOverview
-                        ? 'transition-colors duration-300 hover:text-[#b8860b] dark:hover:text-amber-300'
-                        : 'hover:text-blue-600 transition-colors'
-                    }
-                  >
-                    Documentation
-                  </a>
-                </div>
-              </footer>
-            </div>
-          </main>
-        </SidebarInset>
+                {/* Footer */}
+                <footer
+                  className={
+                    isOverview
+                      ? 'mt-14 pt-10 border-t border-amber-200/30 dark:border-amber-900/25 flex flex-col md:flex-row items-center justify-between text-muted-foreground text-sm pb-10'
+                      : 'mt-12 pt-8 border-t border-gray-100 dark:border-white/5 flex flex-col md:flex-row items-center justify-between text-muted-foreground text-sm pb-8'
+                  }
+                >
+                  <p>© 2026 Omni-Commerce Admin. All rights reserved.</p>
+                  <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-6 mt-4 md:mt-0">
+                    <a
+                      href="#"
+                      className={
+                        isOverview
+                          ? 'transition-colors duration-300 hover:text-[#b8860b] dark:hover:text-amber-300'
+                          : 'hover:text-blue-600 transition-colors'
+                      }
+                    >
+                      Privacy Policy
+                    </a>
+                    <a
+                      href="#"
+                      className={
+                        isOverview
+                          ? 'transition-colors duration-300 hover:text-[#b8860b] dark:hover:text-amber-300'
+                          : 'hover:text-blue-600 transition-colors'
+                      }
+                    >
+                      Terms of Service
+                    </a>
+                    <a
+                      href="#"
+                      className={
+                        isOverview
+                          ? 'transition-colors duration-300 hover:text-[#b8860b] dark:hover:text-amber-300'
+                          : 'hover:text-blue-600 transition-colors'
+                      }
+                    >
+                      Documentation
+                    </a>
+                  </div>
+                </footer>
+              </div>
+            </main>
+          </SidebarInset>
         </div>
       </div>
 

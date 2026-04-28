@@ -46,9 +46,12 @@ const supportTicketRoutes = require("./routes/supportTicketRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const shiprocketService = require("./services/shiprocketService");
 
+const customDomainRoutes = require("./routes/customDomainRoutes");
+
 console.log("[Backend Debug] Mounting API routes...");
 app.use("/api/auth", authRoutes);
 app.use("/api/superadmin", superadminRoutes);
+app.use("/api/custom-domains", customDomainRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/user", userRoutes); // Alias for frontend singular use cases
 app.use("/api/settings", settingsRoutes);

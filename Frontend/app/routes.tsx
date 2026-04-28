@@ -43,6 +43,7 @@ import { DashboardAddEmployee } from './pages/dashboard/DashboardAddEmployee';
 import { Account } from './pages/Account';
 import { WishlistPage } from './pages/WishlistPage';
 import { TrackOrder } from './pages/TrackOrder';
+import { CustomDomain } from './pages/super-admin/CustomDomain';
 
 export const router = createBrowserRouter([
   {
@@ -94,17 +95,16 @@ export const router = createBrowserRouter([
         ],
       },
       {
-        path: 'dashboard',
         element: (
           <ProtectedRoute>
             <Dashboard />
           </ProtectedRoute>
         ),
         children: [
-          { index: true, element: null },
-          { path: 'products', element: <DashboardProducts /> },
+          { path: 'dashboard', index: true, element: null },
+          { path: 'dashboard/products', element: <DashboardProducts /> },
           {
-            path: 'inventory',
+            path: 'dashboard/inventory',
             element: (
               <AdminRoute>
                 <Inventory />
@@ -112,11 +112,11 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'orders',
+            path: 'dashboard/orders',
             element: <DashboardOrders />,
           },
           {
-            path: 'invoices',
+            path: 'dashboard/invoices',
             element: (
               <SuperAdminOnlyRoute>
                 <DashboardInvoices />
@@ -124,7 +124,7 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'customers',
+            path: 'dashboard/customers',
             element: (
               <SuperAdminOnlyRoute>
                 <DashboardCustomers />
@@ -132,7 +132,7 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'users',
+            path: 'dashboard/users',
             element: (
               <SuperAdminOnlyRoute>
                 <DashboardUsers />
@@ -140,7 +140,7 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'clients',
+            path: 'dashboard/clients',
             element: (
               <SuperAdminOnlyRoute>
                 <DashboardClients />
@@ -148,7 +148,7 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'admin-logs',
+            path: 'dashboard/admin-logs',
             element: (
               <SuperAdminOnlyRoute>
                 <DashboardAdminLogs />
@@ -156,11 +156,11 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'support',
+            path: 'dashboard/support',
             element: <SupportRoute />,
           },
           {
-            path: 'analytics',
+            path: 'dashboard/analytics',
             element: (
               <SuperAdminOnlyRoute>
                 <DashboardAnalytics />
@@ -168,7 +168,7 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'inbox',
+            path: 'dashboard/inbox',
             element: (
               <AdminRoute>
                 <DashboardInbox />
@@ -176,7 +176,7 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'contact-messages',
+            path: 'dashboard/contact-messages',
             element: (
               <FullAdminOnlyRoute>
                 <DashboardContactMessages />
@@ -184,7 +184,7 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'settings',
+            path: 'dashboard/settings',
             element: (
               <FullAdminOnlyRoute>
                 <DashboardSettings />
@@ -192,16 +192,16 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'help-center',
+            path: 'dashboard/help-center',
             element: (
               <HelpCenterRoute>
                 <DashboardHelpCenter />
               </HelpCenterRoute>
             ),
           },
-          { path: 'wishlist', element: <WishlistPage /> },
+          { path: 'dashboard/wishlist', element: <WishlistPage /> },
           {
-            path: 'wishlist-activity',
+            path: 'dashboard/wishlist-activity',
             element: (
               <FullAdminOnlyRoute>
                 <DashboardWishlistActivity />
@@ -209,7 +209,7 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'add-employee',
+            path: 'dashboard/add-employee',
             element: (
               <AdminRoute>
                 <DashboardAddEmployee />
@@ -217,14 +217,22 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'seo',
+            path: 'dashboard/seo',
             element: (
               <AdminRoute>
                 <DashboardSeo />
               </AdminRoute>
             ),
           },
-        ]
+          {
+            path: 'super-admin/custom-domain',
+            element: (
+              <SuperAdminOnlyRoute>
+                <CustomDomain />
+              </SuperAdminOnlyRoute>
+            ),
+          },
+        ],
       },
       { path: '*', Component: NotFound },
     ],

@@ -19,6 +19,7 @@ import {
   ChevronUp,
   type LucideIcon,
 } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -144,6 +145,7 @@ interface UserOrder {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function DashboardHelpCenter() {
+  const navigate = useNavigate();
   // ── existing help center state ──────────────────────────────────────────────
   const [bundle, setBundle] = useState<HelpCenterBundle | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -329,7 +331,7 @@ export function DashboardHelpCenter() {
     if (/^https?:\/\//i.test(h)) {
       window.open(h, '_blank', 'noopener,noreferrer');
     } else {
-      window.location.assign(h);
+      navigate(h);
     }
   };
 

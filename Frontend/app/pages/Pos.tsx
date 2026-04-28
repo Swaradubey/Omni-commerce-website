@@ -972,9 +972,9 @@ export function Pos() {
   return (
     <>
       <ImpersonationBanner />
-      <div className="flex h-[calc(100vh-84px)] bg-[#f7f6f2] overflow-hidden">
+      <div className="flex flex-col lg:flex-row lg:h-[calc(100vh-84px)] bg-[#f7f6f2] lg:overflow-hidden">
       {/* Products Section */}
-      <div className="flex-1 flex flex-col h-full border-r border-black/10 overflow-hidden">
+      <div className="flex-1 flex flex-col lg:h-full border-b lg:border-b-0 lg:border-r border-black/10 lg:overflow-hidden">
         <div className="p-4 sm:p-6 bg-white/50 backdrop-blur-sm border-b border-black/10">
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start mb-3">
             <h1 className="text-2xl font-bold text-[#111111]">Point of Sale</h1>
@@ -1026,7 +1026,7 @@ export function Pos() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="flex-1 lg:overflow-y-auto p-4 sm:p-6">
           {isLoading ? (
             <div className="flex items-center justify-center h-40">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
@@ -1108,7 +1108,7 @@ export function Pos() {
       </div>
 
       {/* Cart Section */}
-      <div className="w-[350px] lg:w-[400px] flex flex-col bg-white h-full shadow-[-4px_0_24px_rgba(0,0,0,0.02)]">
+      <div className="w-full lg:w-[350px] xl:w-[400px] flex flex-col bg-white lg:h-full shadow-[-4px_0_24px_rgba(0,0,0,0.02)]">
         <div className="p-5 border-b border-black/5 bg-[#111111] text-white">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <ShoppingCart className="w-5 h-5" />
@@ -1116,7 +1116,7 @@ export function Pos() {
           </h2>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 lg:overflow-y-auto p-5">
           {checkoutComplete && cart.length === 0 ? (
             <div
               className="h-full min-h-[200px] flex flex-col items-center justify-center text-center px-2"

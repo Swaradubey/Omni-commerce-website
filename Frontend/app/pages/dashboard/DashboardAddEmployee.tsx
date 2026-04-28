@@ -25,7 +25,7 @@ export function DashboardAddEmployee() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
     let pass = '';
     for (let i = 0; i < 12; i++) {
-        pass += chars.charAt(Math.floor(Math.random() * chars.length));
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     setFormData(prev => ({ ...prev, password: pass }));
     toast.info('Secure password generated');
@@ -33,7 +33,7 @@ export function DashboardAddEmployee() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Basic validation
     if (!formData.name || !formData.email || !formData.phone || !formData.address || !formData.password || !formData.confirmPassword) {
       toast.error('Please fill in all required fields');
@@ -191,7 +191,7 @@ export function DashboardAddEmployee() {
                     </select>
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
                       <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </div>
                   </div>
@@ -247,10 +247,10 @@ export function DashboardAddEmployee() {
                   />
                 </div>
 
-            </div>
+              </div>
 
               <div className="pt-10 border-t border-gray-100 dark:border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <p className="text-xs text-muted-foreground text-center sm:text-left">
+                <p className="text-sm text-muted-foreground text-center sm:text-left">
                   Password will be securely encrypted. Ensure the email is valid for notification purposes.
                 </p>
                 <Button
@@ -279,7 +279,8 @@ export function DashboardAddEmployee() {
         </Card>
       </div>
 
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes shimmer {
           100% { transform: translateX(100%); }
         }
