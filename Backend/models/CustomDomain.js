@@ -2,12 +2,17 @@ const mongoose = require("mongoose");
 
 const customDomainSchema = new mongoose.Schema(
   {
-    domain: {
+    domainName: {
       type: String,
-      required: [true, "Domain is required"],
+      required: [true, "Domain name is required"],
       unique: true,
       trim: true,
       lowercase: true,
+    },
+    clientId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Client",
+      required: [true, "Client ID is required"],
     },
     clientName: {
       type: String,
@@ -16,7 +21,12 @@ const customDomainSchema = new mongoose.Schema(
     },
     status: {
       type: String,
+      enum: ["Pending", "Verified", "Error"],
       default: "Pending",
+    },
+    dnsInstructions: {
+      type: Object,
+      default: null,
     },
   },
   {
