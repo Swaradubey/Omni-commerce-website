@@ -9,6 +9,11 @@ const customDomainSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
+    domain: {
+      type: String,
+      trim: true,
+      lowercase: true,
+    },
     clientId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Client",

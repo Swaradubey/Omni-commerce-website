@@ -16,7 +16,7 @@ export interface CustomDomainData {
 
 export const customDomainApi = {
   getAll: () => ApiService.get<CustomDomainData[]>('/custom-domains'),
-  create: (data: { domain: string; clientId: string }) => 
+  create: (data: { domainName: string; clientId: string }) => 
     ApiService.post<CustomDomainData>('/custom-domains', data),
   checkStatus: (id: string) => ApiService.get<{ status: string; data: CustomDomainData }>(`/custom-domains/${id}/status`),
   delete: (id: string) => ApiService.delete(`/custom-domains/${id}`),

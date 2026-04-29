@@ -48,7 +48,7 @@ export function CustomDomain() {
       setError(null);
       setSuccess(null);
       const response = await customDomainApi.create({ 
-        domain: domainInput.trim(),
+        domainName: domainInput.trim(),
         clientId: selectedClientId 
       });
       if (response.success) {
@@ -58,7 +58,12 @@ export function CustomDomain() {
         fetchData();
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to add domain');
+      const errorMessage = err.message || 'Failed to add domain';
+      setError(
+        errorMessage.includes('E11000') || errorMessage.includes('duplicate') 
+          ? 'Domain already exists' 
+          : errorMessage
+      );
     } finally {
       setAdding(false);
     }

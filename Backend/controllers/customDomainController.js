@@ -19,31 +19,37 @@ const getAllCustomDomains = async (req, res) => {
 // @access  Private (Super Admin)
 const createCustomDomain = async (req, res) => {
   try {
-    const { domain, clientId } = req.body;
+    const { domainName, clientId } = req.body;
 
-    if (!domain || !clientId) {
-      return res.status(400).json({ success: false, message: "Domain and Client ID are required" });
+    if (!domainName || domainName.trim() === "") {
+      return res.status(400).json({ message: "Domain name is required" });
     }
 
-    const domainName = domain.trim().toLowerCase();
+    if (!clientId) {
+      return res.status(400).json({ message: "Client ID is required" });
+    }
+
+    console.log("Incoming domain:", domainName);
+
+    const formattedDomain = domainName.trim().toLowerCase();
     
     // Check if domain exists in DB
-    const existingDomain = await CustomDomain.findOne({ domainName });
+    const existingDomain = await CustomDomain.findOne({ $or: [{ domainName: formattedDomain }, { domain: formattedDomain }] });
     if (existingDomain) {
-      return res.status(400).json({ success: false, message: "Domain already exists in our system" });
+      return res.status(400).json({ message: "Domain already exists" });
     }
 
     // Fetch client to get name
     const client = await Client.findById(clientId);
     if (!client) {
-      return res.status(404).json({ success: false, message: "Client not found" });
+      return res.status(404).json({ message: "Client not found" });
     }
 
     // Add to Vercel
     try {
-      await vercelService.addDomain(domainName);
+      await vercelService.addDomain(formattedDomain);
     } catch (vercelError) {
-      return res.status(500).json({ success: false, message: `Vercel Error: ${vercelError.message}` });
+      return res.status(500).json({ message: `Vercel Error: ${vercelError.message}` });
     }
 
     // DNS Instructions
@@ -53,7 +59,8 @@ const createCustomDomain = async (req, res) => {
     };
 
     const customDomain = await CustomDomain.create({
-      domainName,
+      domainName: formattedDomain,
+      domain: formattedDomain,
       clientId,
       clientName: client.companyName || client.shopName || "Client",
       status: "Pending",
@@ -62,6 +69,9 @@ const createCustomDomain = async (req, res) => {
 
     res.status(201).json({ success: true, data: customDomain });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ message: "Domain already exists" });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
