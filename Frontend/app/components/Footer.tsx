@@ -30,7 +30,7 @@ export function Footer() {
 
               <div className="flex-1 min-w-[140px]">
                 <span className="block text-lg sm:text-xl font-semibold tracking-tight text-white break-words leading-tight">
-                  Omni-commerce
+                  Retail Verse
                 </span>
                 <span className="block text-xs uppercase tracking-[0.24em] text-white/40">
                   Smart Living Store
@@ -194,7 +194,7 @@ export function Footer() {
 
         {/* Bottom bar */}
         <div className="flex flex-col items-center justify-between gap-4 pt-6 text-sm text-white/40 md:flex-row">
-          <p>© 2026 Omni-commerce. All rights reserved.</p>
+          <p>© 2026 Retail Verse. All rights reserved.</p>
 
           <div className="flex flex-wrap items-center justify-center gap-4 md:justify-end">
             <a href="#" className="transition-colors hover:text-white/70">

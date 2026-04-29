@@ -47,9 +47,9 @@ export function CustomDomain() {
       setAdding(true);
       setError(null);
       setSuccess(null);
-      const response = await customDomainApi.create({ 
+      const response = await customDomainApi.create({
         domainName: domainInput.trim(),
-        clientId: selectedClientId 
+        clientId: selectedClientId
       });
       if (response.success) {
         setSuccess('Domain added successfully and sent to Vercel');
@@ -60,8 +60,8 @@ export function CustomDomain() {
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to add domain';
       setError(
-        errorMessage.includes('E11000') || errorMessage.includes('duplicate') 
-          ? 'Domain already exists' 
+        errorMessage.includes('E11000') || errorMessage.includes('duplicate')
+          ? 'Domain already exists'
           : errorMessage
       );
     } finally {
@@ -138,7 +138,7 @@ export function CustomDomain() {
 
             <form onSubmit={handleAddDomain} className="flex flex-col lg:flex-row items-end gap-4">
               <div className="flex-[2] space-y-2 w-full">
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-lg font-medium text-slate-700">
                   Select Client
                 </label>
                 <select
@@ -162,7 +162,7 @@ export function CustomDomain() {
               </div>
 
               <div className="flex-[3] space-y-2 w-full">
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-lg font-medium text-slate-700">
                   Domain Name
                 </label>
                 <input
@@ -197,7 +197,7 @@ export function CustomDomain() {
                 </button>
               </div>
             </form>
-            
+
             <div className="mt-4">
               {error && <p className="text-xs sm:text-sm text-rose-500 flex items-center gap-1.5 mb-2"><AlertCircle className="w-4 h-4" />{error}</p>}
               {success && <p className="text-xs sm:text-sm text-emerald-500 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" />{success}</p>}
@@ -213,7 +213,7 @@ export function CustomDomain() {
               Root Domain Setup
             </h3>
             <div className="space-y-4">
-              <p className="text-sm text-slate-600">For root domains like <code className="bg-slate-100 px-1 rounded">laxmi.com</code>:</p>
+              <p className="text-lg text-slate-600">For root domains like <code className="bg-slate-100 px-1 rounded">laxmi.com</code>:</p>
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
                 <div className="flex justify-between text-xs font-mono">
                   <span className="text-slate-400 uppercase">Type</span>
@@ -237,7 +237,7 @@ export function CustomDomain() {
               WWW / Subdomain Setup
             </h3>
             <div className="space-y-4">
-              <p className="text-sm text-slate-600">For subdomains or <code className="bg-slate-100 px-1 rounded">www.laxmi.com</code>:</p>
+              <p className="text-lg text-slate-600">For subdomains or <code className="bg-slate-100 px-1 rounded">www.laxmi.com</code>:</p>
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
                 <div className="flex justify-between text-xs font-mono">
                   <span className="text-slate-400 uppercase">Type</span>
@@ -264,7 +264,7 @@ export function CustomDomain() {
         }}>
           <div className="px-6 py-4 border-b flex justify-between items-center" style={{ borderColor: 'rgba(212, 175, 55, 0.25)' }}>
             <h2 className="font-semibold text-slate-800 text-lg sm:text-xl tracking-tight">Connected Domains</h2>
-            <button 
+            <button
               onClick={fetchData}
               className="p-2 hover:bg-amber-100 rounded-full transition-colors text-amber-600"
               title="Refresh List"
@@ -329,13 +329,12 @@ export function CustomDomain() {
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-2">
-                            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${
-                              item.status === 'Verified'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : item.status === 'Error'
+                            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${item.status === 'Verified'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : item.status === 'Error'
                                 ? 'bg-rose-50 text-rose-700 border-rose-200'
                                 : 'bg-amber-50 text-amber-700 border-amber-200'
-                            }`}>
+                              }`}>
                               {item.status === 'Verified' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
                               <span>{item.status}</span>
                             </div>

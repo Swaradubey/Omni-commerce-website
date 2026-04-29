@@ -42,7 +42,7 @@ export function Header() {
               </div>
               <div className="flex flex-col leading-none">
                 <span className="text-lg font-bold tracking-tight text-[#111111] sm:text-xl">
-                  Omni-Commerce
+                  Retail Verse
                 </span>
                 <span className="mt-1 text-[14px] font-semibold uppercase tracking-[0.2em] text-black sm:text-[10px]">
                   Premium Commerce

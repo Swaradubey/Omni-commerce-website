@@ -25,7 +25,7 @@ const DOCS = [
     type: "category",
     slug: "documentation",
     title: "Documentation",
-    description: "Detailed guides for every feature of the Omni-Commerce platform.",
+    description: "Detailed guides for every feature of the Retail Verse platform.",
     icon: "book",
     isPublished: true,
     displayOrder: 1,

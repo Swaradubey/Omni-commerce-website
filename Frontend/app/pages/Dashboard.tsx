@@ -380,7 +380,7 @@ export function Dashboard() {
                 >
                   <span className="font-bold text-lg">E</span>
                 </div>
-                <span className="font-bold text-xl tracking-tight group-data-[collapsible=icon]:hidden">Omni-Commerce</span>
+                <span className="font-bold text-xl tracking-tight group-data-[collapsible=icon]:hidden">Retail Verse</span>
               </div>
             </SidebarHeader>
             <SidebarContent className="px-2 pt-4">
@@ -677,7 +677,7 @@ export function Dashboard() {
                       : 'mt-12 pt-8 border-t border-gray-100 dark:border-white/5 flex flex-col md:flex-row items-center justify-between text-muted-foreground text-sm pb-8'
                   }
                 >
-                  <p>© 2026 Omni-Commerce Admin. All rights reserved.</p>
+                  <p>© 2026 Retail Verse Admin. All rights reserved.</p>
                   <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-6 mt-4 md:mt-0">
                     <a
                       href="#"

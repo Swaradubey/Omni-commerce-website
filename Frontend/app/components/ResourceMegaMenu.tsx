@@ -76,7 +76,7 @@ const middleColumnItems: MenuItem[] = [
     description: 'Collaborate securely across teams and store roles.',
   },
   {
-    title: 'Omni-commerce Igniter Series',
+    title: 'Retail Verse Igniter Series',
     href: '#',
     icon: Sparkles,
     description: 'Explore expert-led ideas to scale modern commerce.',
@@ -86,7 +86,7 @@ const middleColumnItems: MenuItem[] = [
 const updateCards: UpdateCard[] = [
   {
     eyebrow: 'Featured Update',
-    title: "Omni-commerce Igniter Fall ’24",
+    title: "Retail Verse Igniter Fall ’24",
     description:
       'A premium spotlight on the newest growth features, product enhancements, and merchant-focused improvements.',
     href: '#',

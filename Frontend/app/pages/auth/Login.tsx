@@ -59,7 +59,7 @@ export function Login() {
           <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/20">
             <ShoppingBag className="w-5 h-5 text-white" />
           </div>
-          <span className="text-white font-bold text-xl tracking-tight">Omni-commerce</span>
+          <span className="text-white font-bold text-xl tracking-tight">Retail Verse</span>
         </div>
 
         {/* Headline */}
@@ -87,7 +87,7 @@ export function Login() {
 
         {/* Bottom quote */}
         <p className="relative z-10 text-white/30 text-xs">
-          © {new Date().getFullYear()} Omni-commerce. All rights reserved.
+          © {new Date().getFullYear()} Retail Verse. All rights reserved.
         </p>
       </div>
 
@@ -99,7 +99,7 @@ export function Login() {
             <div className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center">
               <ShoppingBag className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-xl text-gray-900 tracking-tight">Omni-commerce</span>
+            <span className="font-bold text-xl text-gray-900 tracking-tight">Retail Verse</span>
           </div>
 
           <div className="mb-8">
