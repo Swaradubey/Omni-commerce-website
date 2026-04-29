@@ -16,8 +16,28 @@ const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 const app = express();
 
 // Middleware
+const allowedOrigins = [
+  "https://storesetgo.online",
+  "https://www.storesetgo.online",
+  "https://retail-verse-website-bj2s-gim5m3yd6-swaradubey-projects.vercel.app"
+];
+
+// Add environment variable origin if it exists
+if (process.env.CLIENT_ORIGIN) {
+  allowedOrigins.push(process.env.CLIENT_ORIGIN);
+} else {
+  allowedOrigins.push("http://localhost:5173");
+}
+
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // allow non-browser requests
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true
 }));
 app.use(express.json({ limit: "50mb" }));
