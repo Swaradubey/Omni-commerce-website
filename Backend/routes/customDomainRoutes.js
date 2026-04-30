@@ -4,11 +4,13 @@ const {
   getAllCustomDomains, 
   createCustomDomain, 
   checkDomainStatus, 
-  deleteCustomDomain 
+  deleteCustomDomain,
+  resolveDomain
 } = require("../controllers/customDomainController");
 const { protect, allowRoles } = require("../middleware/authMiddleware");
 
 // Routes for custom domains
+router.get("/resolve", resolveDomain);
 router.get("/", protect, allowRoles("super_admin"), getAllCustomDomains);
 router.post("/", protect, allowRoles("super_admin"), createCustomDomain);
 router.get("/:id/status", protect, allowRoles("super_admin"), checkDomainStatus);

@@ -103,6 +103,17 @@ export function CustomDomain() {
     }
   };
 
+  const handleOpenDomain = (domain: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const openUrl = `https://${cleanDomain}`;
+    console.log("Clicked domain:", domain);
+    console.log("Final openUrl:", openUrl);
+    console.log("Current hostname:", window.location.hostname);
+    window.open(openUrl, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="w-full max-w-full overflow-x-hidden"
       style={{
@@ -314,14 +325,13 @@ export function CustomDomain() {
                               <Globe className="w-4 h-4" />
                             </div>
                             <span className="font-medium text-slate-800 text-sm break-all">{item.domainName}</span>
-                            <a
-                              href={`https://${item.domainName}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              onClick={(e) => handleOpenDomain(item.domainName, e)}
                               className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-amber-500 hover:bg-amber-500/10 transition-all duration-200"
+                              title={`Open ${item.domainName}`}
                             >
                               <ExternalLink className="w-4 h-4" />
-                            </a>
+                            </button>
                           </div>
                         </td>
                         <td className="py-4 px-4">

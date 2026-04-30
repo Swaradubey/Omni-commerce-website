@@ -2,6 +2,56 @@ const CustomDomain = require("../models/CustomDomain");
 const Client = require("../models/Client");
 const vercelService = require("../services/vercelService");
 
+// @desc    Resolve a custom domain
+// @route   GET /api/custom-domains/resolve
+// @access  Public
+const resolveDomain = async (req, res) => {
+  try {
+    const { domain } = req.query;
+
+    if (!domain) {
+      return res.status(400).json({ success: false, message: "Domain query parameter is required" });
+    }
+
+    console.log("[Backend] Incoming domain resolution request for:", domain);
+
+    // Normalize domain: remove protocol, trailing slash, and www.
+    let normalizedDomain = domain.toLowerCase().trim();
+    normalizedDomain = normalizedDomain.replace(/^https?:\/\//, ""); // Remove http:// or https://
+    normalizedDomain = normalizedDomain.replace(/\/$/, ""); // Remove trailing slash
+    normalizedDomain = normalizedDomain.replace(/^www\./, ""); // Remove www.
+
+    console.log("[Backend] Normalized domain for lookup:", normalizedDomain);
+
+    const customDomain = await CustomDomain.findOne({
+      $or: [
+        { domainName: normalizedDomain },
+        { domainName: `www.${normalizedDomain}` },
+        { domain: normalizedDomain },
+        { domain: `www.${normalizedDomain}` }
+      ]
+    }).populate("clientId");
+
+    if (!customDomain) {
+      console.log(`[Backend] Domain not found for: ${normalizedDomain}`);
+      return res.status(404).json({ success: false, message: "Custom domain not found" });
+    }
+
+    console.log(`[Backend] Matched domain record:`, customDomain.domainName);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        domain: customDomain,
+        client: customDomain.clientId
+      }
+    });
+  } catch (error) {
+    console.error("[Backend] Error resolving domain:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get all custom domains
 // @route   GET /api/custom-domains
 // @access  Private (Super Admin)
@@ -31,8 +81,13 @@ const createCustomDomain = async (req, res) => {
 
     console.log("Incoming domain:", domainName);
 
-    const formattedDomain = domainName.trim().toLowerCase();
+    let formattedDomain = domainName.trim().toLowerCase();
+    formattedDomain = formattedDomain.replace(/^https?:\/\//, ""); // Remove http:// or https://
+    formattedDomain = formattedDomain.replace(/\/$/, ""); // Remove trailing slash
+    // Notice we do NOT remove www. here so if they specifically want www. it stays.
+    // However, Vercel requires the exact domain.
     
+    console.log("Normalized incoming domain:", formattedDomain);
     // Check if domain exists in DB
     const existingDomain = await CustomDomain.findOne({ $or: [{ domainName: formattedDomain }, { domain: formattedDomain }] });
     if (existingDomain) {
@@ -135,4 +190,5 @@ module.exports = {
   createCustomDomain,
   checkDomainStatus,
   deleteCustomDomain,
+  resolveDomain,
 };

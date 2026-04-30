@@ -56,9 +56,12 @@ class ApiService {
       console.warn("[Frontend Debug] No token found in localStorage.");
     }
 
+    const clientId = localStorage.getItem("retail_verse_client_id");
+
     const headers = {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(clientId ? { "x-client-id": clientId } : {}),
       ...(options.headers || {}),
     };
 

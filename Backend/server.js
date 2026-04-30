@@ -22,21 +22,50 @@ const allowedOrigins = [
   "https://retail-verse-website-bj2s-gim5m3yd6-swaradubey-projects.vercel.app"
 ];
 
-// Add environment variable origin if it exists
+// Add environment variable origin(s) if they exist
 if (process.env.CLIENT_ORIGIN) {
-  allowedOrigins.push(process.env.CLIENT_ORIGIN);
+  const envOrigins = process.env.CLIENT_ORIGIN.split(',').map(o => o.trim());
+  allowedOrigins.push(...envOrigins);
 } else {
   allowedOrigins.push("http://localhost:5173");
 }
 
 app.use(cors({
-  origin: function (origin, callback) {
+  origin: async function (origin, callback) {
     if (!origin) return callback(null, true); // allow non-browser requests
+    
+    // Check statically allowed origins
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
-    } else {
-      return callback(new Error("Not allowed by CORS"));
     }
+    
+    try {
+      const originUrl = new URL(origin);
+      const hostname = originUrl.hostname;
+      
+      // Allow any subdomain of storesetgo.online and any .vercel.app domain
+      if (hostname.endsWith('.storesetgo.online') || hostname.endsWith('.vercel.app')) {
+        return callback(null, true);
+      }
+      
+      // Dynamic Custom Domain Check from Database
+      // Ensure mongoose is connected before checking to prevent crashes during startup
+      if (require("mongoose").connection.readyState === 1) {
+        const CustomDomain = require("./models/CustomDomain");
+        const customDomain = await CustomDomain.findOne({ 
+          domainName: hostname, 
+          status: "Verified" 
+        });
+        
+        if (customDomain) {
+          return callback(null, true);
+        }
+      }
+    } catch (err) {
+      console.error("[CORS] Error checking origin:", err.message);
+    }
+    
+    return callback(new Error("Not allowed by CORS"));
   },
   credentials: true
 }));

@@ -57,9 +57,11 @@ const normalizeSaleFields = (payload = {}) => {
 // @access  Public
 const getProducts = async (req, res) => {
   try {
-    const { category, search, minPrice, maxPrice, isActive } = req.query;
+    const { category, search, minPrice, maxPrice, isActive, clientId: queryClientId } = req.query;
+    const clientId = req.headers["x-client-id"] || queryClientId;
     let query = {};
 
+    if (clientId) query.clientId = clientId;
     if (category && category !== "All Categories") query.category = category;
     if (search) {
       query.$or = [
@@ -96,7 +98,11 @@ const getProducts = async (req, res) => {
 // @access  Public
 const getFeaturedProducts = async (req, res) => {
   try {
-    const products = await Product.find({ isFeatured: true, isActive: true })
+    const clientId = req.headers["x-client-id"] || req.query.clientId;
+    let query = { isFeatured: true, isActive: true };
+    if (clientId) query.clientId = clientId;
+
+    const products = await Product.find(query)
       .select(
         "name category price originalPrice isOnSale salePercentage image stock description sku createdAt updatedAt"
       )
