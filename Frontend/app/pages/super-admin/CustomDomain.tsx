@@ -52,7 +52,7 @@ export function CustomDomain() {
         clientId: selectedClientId
       });
       if (response.success) {
-        setSuccess('Domain added successfully and sent to Vercel');
+        setSuccess(response.message || 'Domain added successfully and sent to Vercel');
         setDomainInput('');
         setSelectedClientId('');
         fetchData();

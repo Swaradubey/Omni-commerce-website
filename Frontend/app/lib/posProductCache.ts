@@ -46,27 +46,37 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function idbPut(products: Product[]): Promise<void> {
+function getEffectiveKeys(clientId?: string) {
+  const suffix = clientId ? `_${clientId}` : '';
+  return {
+    idb: `${IDB_KEY}${suffix}`,
+    ls: `${LS_KEY}${suffix}`
+  };
+}
+
+async function idbPut(products: Product[], clientId?: string): Promise<void> {
   const db = await openDb();
+  const keys = getEffectiveKeys(clientId);
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readwrite');
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('IDB write failed'));
-      tx.objectStore(STORE).put(products, IDB_KEY);
+      tx.objectStore(STORE).put(products, keys.idb);
     });
   } finally {
     db.close();
   }
 }
 
-async function idbGet(): Promise<Product[] | null> {
+async function idbGet(clientId?: string): Promise<Product[] | null> {
   const db = await openDb();
+  const keys = getEffectiveKeys(clientId);
   try {
     const row = await new Promise<Product[] | undefined>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readonly');
       tx.onerror = () => reject(tx.error ?? new Error('IDB read failed'));
-      const req = tx.objectStore(STORE).get(IDB_KEY);
+      const req = tx.objectStore(STORE).get(keys.idb);
       req.onsuccess = () => resolve(req.result as Product[] | undefined);
       req.onerror = () => reject(req.error ?? new Error('IDB get failed'));
     });
@@ -77,17 +87,19 @@ async function idbGet(): Promise<Product[] | null> {
   }
 }
 
-function lsPut(products: Product[]): void {
+function lsPut(products: Product[], clientId?: string): void {
+  const keys = getEffectiveKeys(clientId);
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(products));
+    localStorage.setItem(keys.ls, JSON.stringify(products));
   } catch {
     /* quota or private mode */
   }
 }
 
-function lsGet(): Product[] | null {
+function lsGet(clientId?: string): Product[] | null {
+  const keys = getEffectiveKeys(clientId);
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(keys.ls);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed) || parsed.length === 0) return null;
@@ -98,23 +110,23 @@ function lsGet(): Product[] | null {
 }
 
 /** Persist POS product list after a successful online sync. */
-export async function savePosProductsCache(products: Product[]): Promise<void> {
+export async function savePosProductsCache(products: Product[], clientId?: string): Promise<void> {
   const normalized = products.map(normalizeForCache);
   try {
-    await idbPut(normalized);
+    await idbPut(normalized, clientId);
   } catch {
     /* IndexedDB unavailable — localStorage only */
   }
-  lsPut(normalized);
+  lsPut(normalized, clientId);
 }
 
 /** Load last synced POS products (IndexedDB first, then localStorage). */
-export async function loadPosProductsCache(): Promise<Product[] | null> {
+export async function loadPosProductsCache(clientId?: string): Promise<Product[] | null> {
   try {
-    const fromIdb = await idbGet();
+    const fromIdb = await idbGet(clientId);
     if (fromIdb && fromIdb.length > 0) return fromIdb;
   } catch {
     /* fall through */
   }
-  return lsGet();
+  return lsGet(clientId);
 }

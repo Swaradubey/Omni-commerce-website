@@ -194,7 +194,17 @@ export function Footer() {
 
         {/* Bottom bar */}
         <div className="flex flex-col items-center justify-between gap-4 pt-6 text-sm text-white/40 md:flex-row">
-          <p>© 2026 Retail Verse. All rights reserved.</p>
+          <p>
+            © 2026 Retail Verse. All rights reserved. | Powered by{' '}
+            <a
+              href="https://hexerve.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors hover:text-white hover:underline"
+            >
+              Hexerve
+            </a>
+          </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4 md:justify-end">
             <a href="#" className="transition-colors hover:text-white/70">

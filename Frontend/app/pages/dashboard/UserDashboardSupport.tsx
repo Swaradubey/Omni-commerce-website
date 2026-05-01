@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { useAuth } from '../../context/AuthContext';
 import { UserSupportChatModal } from './UserSupportChatModal';
+import ApiService from '../../api/apiService';
 
 export function UserDashboardSupport() {
   const { user } = useAuth();
@@ -81,25 +82,9 @@ export function UserDashboardSupport() {
   const fetchStats = async () => {
     setLoadingStats(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
-      
-      console.log(`[Debug] Fetching user stats from: ${baseUrl}/support-tickets/my/stats`);
-      
-      const res = await fetch(`${baseUrl}/support-tickets/my/stats`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      console.log(`[Debug] User Stats Response Status: ${res.status}`);
-
-      if (res.ok) {
-         const data = await res.json();
-         if (data.success && data.data) {
-           setStats(data.data);
-         }
+      const res = await ApiService.get('/support-tickets/my/stats');
+      if (res.success && res.data) {
+        setStats(res.data);
       }
     } catch(err) {
       console.error("[User Support Stats Error]", err);
@@ -111,26 +96,10 @@ export function UserDashboardSupport() {
   const fetchMyTickets = async () => {
     setLoadingSystemTickets(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
-      
-      console.log(`[Debug] Fetching my tickets from: ${baseUrl}/support-tickets/my`);
-      
-      const res = await fetch(`${baseUrl}/support-tickets/my`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      console.log(`[Debug] My Tickets Response Status: ${res.status}`);
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          setSystemTickets(data.data);
-          setFilteredTickets(data.data);
-        }
+      const res = await ApiService.get('/support-tickets/my');
+      if (res.success && res.data) {
+        setSystemTickets(res.data);
+        setFilteredTickets(res.data);
       }
     } catch (err) {
       console.error("[User Tickets Error]", err);
@@ -143,7 +112,6 @@ export function UserDashboardSupport() {
     e.preventDefault();
     setCreatingTicket(true);
     try {
-      // Map category to issueType
       const categoryToIssueType: Record<string, string> = {
         'Customer Queries': 'other',
         'Reported Issues': 'payment_issue',
@@ -157,24 +125,8 @@ export function UserDashboardSupport() {
         priority: ticketForm.priority
       };
 
-      const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
-      
-      console.log(`[Debug] Creating ticket at: ${baseUrl}/support-tickets`);
-      
-      const res = await fetch(`${baseUrl}/support-tickets`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload)
-      });
-
-      console.log(`[Debug] Create Ticket Response Status: ${res.status}`);
-
-      const data = await res.json();
-      if (data.success) {
+      const res = await ApiService.post('/support-tickets', payload);
+      if (res.success) {
         toast.success("Support ticket submitted successfully.");
         setIsModalOpen(false);
         setTicketForm({ 
@@ -188,11 +140,10 @@ export function UserDashboardSupport() {
         fetchStats();
         fetchMyTickets();
       } else {
-        console.error("[Debug] Create Ticket Error Response:", data.message || "Unknown error");
-        toast.error(data.message || "Failed to create ticket.");
+        toast.error(res.message || "Failed to create ticket.");
       }
-    } catch(err) {
-       toast.error("Network error.");
+    } catch(err: any) {
+       toast.error(err.message || "Network error.");
     } finally {
        setCreatingTicket(false);
     }

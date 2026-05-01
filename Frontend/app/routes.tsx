@@ -45,12 +45,15 @@ import { WishlistPage } from './pages/WishlistPage';
 import { TrackOrder } from './pages/TrackOrder';
 import { CustomDomain } from './pages/super-admin/CustomDomain';
 
+import { RootRoute } from './components/RootRoute';
+
 export const router = createBrowserRouter([
   {
     path: '/',
     Component: Layout,
     children: [
-      { index: true, Component: Home },
+      { index: true, element: <RootRoute /> },
+      { path: 'landing', Component: Home },
       { path: 'shop', Component: Shop },
       { path: 'product/:slug', Component: ProductDetail },
       { path: 'cart', Component: Cart },

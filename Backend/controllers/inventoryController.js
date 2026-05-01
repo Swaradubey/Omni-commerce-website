@@ -12,6 +12,7 @@ const {
   formatProductWithClient,
 } = require("../utils/formatInventoryProduct");
 const { isClientScopedRole } = require("../utils/clientScopedRoles");
+const { resolveClientId } = require("../utils/tenantResolver");
 
 function userOwnsClientProduct(user, product) {
   if (!user || !isClientScopedRole(user.role)) return true;
@@ -28,14 +29,9 @@ const INVENTORY_MANAGER_TITLE_DESC_SUCCESS =
 const getInventoryManage = async (req, res) => {
   try {
     let query = {};
-    if (isClientScopedRole(req.user.role)) {
-      if (!req.user.clientId) {
-        return res.status(403).json({
-          success: false,
-          message: "Client profile is not linked to this account",
-        });
-      }
-      query.clientId = req.user.clientId;
+    const clientId = req.clientId || (await resolveClientId(req));
+    if (clientId) {
+      query.clientId = clientId;
     }
 
     const rows = await Product.find(query)
@@ -64,7 +60,12 @@ const createInventoryItem = async (req, res) => {
 
   try {
     const { sku } = req.body;
-    const itemExists = await Product.findOne({ sku });
+    const clientId = req.clientId || (await resolveClientId(req));
+    
+    let query = { sku };
+    if (clientId) query.clientId = clientId;
+    
+    const itemExists = await Product.findOne(query);
 
     if (itemExists) {
       return res.status(400).json({ success: false, message: "Product with this SKU already exists" });
@@ -73,27 +74,18 @@ const createInventoryItem = async (req, res) => {
     const payload = { ...req.body };
     const role = req.user.role;
 
-    if (isClientScopedRole(role)) {
-      if (!req.user.clientId) {
-        return res.status(403).json({
-          success: false,
-          message: "Client profile is not linked to this account",
-        });
-      }
-      payload.clientId = req.user.clientId;
-    } else if (role === "super_admin" || role === "admin") {
-      const rawCid = req.body.clientId;
-      if (rawCid !== undefined && rawCid !== null && String(rawCid).trim() !== "") {
-        if (!mongoose.Types.ObjectId.isValid(rawCid)) {
-          return res.status(400).json({ success: false, message: "Invalid client assignment" });
-        }
-        const c = await Client.findById(rawCid);
-        if (!c) {
-          return res.status(400).json({ success: false, message: "Client not found for assignment" });
-        }
-        payload.clientId = c._id;
-      }
+    if (!payload.clientId) {
+      payload.clientId = clientId;
     }
+
+    if (!payload.clientId && req.user.role !== "super_admin") {
+      console.error(`[Inventory] Failed to resolve clientId for user: ${req.user.email} (Role: ${req.user.role})`);
+      return res.status(400).json({ 
+        success: false, 
+        message: "Could not resolve client assignment. If you are on a custom domain, ensure it is correctly mapped." 
+      });
+    }
+
     payload.createdBy = req.user._id;
 
     const item = await Product.create(payload);
@@ -116,7 +108,10 @@ const createInventoryItem = async (req, res) => {
 const getInventory = async (req, res) => {
   try {
     const { category, search, minPrice, maxPrice, inStock } = req.query;
+    const clientId = req.clientId || (await resolveClientId(req));
     let query = {};
+
+    if (clientId) query.clientId = clientId;
 
     if (category) query.category = category;
     if (search) query.name = { $regex: search, $options: "i" };
@@ -143,7 +138,11 @@ const getInventory = async (req, res) => {
 // @access  Public
 const getInventoryById = async (req, res) => {
   try {
-    const item = await Product.findById(req.params.id);
+    const clientId = req.clientId || (await resolveClientId(req));
+    let query = { _id: req.params.id };
+    if (clientId) query.clientId = clientId;
+
+    const item = await Product.findOne(query);
     if (item) {
       res.json({ success: true, data: item });
     } else {
@@ -160,10 +159,11 @@ const getInventoryById = async (req, res) => {
 const updateInventoryItem = async (req, res) => {
   try {
     const role = req.user.role;
-    console.log("[Backend Debug] PUT /api/inventory/:id - Product ID:", req.params.id);
-    console.log("[Backend Debug] PUT /api/inventory/:id - Incoming Body:", req.body);
-    console.log("[Backend Debug] PUT /api/inventory/:id - Role:", role);
-    const item = await Product.findById(req.params.id);
+    const clientId = req.clientId || (await resolveClientId(req));
+    let query = { _id: req.params.id };
+    if (clientId) query.clientId = clientId;
+
+    const item = await Product.findOne(query);
     if (!item) {
       return res.status(404).json({ success: false, message: "Inventory item not found" });
     }
@@ -329,8 +329,11 @@ const updateInventoryItem = async (req, res) => {
 // @access  Private (Admin/Staff)
 const updateStock = async (req, res) => {
   try {
-    const { stock } = req.body;
-    const existing = await Product.findById(req.params.id);
+    const clientId = req.clientId || (await resolveClientId(req));
+    let query = { _id: req.params.id };
+    if (clientId) query.clientId = clientId;
+
+    const existing = await Product.findOne(query);
     if (!existing) {
       return res.status(404).json({ success: false, message: "Inventory item not found" });
     }
@@ -360,7 +363,11 @@ const updateStock = async (req, res) => {
 // @access  Private (Admin/Staff)
 const deleteInventoryItem = async (req, res) => {
   try {
-    const item = await Product.findById(req.params.id);
+    const clientId = req.clientId || (await resolveClientId(req));
+    let query = { _id: req.params.id };
+    if (clientId) query.clientId = clientId;
+
+    const item = await Product.findOne(query);
     if (!item) {
       return res.status(404).json({ success: false, message: "Inventory item not found" });
     }

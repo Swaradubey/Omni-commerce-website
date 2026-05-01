@@ -1,7 +1,7 @@
 import React, { useState, type MouseEvent } from 'react';
 import { Link } from 'react-router';
 import { Product } from '../types/product';
-import { ShoppingCart, Star, ArrowUpRight, Heart } from 'lucide-react';
+import { ShoppingCart, Star, ArrowUpRight, Heart, Package2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
@@ -13,6 +13,8 @@ import {
 } from '../utils/wishlistPayload';
 import { productApi, Product as DynamicProduct } from '../api/products';
 import { formatINR } from '../utils/formatINR';
+import { getFullImageUrl } from '../utils/imageUrl';
+
 interface ProductCardProps {
   product: Product & { _id?: string };
   /** API-backed products from the shop (improves Mongo id matching for wishlist). */
@@ -134,12 +136,16 @@ export function ProductCard({
       className="group relative block overflow-hidden rounded-3xl border border-black/8 bg-white transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(0,0,0,0.08)]"
     >
       {/* Image */}
-      <div className="relative aspect-[4/4.2] overflow-hidden bg-[#f7f7f7]">
-        <img
-          src={product.image}
-          alt={product.name}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+      <div className="relative aspect-[4/4.2] overflow-hidden bg-[#f7f7f7] flex items-center justify-center">
+        {product.image ? (
+          <img
+            src={getFullImageUrl(product.image)}
+            alt={product.name}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <Package2 className="w-12 h-12 text-gray-300" />
+        )}
 
         {/* Top badges */}
         <div className="absolute left-4 top-4 flex flex-col gap-2">

@@ -84,6 +84,11 @@ class ApiService {
       }
 
       if (!response.ok) {
+        // Explicit logging for user requirements
+        console.log(`[Frontend Login Debug] Final URL: ${url}`);
+        console.log(`[Frontend Login Debug] Error Status: ${response.status}`);
+        console.log(`[Frontend Login Debug] Error Message: ${data.message || response.statusText}`);
+
         // Safe error logging
         console.error("Safe Error Log:", {
           url: response.url,
@@ -111,7 +116,10 @@ class ApiService {
       return data as ApiResponse<T>;
     } catch (error: any) {
       console.error(`API Error [${endpoint}]:`, error.message);
+      
+      // Explicit logging for connection issues
       if (error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+        console.log(`[Frontend Login Debug] Failed to connect to URL: ${url}`);
         throw new Error("Unable to connect to server. Please ensure the backend is running.");
       }
       throw error;

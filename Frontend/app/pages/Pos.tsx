@@ -49,6 +49,7 @@ import {
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
+import { getFullImageUrl } from '../utils/imageUrl';
 
 interface CartItem extends Product {
   cartQuantity: number;
@@ -122,8 +123,8 @@ function posProductToShopProduct(p: Product): ShopProduct & { _id?: string } {
     price: p.price,
     description: p.description || '',
     category: p.category,
-    image: p.image || '',
-    images: p.image ? [p.image] : [],
+    image: getFullImageUrl(p.image),
+    images: p.image ? [getFullImageUrl(p.image)] : [],
     stock: p.stock,
     rating: p.rating ?? 0,
     reviews: 0,
@@ -226,16 +227,17 @@ export function Pos() {
   const fetchProducts = useCallback(async () => {
     setIsLoading(true);
     const online = typeof navigator !== 'undefined' && navigator.onLine;
+    const clientIdForCache = localStorage.getItem('retail_verse_client_id') || undefined;
 
     try {
       if (online) {
         try {
-          const response = await productApi.getAll();
+          const response = await productApi.getManage();
           if (response.success && Array.isArray(response.data)) {
             const list = response.data as Product[];
             setProducts(list);
             setProductSource('live');
-            await savePosProductsCache(list);
+            await savePosProductsCache(list, clientIdForCache);
             return;
           }
         } catch {
@@ -243,7 +245,7 @@ export function Pos() {
         }
       }
 
-      const cached = await loadPosProductsCache();
+      const cached = await loadPosProductsCache(clientIdForCache);
       if (cached && cached.length > 0) {
         setProducts(cached);
         setProductSource('cache');
@@ -410,7 +412,7 @@ export function Pos() {
       let body = buildWishlistToggleBody(shop, wishlistPool);
       if ('item' in body) {
         try {
-          const response = await productApi.getAll();
+          const response = await productApi.getManage();
           if (response.success && Array.isArray(response.data)) {
             const list = (response.data as Product[]).map(posProductToShopProduct);
             const retry = buildWishlistToggleBody(shop, list);
@@ -1079,7 +1081,7 @@ export function Pos() {
                       <Heart className={`h-4 w-4 ${inWishlist ? 'fill-current' : ''}`} />
                     </button>
                     {product.image ? (
-                      <img src={product.image} alt={product.name} className="w-full h-full object-cover transition-transform duration-300 group-hover/card:scale-[1.02]" />
+                      <img src={getFullImageUrl(product.image)} alt={product.name} className="w-full h-full object-cover transition-transform duration-300 group-hover/card:scale-[1.02]" />
                     ) : (
                       <Package2 className="w-10 h-10 text-gray-300" />
                     )}
@@ -1160,7 +1162,7 @@ export function Pos() {
                   <div className="flex h-[200px] w-full items-center justify-center overflow-hidden rounded-lg bg-white/80">
                     {currentOrderPreviewItem.image && !previewImageFailed ? (
                       <img
-                        src={currentOrderPreviewItem.image}
+                        src={getFullImageUrl(currentOrderPreviewItem.image)}
                         alt=""
                         className="max-h-full max-w-full object-contain"
                         onError={() => setPreviewImageFailed(true)}
@@ -1213,7 +1215,7 @@ export function Pos() {
                       <div className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center border border-black/5">
                         {item.image ? (
                           <img
-                            src={item.image}
+                            src={getFullImageUrl(item.image)}
                             alt=""
                             className="h-full w-full object-cover"
                           />

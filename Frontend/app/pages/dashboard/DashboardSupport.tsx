@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { useAuth } from '../../context/AuthContext';
 import { SupportChatModal } from './SupportChatModal';
+import ApiService from '../../api/apiService';
 
 export function DashboardSupport() {
   const { user } = useAuth();
@@ -87,30 +88,11 @@ export function DashboardSupport() {
   const fetchStats = async () => {
     setLoadingStats(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
-      
-      console.log(`[Debug] Fetching stats from: ${baseUrl}/support-tickets/stats`);
-      
-      const res = await fetch(`${baseUrl}/support-tickets/stats`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      console.log(`[Debug] Stats Response Status: ${res.status}`);
-      
-      if (res.ok) {
-         const data = await res.json();
-         if (data.success && data.data) {
-           setStats(data.data);
-         }
-      } else {
-         const errorData = await res.json().catch(() => ({}));
-         console.error("[Debug] Stats Error Response:", errorData.message || "Unknown error");
+      const res = await ApiService.get('/support-tickets/stats');
+      if (res.success && res.data) {
+        setStats(res.data);
       }
-    } catch(err) {
+    } catch(err: any) {
       console.error("[Zendesk Stats Error]", err);
     } finally {
       setLoadingStats(false);
@@ -120,54 +102,20 @@ export function DashboardSupport() {
   const fetchTickets = async () => {
     setLoadingTickets(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
+      const res = await ApiService.get('/support-tickets/zendesk');
       
-      console.log(`[Debug] Fetching Zendesk tickets from: ${baseUrl}/support-tickets/zendesk`);
-      
-      const res = await fetch(`${baseUrl}/support-tickets/zendesk`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      console.log(`[Debug] Zendesk Tickets Response Status: ${res.status}`);
-
-      if (res.ok) {
-         const data = await res.json();
-         console.log(`[Debug] Zendesk tickets count: ${data.data?.length || 0}`);
-         
-         if (data.success && data.data && data.data.length > 0) {
-           setTickets(data.data);
-         } else {
-           console.log("[Debug] Zendesk returned empty, falling back to Admin MongoDB tickets...");
-           // Fallback to MongoDB tickets
-           const adminRes = await fetch(`${baseUrl}/support-tickets/admin`, {
-             headers: {
-               'Content-Type': 'application/json',
-               'Authorization': `Bearer ${token}`,
-             },
-           });
-           
-           console.log(`[Debug] Admin Tickets Fallback Status: ${adminRes.status}`);
-           
-           if (adminRes.ok) {
-             const adminData = await adminRes.json();
-             console.log(`[Debug] Admin tickets count: ${adminData.data?.length || 0}`);
-             if (adminData.success && adminData.data) {
-               setTickets(adminData.data);
-             }
-           }
-         }
+      if (res.success && res.data && res.data.length > 0) {
+        setTickets(res.data);
       } else {
-         const errorData = await res.json().catch(() => ({}));
-         console.error("[Debug] Zendesk Fetch Error Response:", errorData.message || "Unknown error");
-         toast.error(errorData.message || "Failed to load Zendesk tickets.");
+        console.log("[Debug] Zendesk returned empty, falling back to Admin MongoDB tickets...");
+        const adminRes = await ApiService.get('/support-tickets/admin');
+        if (adminRes.success && adminRes.data) {
+          setTickets(adminRes.data);
+        }
       }
-    } catch(err) {
+    } catch(err: any) {
       console.error("[Zendesk Tickets Error]", err);
-      toast.error("Network error while loading Zendesk tickets.");
+      toast.error(err.message || "Failed to load tickets.");
     } finally {
       setLoadingTickets(false);
     }
@@ -176,25 +124,9 @@ export function DashboardSupport() {
   const fetchSystemTickets = async () => {
     setLoadingSystemTickets(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
-      
-      console.log(`[Debug] Fetching system tickets from: ${baseUrl}/support-tickets/admin`);
-      
-      const res = await fetch(`${baseUrl}/support-tickets/admin`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      console.log(`[Debug] System Tickets Response Status: ${res.status}`);
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          setSystemTickets(data.data);
-        }
+      const res = await ApiService.get('/support-tickets/admin');
+      if (res.success && res.data) {
+        setSystemTickets(res.data);
       }
     } catch (err) {
       console.error("[System Tickets Error]", err);
@@ -205,34 +137,17 @@ export function DashboardSupport() {
 
   const handleUpdateStatus = async (ticketId: string, newStatus: string) => {
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
-      
-      console.log(`[Debug] Updating ticket status: ${baseUrl}/support-tickets/${ticketId}/status to ${newStatus}`);
-      
-      const res = await fetch(`${baseUrl}/support-tickets/${ticketId}/status`, {
-        method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-
-      console.log(`[Debug] Update Status Response Status: ${res.status}`);
-      
-      const data = await res.json();
-      if (data.success) {
+      const res = await ApiService.patch(`/support-tickets/${ticketId}/status`, { status: newStatus });
+      if (res.success) {
         toast.success(`Ticket marked as ${newStatus}`);
         fetchStats();
         fetchSystemTickets();
         setIsDetailModalOpen(false);
       } else {
-        console.error("[Debug] Update Status Error Response:", data.message || "Unknown error");
-        toast.error(data.message || "Failed to update status");
+        toast.error(res.message || "Failed to update status");
       }
-    } catch (err) {
-      toast.error("Network error while updating status");
+    } catch (err: any) {
+      toast.error(err.message || "Network error while updating status");
     }
   };
 
@@ -250,18 +165,8 @@ export function DashboardSupport() {
     e.preventDefault();
     setCreatingTicket(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-      const res = await fetch(`${baseUrl}/support-tickets/zendesk`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(ticketForm)
-      });
-      const data = await res.json();
-      if (data.success) {
+      const res = await ApiService.post('/support-tickets/zendesk', ticketForm);
+      if (res.success) {
         toast.success("Ticket created successfully in Zendesk.");
         setIsModalOpen(false);
         setTicketForm({ subject: '', description: '', name: '', email: '', category: 'Customer Queries', priority: 'normal' });
@@ -270,10 +175,10 @@ export function DashboardSupport() {
           fetchTickets();
         }
       } else {
-        toast.error(data.message || "Failed to create ticket.");
+        toast.error(res.message || "Failed to create ticket.");
       }
-    } catch(err) {
-       toast.error("Network error.");
+    } catch(err: any) {
+       toast.error(err.message || "Network error.");
     } finally {
        setCreatingTicket(false);
     }

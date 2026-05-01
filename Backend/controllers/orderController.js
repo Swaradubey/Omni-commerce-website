@@ -6,6 +6,7 @@ const User = require("../models/User");
 const TrackOrder = require("../models/TrackOrder");
 const Invoice = require("../models/Invoice");
 const shiprocketService = require("../services/shiprocketService");
+const { resolveClientId } = require("../utils/tenantResolver");
 
 /** Standard stages (1–6) for timeline UI */
 const TRACKING_STAGE_LABELS = [
@@ -520,6 +521,7 @@ function sanitizePaymentDetails(details) {
 // @access  Public
 const createOrder = async (req, res) => {
   try {
+    const clientId = req.clientId || (await resolveClientId(req));
     console.log("-----------------------------------------");
     const payloadKeys =
       req.body && typeof req.body === "object" && !Array.isArray(req.body)
@@ -759,7 +761,7 @@ const createOrder = async (req, res) => {
 
       // If productId is a valid ObjectId, we try to find it for stock management
       if (mongoose.Types.ObjectId.isValid(resolvedProductId)) {
-        const product = await Product.findById(resolvedProductId);
+        const product = await Product.findOne({ _id: resolvedProductId, clientId });
         if (product && product.stock < item.quantity) {
           console.warn(`[VALIDATION] Insufficient stock for ${product.name}`);
           return res.status(400).json({
@@ -867,6 +869,7 @@ const createOrder = async (req, res) => {
     // Order model has no cancelled/refunded status field — every persisted document is a completed placement; totalSpent sums totalPrice for those.
     const order = new Order({
       orderId: orderIdStr || orderId || orderIdSnake || `ORD-${Date.now()}`,
+      clientId: clientId || undefined,
       user: resolvedUserId || undefined,
       ...(customerNameSnap ? { customerName: customerNameSnap } : {}),
       ...(customerEmailSnap ? { customerEmail: customerEmailSnap } : {}),
@@ -941,9 +944,10 @@ const createOrder = async (req, res) => {
       for (const item of items) {
         const stockId = item.productId || item._id || item.id;
         if (stockId && mongoose.Types.ObjectId.isValid(stockId)) {
-          await Product.findByIdAndUpdate(stockId, {
-            $inc: { stock: -item.quantity },
-          });
+          await Product.findOneAndUpdate(
+            { _id: stockId, clientId },
+            { $inc: { stock: -item.quantity } }
+          );
         }
       }
 
@@ -1092,7 +1096,9 @@ const createOrder = async (req, res) => {
 
 const getOrders = async (req, res) => {
   try {
-    const orders = await Order.find({}).sort("-createdAt");
+    const clientId = req.clientId || (await resolveClientId(req));
+    const query = clientId ? { clientId } : {};
+    const orders = await Order.find(query).sort("-createdAt");
     res.json({
       success: true,
       count: orders.length,
@@ -1108,10 +1114,12 @@ const getOrders = async (req, res) => {
 // @access  Private (same roles as GET /api/orders)
 const getLatestTransactions = async (req, res) => {
   try {
+    const clientId = req.clientId || (await resolveClientId(req));
     const rawLimit = parseInt(req.query.limit, 10);
     const limit = Number.isFinite(rawLimit) ? Math.min(50, Math.max(1, rawLimit)) : 12;
 
-    const orders = await Order.find({})
+    const query = clientId ? { clientId } : {};
+    const orders = await Order.find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate("user", "name email")
@@ -1166,9 +1174,10 @@ const getOrderById = async (req, res) => {
       return res.status(400).json({ success: false, message: "Order id is required" });
     }
 
-    let order = await Order.findOne({ orderId: raw });
+    const clientId = req.clientId || (await resolveClientId(req));
+    let order = await Order.findOne({ orderId: raw, clientId });
     if (!order && mongoose.Types.ObjectId.isValid(raw)) {
-      order = await Order.findById(raw);
+      order = await Order.findOne({ _id: raw, clientId });
     }
 
     if (order) {
@@ -1186,8 +1195,9 @@ const getOrderById = async (req, res) => {
 // @access  Private (user, customer)
 const getMyOrdersTracking = async (req, res) => {
   try {
+    const clientId = req.clientId || (await resolveClientId(req));
     const isAdmin = req.user && ["admin", "super_admin", "manager", "staff", "inventory_manager", "cashier"].includes(req.user.role);
-    const query = isAdmin ? {} : { user: req.user._id };
+    const query = isAdmin ? (clientId ? { clientId } : {}) : { user: req.user._id };
     
     const limit = isAdmin ? 20 : 50;
 

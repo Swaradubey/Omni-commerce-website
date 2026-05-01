@@ -3,6 +3,7 @@ import { X, MessageSquare, Send, Loader2, User, UserCircle, RefreshCcw, Clock, A
 import { Card } from '../../components/ui/card';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
+import ApiService from '../../api/apiService';
 
 interface UserSupportChatModalProps {
   isOpen: boolean;
@@ -36,31 +37,15 @@ export function UserSupportChatModal({ isOpen, onClose, ticket }: UserSupportCha
     if (!ticket?.zendeskTicketId) return;
     setLoadingMessages(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
-      
-      console.log(`[Debug] User fetching messages for Zendesk ID ${ticket.zendeskTicketId} from: ${baseUrl}/support-tickets/zendesk/${ticket.zendeskTicketId}/comments`);
-      
-      const res = await fetch(`${baseUrl}/support-tickets/zendesk/${ticket.zendeskTicketId}/comments?_t=${Date.now()}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      console.log(`[Debug] User Fetch Messages Status: ${res.status}`);
-      
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setMessages(data.data || []);
+      const res = await ApiService.get(`/support-tickets/zendesk/${ticket.zendeskTicketId}/comments?_t=${Date.now()}`);
+      if (res.success) {
+        setMessages(res.data || []);
       } else {
-        const errorMsg = data.message || 'Failed to load chat messages';
-        console.error("[Chat] Fetch Error:", errorMsg);
-        toast.error(errorMsg);
+        toast.error(res.message || 'Failed to load chat messages');
       }
-    } catch (err) {
-      console.error("[Chat] Network Error:", err);
-      toast.error('Network error while loading messages');
+    } catch (err: any) {
+      console.error("[Chat] Error:", err);
+      toast.error(err.message || 'Network error while loading messages');
     } finally {
       setLoadingMessages(false);
     }
@@ -73,35 +58,17 @@ export function UserSupportChatModal({ isOpen, onClose, ticket }: UserSupportCha
 
     setSending(true);
     try {
-      const token = localStorage.getItem('eco_shop_token');
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://omni-commerce-website.onrender.com/api';
-      
-      console.log(`[Debug] User sending message for Zendesk ID ${ticket.zendeskTicketId} to: ${baseUrl}/support-tickets/zendesk/${ticket.zendeskTicketId}/comments`);
-      
-      const res = await fetch(`${baseUrl}/support-tickets/zendesk/${ticket.zendeskTicketId}/comments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message: cleanMessage, isPublic: true }),
-      });
-      
-      console.log(`[Debug] User Send Message Status: ${res.status}`);
-      
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const res = await ApiService.post(`/support-tickets/zendesk/${ticket.zendeskTicketId}/comments`, { message: cleanMessage, isPublic: true });
+      if (res.success) {
         setMessageInput('');
         await fetchMessages();
         toast.success('Message sent');
       } else {
-        const errorMsg = data.message || 'Failed to send message';
-        console.error("[Chat] Send Error:", errorMsg);
-        toast.error(errorMsg);
+        toast.error(res.message || 'Failed to send message');
       }
-    } catch (err) {
-      console.error("[Chat] Send Network Error:", err);
-      toast.error('Network error while sending message');
+    } catch (err: any) {
+      console.error("[Chat] Send Error:", err);
+      toast.error(err.message || 'Network error while sending message');
     } finally {
       setSending(false);
     }

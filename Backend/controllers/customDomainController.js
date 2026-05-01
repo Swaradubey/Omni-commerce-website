@@ -84,15 +84,8 @@ const createCustomDomain = async (req, res) => {
     let formattedDomain = domainName.trim().toLowerCase();
     formattedDomain = formattedDomain.replace(/^https?:\/\//, ""); // Remove http:// or https://
     formattedDomain = formattedDomain.replace(/\/$/, ""); // Remove trailing slash
-    // Notice we do NOT remove www. here so if they specifically want www. it stays.
-    // However, Vercel requires the exact domain.
     
     console.log("Normalized incoming domain:", formattedDomain);
-    // Check if domain exists in DB
-    const existingDomain = await CustomDomain.findOne({ $or: [{ domainName: formattedDomain }, { domain: formattedDomain }] });
-    if (existingDomain) {
-      return res.status(400).json({ message: "Domain already exists" });
-    }
 
     // Fetch client to get name
     const client = await Client.findById(clientId);
@@ -100,11 +93,28 @@ const createCustomDomain = async (req, res) => {
       return res.status(404).json({ message: "Client not found" });
     }
 
+    let alreadyInVercel = false;
+    let successMessage = "Custom domain created successfully and sent to Vercel";
+
     // Add to Vercel
     try {
       await vercelService.addDomain(formattedDomain);
     } catch (vercelError) {
-      return res.status(500).json({ message: `Vercel Error: ${vercelError.message}` });
+      const errorMsg = vercelError.message || "";
+      // Requirement 3 & 4: If Vercel returns an error that the domain is already in use, do not completely fail.
+      if (
+        errorMsg.includes("already in use") || 
+        errorMsg.includes("already_exists") || 
+        errorMsg.includes("already exists")
+      ) {
+        console.log(`[Vercel] Domain ${formattedDomain} already exists or is in use in Vercel.`);
+        alreadyInVercel = true;
+        // Requirement 7: Add proper response message
+        successMessage = "Domain already exists in Vercel and has been linked to this client.";
+      } else {
+        console.error(`[Vercel] Error adding domain: ${errorMsg}`);
+        return res.status(500).json({ message: `Vercel Error: ${errorMsg}` });
+      }
     }
 
     // DNS Instructions
@@ -113,19 +123,39 @@ const createCustomDomain = async (req, res) => {
       subdomain: { type: "CNAME", name: "www", value: "cname.vercel-dns.com" }
     };
 
-    const customDomain = await CustomDomain.create({
-      domainName: formattedDomain,
-      domain: formattedDomain,
-      clientId,
-      clientName: client.companyName || client.shopName || "Client",
-      status: "Pending",
-      dnsInstructions
+    // Requirement 6: Avoid duplicate MongoDB entries for the same domain.
+    // Check if domain exists in DB
+    let customDomain = await CustomDomain.findOne({ 
+      $or: [{ domainName: formattedDomain }, { domain: formattedDomain }] 
     });
 
-    res.status(201).json({ success: true, data: customDomain });
+    if (customDomain) {
+      // Requirement 5: If domain is already configured, save/update it in MongoDB for the selected client.
+      customDomain.clientId = clientId;
+      customDomain.clientName = client.companyName || client.shopName || "Client";
+      customDomain.dnsInstructions = dnsInstructions;
+      // We keep existing status or reset to Pending if needed. 
+      // Resetting to Pending allows the Super Admin to trigger a re-verify manually.
+      customDomain.status = "Pending"; 
+      await customDomain.save();
+      return res.status(200).json({ success: true, data: customDomain, message: successMessage });
+    } else {
+      // Create new record
+      customDomain = await CustomDomain.create({
+        domainName: formattedDomain,
+        domain: formattedDomain,
+        clientId,
+        clientName: client.companyName || client.shopName || "Client",
+        status: "Pending",
+        dnsInstructions
+      });
+      return res.status(201).json({ success: true, data: customDomain, message: successMessage });
+    }
+
   } catch (error) {
+    console.error("Error in createCustomDomain:", error);
     if (error.code === 11000) {
-      return res.status(400).json({ message: "Domain already exists" });
+      return res.status(400).json({ message: "Domain already exists in the system" });
     }
     res.status(500).json({ success: false, message: error.message });
   }

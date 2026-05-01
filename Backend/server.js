@@ -12,6 +12,7 @@ const express = require("express");
 const cors = require("cors");
 const connectDB = require("./config/db");
 const { notFound, errorHandler } = require("./middleware/errorMiddleware");
+const tenantMiddleware = require("./middleware/tenantMiddleware");
 
 const app = express();
 
@@ -19,7 +20,9 @@ const app = express();
 const allowedOrigins = [
   "https://storesetgo.online",
   "https://www.storesetgo.online",
-  "https://retail-verse-website-bj2s-gim5m3yd6-swaradubey-projects.vercel.app"
+  "https://retailverse.in",
+  "https://www.retailverse.in",
+  "https://retail-verse-website-bj2s.vercel.app"
 ];
 
 // Add environment variable origin(s) if they exist
@@ -27,7 +30,7 @@ if (process.env.CLIENT_ORIGIN) {
   const envOrigins = process.env.CLIENT_ORIGIN.split(',').map(o => o.trim());
   allowedOrigins.push(...envOrigins);
 } else {
-  allowedOrigins.push("http://localhost:5173");
+  allowedOrigins.push("http://localhost:5173", "http://localhost:3000");
 }
 
 app.use(cors({
@@ -49,12 +52,19 @@ app.use(cors({
       }
       
       // Dynamic Custom Domain Check from Database
-      // Ensure mongoose is connected before checking to prevent crashes during startup
       if (require("mongoose").connection.readyState === 1) {
         const CustomDomain = require("./models/CustomDomain");
+        
+        // Normalize hostname for lookup (remove www.)
+        const normalized = hostname.toLowerCase().replace(/^www\./, "");
+        
         const customDomain = await CustomDomain.findOne({ 
-          domainName: hostname, 
-          status: "Verified" 
+          $or: [
+            { domainName: normalized },
+            { domainName: `www.${normalized}` },
+            { domain: normalized },
+            { domain: `www.${normalized}` }
+          ]
         });
         
         if (customDomain) {
@@ -71,6 +81,9 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// Attach tenant resolution globally before any routes
+app.use(tenantMiddleware);
 
 // Routes
 const authRoutes = require("./routes/authRoutes");

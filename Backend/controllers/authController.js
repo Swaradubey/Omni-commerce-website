@@ -150,22 +150,34 @@ async function tryAuthenticateSuperAdmin(normalizedEmail, password, req = null) 
     }
   }
 
+  const data = {
+    _id: synced._id,
+    name: synced.name,
+    email: synced.email,
+    role: "super_admin",
+    phone: synced.phone || "",
+    address: synced.address || "",
+    clientId: synced.clientId || null,
+    managerId: synced.managerId || null,
+    lastLoginAt: synced.lastLoginAt,
+    isAdmin: true,
+    isSuperAdmin: true,
+    token: generateToken(synced._id, synced.email, "super_admin"),
+  };
+
+  // Resolve clientId from domain if not present in user record
+  if (!data.clientId) {
+    const { resolveClientId } = require("../utils/tenantResolver");
+    const resolved = await resolveClientId(req);
+    if (resolved) {
+      data.clientId = resolved;
+      console.log(`[Auth] Super Admin: Resolved clientId from domain for login: ${resolved}`);
+    }
+  }
+
   return {
     kind: "ok",
-    data: {
-      _id: synced._id,
-      name: synced.name,
-      email: synced.email,
-      role: "super_admin",
-      phone: synced.phone || "",
-      address: synced.address || "",
-      clientId: synced.clientId || null,
-      managerId: synced.managerId || null,
-      lastLoginAt: synced.lastLoginAt,
-      isAdmin: true,
-      isSuperAdmin: true,
-      token: generateToken(synced._id, synced.email, "super_admin"),
-    },
+    data,
   };
 }
 
@@ -333,6 +345,16 @@ const loginUser = async (req, res) => {
         console.error(`[Auth] Login log failed email=${normalizedEmail}:`, logErr.message);
       }
 
+      // Resolve clientId from domain if not present in user record
+      let resolvedClientId = synced.clientId;
+      if (!resolvedClientId) {
+        const { resolveClientId } = require("../utils/tenantResolver");
+        resolvedClientId = await resolveClientId(req);
+        if (resolvedClientId) {
+          console.log(`[Auth] Resolved clientId from domain for login: ${resolvedClientId}`);
+        }
+      }
+
       console.log(`[Auth] Login OK: ${normalizedEmail} role=${synced.role}`);
       return res.json({
         success: true,
@@ -344,7 +366,7 @@ const loginUser = async (req, res) => {
           role: synced.role,
           phone: synced.phone || "",
           address: synced.address || "",
-          clientId: synced.clientId || null,
+          clientId: resolvedClientId || null,
           managerId: synced.managerId || null,
           lastLoginAt: synced.lastLoginAt,
           isAdmin: synced.role === "admin" || synced.role === "super_admin",

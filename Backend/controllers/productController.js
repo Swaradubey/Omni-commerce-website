@@ -9,6 +9,7 @@ const {
 } = require("../utils/productFieldPermissions");
 const { formatProductWithClient } = require("../utils/formatInventoryProduct");
 const { isClientScopedRole } = require("../utils/clientScopedRoles");
+const { resolveClientId } = require("../utils/tenantResolver");
 
 function userOwnsClientProduct(user, product) {
   if (!user || !isClientScopedRole(user.role)) return true;
@@ -57,11 +58,17 @@ const normalizeSaleFields = (payload = {}) => {
 // @access  Public
 const getProducts = async (req, res) => {
   try {
-    const { category, search, minPrice, maxPrice, isActive, clientId: queryClientId } = req.query;
-    const clientId = req.headers["x-client-id"] || queryClientId;
+    const { category, search, minPrice, maxPrice, isActive } = req.query;
+    const clientId = req.clientId || (await resolveClientId(req));
     let query = {};
 
-    if (clientId) query.clientId = clientId;
+    if (clientId) {
+      query.clientId = clientId;
+    } else {
+      console.warn("[Products] No clientId resolved for getProducts");
+      // If we're strictly multi-tenant, we might want to return empty or error
+      // For now, let's allow it but log it, or enforce it if possible.
+    }
     if (category && category !== "All Categories") query.category = category;
     if (search) {
       query.$or = [
@@ -98,7 +105,7 @@ const getProducts = async (req, res) => {
 // @access  Public
 const getFeaturedProducts = async (req, res) => {
   try {
-    const clientId = req.headers["x-client-id"] || req.query.clientId;
+    const clientId = req.clientId || (await resolveClientId(req));
     let query = { isFeatured: true, isActive: true };
     if (clientId) query.clientId = clientId;
 
@@ -126,7 +133,11 @@ const getFeaturedProducts = async (req, res) => {
 // @access  Public
 const getProductById = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const clientId = req.clientId || (await resolveClientId(req));
+    let query = { _id: req.params.id };
+    if (clientId) query.clientId = clientId;
+
+    const product = await Product.findOne(query);
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -163,7 +174,12 @@ const createProduct = async (req, res) => {
 
   try {
     const { sku } = req.body;
-    const existingProduct = await Product.findOne({ sku });
+    const clientId = req.clientId || (await resolveClientId(req));
+    
+    let query = { sku };
+    if (clientId) query.clientId = clientId;
+    
+    const existingProduct = await Product.findOne(query);
 
     if (existingProduct) {
       console.warn("[Backend Debug] SKU Conflict:", sku);
@@ -176,26 +192,16 @@ const createProduct = async (req, res) => {
     const payload = normalizeSaleFields(req.body);
     const role = req.user.role;
 
-    if (isClientScopedRole(role)) {
-      if (!req.user.clientId) {
-        return res.status(403).json({
-          success: false,
-          message: "Client profile is not linked to this account",
-        });
-      }
-      payload.clientId = req.user.clientId;
-    } else if (role === "super_admin" || role === "admin") {
-      const rawCid = req.body.clientId;
-      if (rawCid !== undefined && rawCid !== null && String(rawCid).trim() !== "") {
-        if (!mongoose.Types.ObjectId.isValid(rawCid)) {
-          return res.status(400).json({ success: false, message: "Invalid client assignment" });
-        }
-        const c = await Client.findById(rawCid);
-        if (!c) {
-          return res.status(400).json({ success: false, message: "Client not found for assignment" });
-        }
-        payload.clientId = c._id;
-      }
+    if (!payload.clientId) {
+      payload.clientId = await resolveClientId(req);
+    }
+
+    if (!payload.clientId && req.user.role !== "super_admin") {
+      console.error(`[Products] Failed to resolve clientId for user: ${req.user.email} (Role: ${req.user.role})`);
+      return res.status(400).json({ 
+        success: false, 
+        message: "Could not resolve client assignment. If you are on a custom domain, ensure it is correctly mapped." 
+      });
     }
 
     payload.createdBy = req.user._id;
@@ -244,7 +250,11 @@ const updateProduct = async (req, res) => {
       console.log(`PUT /api/products/${req.params.id} - Role: ${role}`);
     }
     
-    const product = await Product.findById(req.params.id);
+    const clientId = req.clientId || (await resolveClientId(req));
+    let query = { _id: req.params.id };
+    if (clientId) query.clientId = clientId;
+
+    const product = await Product.findOne(query);
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -369,7 +379,10 @@ const updateProduct = async (req, res) => {
     });
 
     if (normalizedPayload.sku && normalizedPayload.sku !== product.sku) {
-      const existingProduct = await Product.findOne({ sku: normalizedPayload.sku });
+      let skuQuery = { sku: normalizedPayload.sku };
+      if (clientId) skuQuery.clientId = clientId;
+      
+      const existingProduct = await Product.findOne(skuQuery);
       if (existingProduct) {
         return res.status(400).json({
           success: false,
@@ -435,7 +448,11 @@ const updateProductStock = async (req, res) => {
       });
     }
 
-    const existing = await Product.findById(req.params.id);
+    const clientId = req.clientId || (await resolveClientId(req));
+    let query = { _id: req.params.id };
+    if (clientId) query.clientId = clientId;
+
+    const existing = await Product.findOne(query);
     if (!existing) {
       return res.status(404).json({
         success: false,
@@ -471,7 +488,11 @@ const updateProductStock = async (req, res) => {
 // @access  Private (Admin/Staff)
 const deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const clientId = req.clientId || (await resolveClientId(req));
+    let query = { _id: req.params.id };
+    if (clientId) query.clientId = clientId;
+
+    const product = await Product.findOne(query);
     if (!product) {
       return res.status(404).json({
         success: false,

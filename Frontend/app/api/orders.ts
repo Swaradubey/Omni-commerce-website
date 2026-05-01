@@ -1,7 +1,7 @@
 import ApiService from './apiService';
 
 const BASE_URL: string =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_BASE_URL || "https://omni-commerce-website.onrender.com/api";
 
 /** Same key as ApiService — send Bearer token on order creation so the backend can link orders to logged-in customers. */
 const TOKEN_KEY = "eco_shop_token";
@@ -88,36 +88,7 @@ interface OrderCreateResponse {
 export const createOrder = async (
   orderData: OrderPayload
 ): Promise<OrderCreateResponse> => {
-  // Ensure we don't have double /api/ if VITE_API_BASE_URL already includes it
-  const url = BASE_URL.endsWith('/api') ? `${BASE_URL}/orders` : `${BASE_URL}/orders`;
-  // Actually, standard is usually BASE_URL = http://localhost:5000/api
-  // In Checkout.tsx it was using createOrder(orderData)
-  
-  console.log('[FRONTEND] createOrder → POST', url);
-  console.log(
-    '[FRONTEND] createOrder payload keys:',
-    orderData && typeof orderData === 'object' ? Object.keys(orderData).join(', ') : '(invalid)'
-  );
-
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && token !== 'null' && token !== 'undefined'
-        ? { Authorization: `Bearer ${token}` }
-        : {}),
-    },
-    body: JSON.stringify(orderData),
-  });
-
-  const body = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(body.message || body.error || `Server error (${response.status})`);
-  }
-
-  return body as OrderCreateResponse;
+  return ApiService.post<any>("/orders", orderData);
 };
 
 export const getOrderById = async (

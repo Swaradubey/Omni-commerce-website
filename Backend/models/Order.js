@@ -48,6 +48,12 @@ const orderSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    clientId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Client",
+      required: false,
+      default: null,
+    },
     items: [
       {
         productId: {

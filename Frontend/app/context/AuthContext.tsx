@@ -195,6 +195,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(IMPERSONATION_SUPER_TOKEN_BACKUP_KEY);
       localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data));
+      if (data.clientId) {
+        localStorage.setItem('retail_verse_client_id', String(data.clientId));
+      }
 
       setToken(data.token);
       setUser(data as User);
@@ -230,6 +233,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(IMPERSONATION_SUPER_TOKEN_BACKUP_KEY);
       localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data));
+      if (data.clientId) {
+        localStorage.setItem('retail_verse_client_id', String(data.clientId));
+      }
 
       setToken(data.token);
       setUser(data as User);
@@ -259,6 +265,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(IMPERSONATION_SUPER_TOKEN_BACKUP_KEY);
       localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data));
+      if (data.clientId) {
+        localStorage.setItem('retail_verse_client_id', String(data.clientId));
+      }
 
       setToken(data.token);
       setUser(data as User);
@@ -275,6 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(USER_STORAGE_KEY);
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(IMPERSONATION_SUPER_TOKEN_BACKUP_KEY);
+    localStorage.removeItem('retail_verse_client_id');
   };
 
   const patchUser = (partial: Partial<User>) => {
