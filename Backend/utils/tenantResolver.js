@@ -2,7 +2,7 @@ const CustomDomain = require("../models/CustomDomain");
 
 /**
  * Normalizes a domain name by removing protocol, www., and trailing slashes.
- * @param {string} domain 
+ * @param {string} domain
  * @returns {string}
  */
 function normalizeDomain(domain) {
@@ -17,92 +17,143 @@ function normalizeDomain(domain) {
 }
 
 /**
- * Resolves the clientId from various request sources:
- * 1. User object (if logged in and scoped)
- * 2. Headers (x-client-id)
- * 3. Body or Query parameters
- * 4. Origin or Referer domain
- * 
- * @param {import("express").Request} req 
+ * Resolves the clientId from various request sources.
+ *
+ * Resolution priority:
+ *  1. Non-admin user with clientId
+ *  2. x-client-id header (explicit client id sent by frontend)
+ *  3. body / query clientId param
+ *  4. Domain lookup — tries each candidate in this order:
+ *       a. x-client-origin header  (window.location.origin from browser)
+ *       b. x-client-domain header  (window.location.hostname from browser)
+ *       c. origin / referer header
+ *       d. x-forwarded-host / host header
+ *
+ * IMPORTANT: For API calls, req.headers.host is the Render backend host, NOT
+ * the custom domain. The browser-sent x-client-origin / x-client-domain
+ * headers reliably carry the real end-user domain (e.g. retailverse.in).
+ *
+ * @param {import("express").Request} req
  * @returns {Promise<string|null>}
  */
 async function resolveClientId(req) {
   const route = req.originalUrl || req.url;
   
-  // 1. Try from user object
+  // Full debug snapshot for tenant resolution troubleshooting
+  console.log("[Tenant Debug] origin:", req.headers.origin);
+  console.log("[Tenant Debug] host:", req.headers.host);
+  console.log("[Tenant Debug] x-client-domain:", req.headers["x-client-domain"]);
+  console.log("[Tenant Debug] user role:", req.user?.role);
+  console.log("[Tenant Debug] user clientId:", req.user?.clientId);
+
+  // ── A. Authenticated user object ──────────────────────────────────────────
+  // If logged-in user has clientId, use it (highest priority)
   if (req.user && req.user.clientId) {
     console.log(`[TenantResolver] Resolved via user.clientId: ${req.user.clientId} for ${route}`);
+    console.log("[Tenant Debug] resolved clientId:", req.user.clientId);
     return String(req.user.clientId);
   }
 
-  // 2. Try from headers
+  // ── B. Admin/Super-admin selectedClientId or activeClientId ───────────────
+  // Some flows might set selectedClientId or activeClientId in the session or body
+  const selectedClientId = req.user?.selectedClientId || req.user?.activeClientId || req.body?.selectedClientId || req.query?.selectedClientId;
+  if (selectedClientId && selectedClientId !== "null" && selectedClientId !== "undefined") {
+    console.log(`[TenantResolver] Resolved via selected/active clientId: ${selectedClientId} for ${route}`);
+    console.log("[Tenant Debug] resolved clientId:", selectedClientId);
+    return String(selectedClientId);
+  }
+
+  // ── C. Explicit x-client-id header ────────────────────────────────────────
   const headerId = req.headers["x-client-id"];
   if (headerId && headerId !== "null" && headerId !== "undefined") {
     console.log(`[TenantResolver] Resolved via x-client-id header: ${headerId} for ${route}`);
+    console.log("[Tenant Debug] resolved clientId:", headerId);
     return String(headerId);
   }
 
-  // 3. Try from body or query
-  const bodyId = req.body?.clientId || req.query?.clientId;
-  if (bodyId && bodyId !== "null" && bodyId !== "undefined") {
-    console.log(`[TenantResolver] Resolved via body/query clientId: ${bodyId} for ${route}`);
-    return String(bodyId);
+  // ── D, E, F. Domain-based lookup ──────────────────────────────────────────
+  // Read all domain hint sources
+  const xClientOrigin = req.headers["x-client-origin"] || "";
+  const xClientDomain = req.headers["x-client-domain"] || "";
+  const originHeader  = req.headers.origin || req.headers.referer || "";
+  const hostHeader    = req.headers["x-forwarded-host"] || req.headers.host || "";
+
+  // Build a prioritised list of raw hostname strings
+  const rawCandidates = [];
+
+  if (xClientOrigin) {
+    try { rawCandidates.push(new URL(xClientOrigin).hostname); }
+    catch { rawCandidates.push(xClientOrigin); }
+  }
+  if (xClientDomain) {
+    rawCandidates.push(xClientDomain);
+  }
+  if (originHeader) {
+    try { rawCandidates.push(new URL(originHeader).hostname); }
+    catch { rawCandidates.push(originHeader); }
+  }
+  if (hostHeader) {
+    rawCandidates.push(hostHeader.split(":")[0]);
   }
 
-  // 4. Resolve from domain (Origin, Referer, or Host)
-  const origin = req.headers.origin || req.headers.referer;
-  const host = req.headers["x-forwarded-host"] || req.headers.host;
-  
-  console.log(`[TenantResolver] Debug - Route: ${route}, Origin: ${req.headers.origin}, Referer: ${req.headers.referer}, Host: ${req.headers.host}, X-Forwarded-Host: ${req.headers["x-forwarded-host"]}`);
+  // System / infrastructure domains — skip DB lookup
+  const isSystemDomain = (d) =>
+    !d ||
+    d === "localhost" ||
+    d.endsWith(".vercel.app") ||
+    d.endsWith(".onrender.com") ||
+    d.endsWith(".render.com");
 
-  // Try parsing from Origin/Referer first (usually more reliable for frontend apps)
-  let domainToResolve = null;
-  if (origin) {
-    try {
-      domainToResolve = new URL(origin).hostname;
-    } catch (err) {
-      domainToResolve = origin; // Fallback if not a full URL
+  // Deduplicate while preserving priority order
+  const seen = new Set();
+  const candidates = [];
+  for (const raw of rawCandidates) {
+    const normalized = normalizeDomain(raw);
+    if (normalized && !seen.has(normalized)) {
+      seen.add(normalized);
+      candidates.push(normalized);
     }
-  } else if (host) {
-    domainToResolve = host;
   }
 
-  if (domainToResolve) {
-    try {
-      const normalized = normalizeDomain(domainToResolve);
-      console.log(`[TenantResolver] Attempting to resolve domain: ${normalized}`);
-      
-      // Skip resolution for known system domains
-      if (normalized === "localhost" || normalized.endsWith("vercel.app") || normalized.endsWith("onrender.com")) {
-        console.log(`[TenantResolver] System domain detected (${normalized}), skipping DB lookup.`);
-      } else {
-        const domainDoc = await CustomDomain.findOne({
-          $or: [
-            { domainName: normalized },
-            { domainName: `www.${normalized}` },
-            { domain: normalized },
-            { domain: `www.${normalized}` }
-          ]
-        }).select("clientId");
+  for (const normalized of candidates) {
+    if (isSystemDomain(normalized)) {
+      console.log(`[TenantResolver] System domain detected (${normalized}), skipping DB lookup.`);
+      continue;
+    }
 
-        if (domainDoc && domainDoc.clientId) {
-          console.log(`[TenantResolver] Resolved domain ${normalized} to clientId: ${domainDoc.clientId}`);
-          return String(domainDoc.clientId);
-        } else {
-          console.log(`[TenantResolver] No CustomDomain mapping found for: ${normalized}`);
-        }
+    console.log(`[TenantResolver] Attempting to resolve domain: ${normalized}`);
+    try {
+      const domainDoc = await CustomDomain.findOne({
+        $or: [
+          { domainName: normalized },
+          { domainName: `www.${normalized}` },
+          { domain: normalized },
+          { domain: `www.${normalized}` },
+        ],
+      }).select("clientId");
+
+      if (domainDoc && domainDoc.clientId) {
+        console.log(
+          `[TenantResolver] Resolved domain ${normalized} to clientId: ${domainDoc.clientId}`
+        );
+        console.log("[Tenant Debug] resolved clientId:", domainDoc.clientId);
+        return String(domainDoc.clientId);
+      } else {
+        console.log(`[TenantResolver] No CustomDomain mapping found for: ${normalized}`);
       }
     } catch (err) {
-      console.error(`[TenantResolver] Error during domain resolution: ${err.message}`);
+      console.error(
+        `[TenantResolver] Error during domain resolution for ${normalized}: ${err.message}`
+      );
     }
   }
 
   console.log(`[TenantResolver] Could not resolve clientId for ${route}`);
+  console.log("[Tenant Debug] resolved clientId: null");
   return null;
 }
 
 module.exports = {
   resolveClientId,
-  normalizeDomain
+  normalizeDomain,
 };
-

@@ -1097,7 +1097,7 @@ const createOrder = async (req, res) => {
 const getOrders = async (req, res) => {
   try {
     const clientId = req.clientId || (await resolveClientId(req));
-    const query = clientId ? { clientId } : {};
+    const query = { clientId };
     const orders = await Order.find(query).sort("-createdAt");
     res.json({
       success: true,
@@ -1118,7 +1118,7 @@ const getLatestTransactions = async (req, res) => {
     const rawLimit = parseInt(req.query.limit, 10);
     const limit = Number.isFinite(rawLimit) ? Math.min(50, Math.max(1, rawLimit)) : 12;
 
-    const query = clientId ? { clientId } : {};
+    const query = { clientId };
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
       .limit(limit)

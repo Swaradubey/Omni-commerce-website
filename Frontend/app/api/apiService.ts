@@ -62,6 +62,10 @@ class ApiService {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(clientId ? { "x-client-id": clientId } : {}),
+      // Always send domain hints so the backend tenant resolver can identify the
+      // custom domain (e.g. retailverse.in) even when x-client-id is absent.
+      "x-client-domain": window.location.hostname,
+      "x-client-origin": window.location.origin,
       ...(options.headers || {}),
     };
 

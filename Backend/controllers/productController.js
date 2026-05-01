@@ -59,15 +59,19 @@ const normalizeSaleFields = (payload = {}) => {
 const getProducts = async (req, res) => {
   try {
     const { category, search, minPrice, maxPrice, isActive } = req.query;
-    const clientId = req.clientId || (await resolveClientId(req));
-    let query = {};
 
-    if (clientId) {
-      query.clientId = clientId;
-    } else {
+    console.log("[Tenant Debug] origin:", req.headers.origin);
+    console.log("[Tenant Debug] host:", req.headers.host);
+    console.log("[Tenant Debug] x-client-domain:", req.headers["x-client-domain"]);
+    console.log("[Tenant Debug] user role:", req.user?.role);
+    console.log("[Tenant Debug] user clientId:", req.user?.clientId);
+    console.log("[Tenant Debug] resolved clientId:", req.clientId);
+
+    const clientId = req.clientId || (await resolveClientId(req));
+    let query = { clientId };
+
+    if (!clientId) {
       console.warn("[Products] No clientId resolved for getProducts");
-      // If we're strictly multi-tenant, we might want to return empty or error
-      // For now, let's allow it but log it, or enforce it if possible.
     }
     if (category && category !== "All Categories") query.category = category;
     if (search) {
@@ -106,8 +110,7 @@ const getProducts = async (req, res) => {
 const getFeaturedProducts = async (req, res) => {
   try {
     const clientId = req.clientId || (await resolveClientId(req));
-    let query = { isFeatured: true, isActive: true };
-    if (clientId) query.clientId = clientId;
+    let query = { isFeatured: true, isActive: true, clientId };
 
     const products = await Product.find(query)
       .select(

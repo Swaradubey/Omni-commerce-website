@@ -58,21 +58,27 @@ function pctChange(current, previous) {
  * Guest checkout and walk-in POS without a linked User are excluded from the numerator so the rate stays bounded
  * against the registered-customer denominator.
  */
-async function conversionRateForWindow(start, end) {
-  const registered = await User.countDocuments({ role: { $in: CUSTOMER_ROLES } });
+async function conversionRateForWindow(start, end, clientId) {
+  const userQuery = { role: { $in: CUSTOMER_ROLES } };
+  if (clientId) userQuery.clientId = clientId;
+  const registered = await User.countDocuments(userQuery);
   if (registered === 0) return { rate: 0, registered };
 
-  const withUser = await Order.distinct("user", {
+  const orderQuery = {
     createdAt: { $gte: start, $lt: end },
     user: { $exists: true, $ne: null },
-  });
+  };
+  if (clientId) orderQuery.clientId = clientId;
+
+  const withUser = await Order.distinct("user", orderQuery);
   const purchasers = withUser.filter((id) => id != null).length;
   const rate = Math.min(100, (purchasers / registered) * 100);
   return { rate, registered, purchasers };
 }
 
-async function orderTotalsForWindow(start, end) {
+async function orderTotalsForWindow(start, end, clientId) {
   const match = { createdAt: { $gte: start, $lt: end } };
+  if (clientId) match.clientId = clientId;
   const [agg] = await Order.aggregate([
     { $match: match },
     {
@@ -101,13 +107,15 @@ const FULFILLED_STATUS_LOWER = [
  * Sales this month: sum(totalPrice) for orders placed in [start,end) that are not cancelled
  * and match at least one “successful sale” signal (paid, POS, delivered, stage ≥ 2, or fulfilled status).
  */
-async function salesThisMonthForWindow(start, end) {
+async function salesThisMonthForWindow(start, end, clientId) {
+  const match = {
+    createdAt: { $gte: start, $lt: end },
+    $or: [{ cancelledAt: { $exists: false } }, { cancelledAt: null }],
+  };
+  if (clientId) match.clientId = clientId;
   const [agg] = await Order.aggregate([
     {
-      $match: {
-        createdAt: { $gte: start, $lt: end },
-        $or: [{ cancelledAt: { $exists: false } }, { cancelledAt: null }],
-      },
+      $match: match,
     },
     {
       $match: {
@@ -152,13 +160,15 @@ async function salesThisMonthForWindow(start, end) {
 }
 
 /** Refunds recorded in the window (by refundedAt). */
-async function lossFromRefundsForWindow(start, end) {
+async function lossFromRefundsForWindow(start, end, clientId) {
+  const match = {
+    refundAmount: { $gt: 0 },
+    refundedAt: { $gte: start, $lt: end },
+  };
+  if (clientId) match.clientId = clientId;
   const [agg] = await Order.aggregate([
     {
-      $match: {
-        refundAmount: { $gt: 0 },
-        refundedAt: { $gte: start, $lt: end },
-      },
+      $match: match,
     },
     { $group: { _id: null, t: { $sum: "$refundAmount" } } },
   ]);
@@ -168,23 +178,25 @@ async function lossFromRefundsForWindow(start, end) {
 /**
  * Cancellations in the window: sum(totalPrice) when no refund amount is stored (avoids double-count with refund loss).
  */
-async function lossFromCancellationsForWindow(start, end) {
+async function lossFromCancellationsForWindow(start, end, clientId) {
+  const match = {
+    cancelledAt: { $gte: start, $lt: end },
+    $or: [{ refundAmount: { $exists: false } }, { refundAmount: null }, { refundAmount: 0 }],
+  };
+  if (clientId) match.clientId = clientId;
   const [agg] = await Order.aggregate([
     {
-      $match: {
-        cancelledAt: { $gte: start, $lt: end },
-        $or: [{ refundAmount: { $exists: false } }, { refundAmount: null }, { refundAmount: 0 }],
-      },
+      $match: match,
     },
     { $group: { _id: null, t: { $sum: { $ifNull: ["$totalPrice", 0] } } } },
   ]);
   return agg?.t ?? 0;
 }
 
-async function lossThisMonthForWindow(start, end) {
+async function lossThisMonthForWindow(start, end, clientId) {
   const [a, b] = await Promise.all([
-    lossFromRefundsForWindow(start, end),
-    lossFromCancellationsForWindow(start, end),
+    lossFromRefundsForWindow(start, end, clientId),
+    lossFromCancellationsForWindow(start, end, clientId),
   ]);
   return a + b;
 }
@@ -193,9 +205,11 @@ async function lossThisMonthForWindow(start, end) {
  * Distinct "active ordering customers" in [start, end): same identity keys as conversion/CLV
  * (linked User id, else normalized customerEmail on the order). Orders with neither are excluded.
  */
-async function activeOrderingCustomersCountForWindow(start, end) {
+async function activeOrderingCustomersCountForWindow(start, end, clientId) {
+  const match = { createdAt: { $gte: start, $lt: end } };
+  if (clientId) match.clientId = clientId;
   const [agg] = await Order.aggregate([
-    { $match: { createdAt: { $gte: start, $lt: end } } },
+    { $match: match },
     {
       $project: {
         payerKey: {
@@ -224,8 +238,10 @@ async function activeOrderingCustomersCountForWindow(start, end) {
  * Customer lifetime value (all-time):
  * total revenue from valid orders / count of distinct paying identities (user id or normalized guest email on orders).
  */
-async function customerLifetimeValueAllTime() {
+async function customerLifetimeValueAllTime(clientId) {
+  const match = clientId ? { clientId } : {};
   const [revAgg] = await Order.aggregate([
+    { $match: match },
     {
       $group: {
         _id: null,
@@ -236,6 +252,7 @@ async function customerLifetimeValueAllTime() {
   const totalRevenue = revAgg?.revenue ?? 0;
 
   const keys = await Order.aggregate([
+    { $match: match },
     {
       $project: {
         k: {
@@ -268,16 +285,20 @@ async function customerLifetimeValueAllTime() {
  * Documented as "monthly active registered customers" rather than raw HTTP sessions.
  */
 /** New storefront registrations (user/customer role) created in [start, end). */
-async function newCustomersForWindow(start, end) {
-  return User.countDocuments({
+async function newCustomersForWindow(start, end, clientId) {
+  const query = {
     role: { $in: CUSTOMER_ROLES },
     createdAt: { $gte: start, $lt: end },
-  });
+  };
+  if (clientId) query.clientId = clientId;
+  return User.countDocuments(query);
 }
 
-async function monthlyActiveCustomers(start, end) {
+async function monthlyActiveCustomers(start, end, clientId) {
+  const match = { role: { $in: CUSTOMER_ROLES } };
+  if (clientId) match.clientId = clientId;
   const [agg] = await User.aggregate([
-    { $match: { role: { $in: CUSTOMER_ROLES } } },
+    { $match: match },
     {
       $addFields: {
         lastSeen: { $max: ["$lastActiveAt", "$lastLoginAt"] },
@@ -301,9 +322,11 @@ async function monthlyActiveCustomers(start, end) {
  * MoM trend for CLV: compares average revenue per distinct paying identity (user or email) within each calendar month.
  * This is not the lifetime CLV delta (that would need historical snapshots); it is documented as a revenue-intensity trend.
  */
-async function monthlyRevenuePerPayer(start, end) {
+async function monthlyRevenuePerPayer(start, end, clientId) {
+  const match = { createdAt: { $gte: start, $lt: end } };
+  if (clientId) match.clientId = clientId;
   const rows = await Order.aggregate([
-    { $match: { createdAt: { $gte: start, $lt: end } } },
+    { $match: match },
     {
       $project: {
         payerKey: {
@@ -343,15 +366,17 @@ async function monthlyRevenuePerPayer(start, end) {
 }
 
 /** Last 7 local days (including today): label + total revenue (website + POS). */
-async function revenueFlowLast7Days() {
+async function revenueFlowLast7Days(clientId) {
   const now = new Date();
   const days = [];
   const short = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   for (let i = 6; i >= 0; i -= 1) {
     const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 0, 0, 0, 0);
     const next = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1, 0, 0, 0, 0);
+    const match = { createdAt: { $gte: day, $lt: next } };
+    if (clientId) match.clientId = clientId;
     const [agg] = await Order.aggregate([
-      { $match: { createdAt: { $gte: day, $lt: next } } },
+      { $match: match },
       {
         $group: {
           _id: null,
@@ -378,9 +403,11 @@ const PIE_COLORS = ["#3b82f6", "#ec4899", "#10b981", "#f59e0b", "#8b5cf6", "#06b
  * Category revenue for orders in [start, end): join line items to Product when productId is a valid ObjectId.
  * Orders without resolvable category bucket as "Uncategorized".
  */
-async function topCategoriesForWindow(start, end, limit = 8) {
+async function topCategoriesForWindow(start, end, clientId, limit = 8) {
+  const match = { createdAt: { $gte: start, $lt: end } };
+  if (clientId) match.clientId = clientId;
   const rows = await Order.aggregate([
-    { $match: { createdAt: { $gte: start, $lt: end } } },
+    { $match: match },
     { $unwind: "$items" },
     {
       $addFields: {
@@ -470,67 +497,71 @@ async function topCategoriesForWindow(start, end, limit = 8) {
 }
 
 /** Top products by line revenue in window; growth vs previous window of equal length. */
-async function topProductsForWindow(start, end, limit = 3) {
+async function topProductsForWindow(start, end, clientId, limit = 3) {
   const prevStart = new Date(start.getTime() - (end.getTime() - start.getTime()));
   const prevEnd = start;
 
-  const productLineStages = (windowStart, windowEnd) => [
-    { $match: { createdAt: { $gte: windowStart, $lt: windowEnd } } },
-    { $unwind: "$items" },
-    {
-      $addFields: {
-        lineRevenue: {
-          $multiply: [{ $ifNull: ["$items.price", 0] }, { $ifNull: ["$items.quantity", 0] }],
+  const productLineStages = (windowStart, windowEnd) => {
+    const match = { createdAt: { $gte: windowStart, $lt: windowEnd } };
+    if (clientId) match.clientId = clientId;
+    return [
+      { $match: match },
+      { $unwind: "$items" },
+      {
+        $addFields: {
+          lineRevenue: {
+            $multiply: [{ $ifNull: ["$items.price", 0] }, { $ifNull: ["$items.quantity", 0] }],
+          },
+          pidStr: { $toString: "$items.productId" },
         },
-        pidStr: { $toString: "$items.productId" },
       },
-    },
-    {
-      $addFields: {
-        pidForLookup: {
-          $cond: {
-            if: {
-              $regexMatch: { input: "$pidStr", regex: /^[a-fA-F0-9]{24}$/ },
+      {
+        $addFields: {
+          pidForLookup: {
+            $cond: {
+              if: {
+                $regexMatch: { input: "$pidStr", regex: /^[a-fA-F0-9]{24}$/ },
+              },
+              then: { $toObjectId: "$pidStr" },
+              else: null,
             },
-            then: { $toObjectId: "$pidStr" },
-            else: null,
           },
         },
       },
-    },
-    {
-      $lookup: {
-        from: "products",
-        localField: "pidForLookup",
-        foreignField: "_id",
-        as: "p",
+      {
+        $lookup: {
+          from: "products",
+          localField: "pidForLookup",
+          foreignField: "_id",
+          as: "p",
+        },
       },
-    },
-    {
-      $addFields: {
-        productName: {
-          $trim: {
-            input: {
-              $toString: {
-                $ifNull: [{ $arrayElemAt: ["$p.name", 0] }, { $ifNull: ["$items.name", "Product"] }],
+      {
+        $addFields: {
+          productName: {
+            $trim: {
+              input: {
+                $toString: {
+                  $ifNull: [{ $arrayElemAt: ["$p.name", 0] }, { $ifNull: ["$items.name", "Product"] }],
+                },
               },
             },
           },
-        },
-        productImage: {
-          $ifNull: [{ $arrayElemAt: ["$p.image", 0] }, { $ifNull: ["$items.image", ""] }],
+          productImage: {
+            $ifNull: [{ $arrayElemAt: ["$p.image", 0] }, { $ifNull: ["$items.image", ""] }],
+          },
         },
       },
-    },
-    {
-      $group: {
-        _id: "$pidStr",
-        revenue: { $sum: "$lineRevenue" },
-        name: { $first: "$productName" },
-        image: { $first: "$productImage" },
+      {
+        $group: {
+          _id: "$pidStr",
+          revenue: { $sum: "$lineRevenue" },
+          name: { $first: "$productName" },
+          image: { $first: "$productImage" },
+        },
       },
-    },
-  ];
+    ];
+  };
 
   const currentAgg = await Order.aggregate([
     ...productLineStages(start, end),
@@ -563,48 +594,51 @@ async function topProductsForWindow(start, end, limit = 3) {
 // @access  Private / admin
 const getAdminAnalytics = async (req, res) => {
   try {
+    const clientId = req.clientId || (await resolveClientId(req));
+    console.log("[Analytics Debug] clientId:", clientId);
+
     const now = new Date();
     const cur = monthWindowContaining(now);
     const prev = previousMonthWindow(now);
 
     const [convCur, convPrev] = await Promise.all([
-      conversionRateForWindow(cur.start, cur.end),
-      conversionRateForWindow(prev.start, prev.end),
+      conversionRateForWindow(cur.start, cur.end, clientId),
+      conversionRateForWindow(prev.start, prev.end, clientId),
     ]);
 
     const [totCur, totPrev] = await Promise.all([
-      orderTotalsForWindow(cur.start, cur.end),
-      orderTotalsForWindow(prev.start, prev.end),
+      orderTotalsForWindow(cur.start, cur.end, clientId),
+      orderTotalsForWindow(prev.start, prev.end, clientId),
     ]);
 
-    const clv = await customerLifetimeValueAllTime();
+    const clv = await customerLifetimeValueAllTime(clientId);
     const [mrpCur, mrpPrev] = await Promise.all([
-      monthlyRevenuePerPayer(cur.start, cur.end),
-      monthlyRevenuePerPayer(prev.start, prev.end),
+      monthlyRevenuePerPayer(cur.start, cur.end, clientId),
+      monthlyRevenuePerPayer(prev.start, prev.end, clientId),
     ]);
 
     const [mauCur, mauPrev] = await Promise.all([
-      monthlyActiveCustomers(cur.start, cur.end),
-      monthlyActiveCustomers(prev.start, prev.end),
+      monthlyActiveCustomers(cur.start, cur.end, clientId),
+      monthlyActiveCustomers(prev.start, prev.end, clientId),
     ]);
 
     const [newCustCur, newCustPrev] = await Promise.all([
-      newCustomersForWindow(cur.start, cur.end),
-      newCustomersForWindow(prev.start, prev.end),
+      newCustomersForWindow(cur.start, cur.end, clientId),
+      newCustomersForWindow(prev.start, prev.end, clientId),
     ]);
 
     const [activeCustCur, activeCustPrev] = await Promise.all([
-      activeOrderingCustomersCountForWindow(cur.start, cur.end),
-      activeOrderingCustomersCountForWindow(prev.start, prev.end),
+      activeOrderingCustomersCountForWindow(cur.start, cur.end, clientId),
+      activeOrderingCustomersCountForWindow(prev.start, prev.end, clientId),
     ]);
 
     const [revenueFlow, topCategories, topProducts, salesThisMonthRaw, lossThisMonthRaw] =
       await Promise.all([
-        revenueFlowLast7Days(),
-        topCategoriesForWindow(cur.start, cur.end),
-        topProductsForWindow(cur.start, cur.end, 3),
-        salesThisMonthForWindow(cur.start, cur.end),
-        lossThisMonthForWindow(cur.start, cur.end),
+        revenueFlowLast7Days(clientId),
+        topCategoriesForWindow(cur.start, cur.end, clientId),
+        topProductsForWindow(cur.start, cur.end, clientId, 3),
+        salesThisMonthForWindow(cur.start, cur.end, clientId),
+        lossThisMonthForWindow(cur.start, cur.end, clientId),
       ]);
 
     const salesThisMonth = Math.round(salesThisMonthRaw * 100) / 100;

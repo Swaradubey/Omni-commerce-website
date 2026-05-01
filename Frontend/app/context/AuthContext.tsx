@@ -198,6 +198,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.clientId) {
         localStorage.setItem('retail_verse_client_id', String(data.clientId));
       }
+      // Always persist the domain so the backend tenant resolver can identify
+      // the custom domain (e.g. retailverse.in) even for accounts without clientId.
+      localStorage.setItem('retail_verse_client_domain', window.location.hostname);
+      localStorage.setItem('retail_verse_client_origin', window.location.origin);
 
       setToken(data.token);
       setUser(data as User);
@@ -236,6 +240,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.clientId) {
         localStorage.setItem('retail_verse_client_id', String(data.clientId));
       }
+      // Always persist the domain so the backend tenant resolver can identify
+      // the custom domain (e.g. retailverse.in) even for accounts without clientId.
+      localStorage.setItem('retail_verse_client_domain', window.location.hostname);
+      localStorage.setItem('retail_verse_client_origin', window.location.origin);
 
       setToken(data.token);
       setUser(data as User);
@@ -285,6 +293,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(IMPERSONATION_SUPER_TOKEN_BACKUP_KEY);
     localStorage.removeItem('retail_verse_client_id');
+    localStorage.removeItem('retail_verse_client_domain');
+    localStorage.removeItem('retail_verse_client_origin');
   };
 
   const patchUser = (partial: Partial<User>) => {

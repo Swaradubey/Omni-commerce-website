@@ -28,11 +28,15 @@ const INVENTORY_MANAGER_TITLE_DESC_SUCCESS =
 // @access  Private
 const getInventoryManage = async (req, res) => {
   try {
-    let query = {};
+    console.log("[Tenant Debug] origin:", req.headers.origin);
+    console.log("[Tenant Debug] host:", req.headers.host);
+    console.log("[Tenant Debug] x-client-domain:", req.headers["x-client-domain"]);
+    console.log("[Tenant Debug] user role:", req.user?.role);
+    console.log("[Tenant Debug] user clientId:", req.user?.clientId);
+    console.log("[Tenant Debug] resolved clientId:", req.clientId);
+
     const clientId = req.clientId || (await resolveClientId(req));
-    if (clientId) {
-      query.clientId = clientId;
-    }
+    let query = { clientId };
 
     const rows = await Product.find(query)
       .sort("-createdAt")
@@ -109,9 +113,7 @@ const getInventory = async (req, res) => {
   try {
     const { category, search, minPrice, maxPrice, inStock } = req.query;
     const clientId = req.clientId || (await resolveClientId(req));
-    let query = {};
-
-    if (clientId) query.clientId = clientId;
+    let query = { clientId };
 
     if (category) query.category = category;
     if (search) query.name = { $regex: search, $options: "i" };
