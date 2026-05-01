@@ -1,4 +1,6 @@
 const User = require("../models/User");
+const { resolveClientId } = require("../utils/tenantResolver");
+
 
 /** Registered storefront accounts included in customer analytics (excludes staff/admin). */
 const CUSTOMER_ROLES = ["user", "customer"];
@@ -33,11 +35,24 @@ function daysAgoMs(days) {
 // @access  Private / admin
 const getCustomerSummary = async (req, res) => {
   try {
+    const isSuperAdmin = req.user && req.user.role === "super_admin";
+    const clientId = await resolveClientId(req); 
+
+    
+    // Requirement 10 & 16: Log data retrieval details
+    console.log(`[adminCustomer] getCustomerSummary - Page: Customers, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+
     const activeSince = new Date(daysAgoMs(ACTIVE_WINDOW_DAYS));
     const liveSince = new Date(Date.now() - LIVE_WINDOW_HOURS * 60 * 60 * 1000);
     const monthStart = startOfCurrentMonth();
 
     const baseMatch = { role: { $in: CUSTOMER_ROLES } };
+    if (!isSuperAdmin && clientId) {
+      baseMatch.clientId = clientId;
+    }
+
+    // Requirement 16: Log DB query details
+    console.log(`[adminCustomer] DB Aggregate - Collection: users, Filter: ${JSON.stringify(baseMatch)}`);
 
     const [agg] = await User.aggregate([
       { $match: baseMatch },
@@ -118,6 +133,13 @@ function escapeRegex(s) {
 // @access  Private / admin
 const getCustomers = async (req, res) => {
   try {
+    const isSuperAdmin = req.user && req.user.role === "super_admin";
+    const clientId = await resolveClientId(req);
+
+
+    // Requirement 10 & 16: Log data retrieval details
+    console.log(`[adminCustomer] getCustomers - Page: Customers, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
@@ -126,11 +148,17 @@ const getCustomers = async (req, res) => {
     const activeSince = new Date(daysAgoMs(ACTIVE_WINDOW_DAYS));
 
     const match = { role: { $in: CUSTOMER_ROLES } };
+    if (!isSuperAdmin && clientId) {
+      match.clientId = clientId;
+    }
 
     if (search) {
       const rx = new RegExp(escapeRegex(search), "i");
       match.$or = [{ name: rx }, { email: rx }];
     }
+
+    // Requirement 16: Log DB query details
+    console.log(`[adminCustomer] DB Aggregate (List) - Collection: users, Filter: ${JSON.stringify(match)}`);
 
     /*
   .
@@ -229,7 +257,7 @@ const getCustomers = async (req, res) => {
               $group: {
                 _id: null,
                 totalSpent: { $sum: { $ifNull: ["$totalPrice", 0] } },
-                totalOrders: { $sum: "$_itemQtySum" },
+                totalOrders: { $sum: 1 },
               },
             },
           ],

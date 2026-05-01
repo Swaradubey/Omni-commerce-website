@@ -54,7 +54,7 @@ export function DashboardAnalytics() {
     }
     setError(null);
     try {
-      const res = await fetchAdminAnalytics();
+      const res = await fetchAdminAnalytics({ pageName: 'Analytics' });
       setData(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load analytics');

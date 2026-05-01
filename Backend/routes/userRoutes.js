@@ -16,9 +16,9 @@ router.get(
 );
 
 /** Super Admin directory (same payload as `/platform/list`; REST-style alias). */
-router.get("/", protect, allowRoles("super_admin"), listPlatformUsers);
+router.get("/", protect, allowRoles("super_admin", "client"), listPlatformUsers);
 
-router.get("/platform/list", protect, allowRoles("super_admin"), listPlatformUsers);
-router.patch("/platform/:id/role", protect, allowRoles("super_admin"), updateUserRole);
+router.get("/platform/list", protect, allowRoles("super_admin", "client"), listPlatformUsers);
+router.patch("/platform/:id/role", protect, allowRoles("super_admin", "client"), updateUserRole);
 
 module.exports = router;

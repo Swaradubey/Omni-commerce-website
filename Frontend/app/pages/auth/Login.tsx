@@ -226,9 +226,9 @@ export function Login() {
 
           <p className="text-center text-xs text-gray-400">
             By signing in you agree to our{' '}
-            <span className="underline cursor-pointer hover:text-gray-600 transition-colors">Terms of Service</span>
+            <Link to="/terms-of-service" className="underline cursor-pointer hover:text-gray-600 transition-colors">Terms of Service</Link>
             {' '}and{' '}
-            <span className="underline cursor-pointer hover:text-gray-600 transition-colors">Privacy Policy</span>.
+            <Link to="/privacy-policy" className="underline cursor-pointer hover:text-gray-600 transition-colors">Privacy Policy</Link>.
           </p>
         </div>
       </div>

@@ -51,13 +51,13 @@ router.get(
 );
 
 // @route   GET /api/orders (dashboard — admin/staff only)
-router.get("/", protect, allowRoles("super_admin", "admin", "staff", "inventory_manager", "cashier"), getOrders);
+router.get("/", protect, allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier"), getOrders);
 
 // @route   GET /api/orders/dashboard/latest-transactions (must be before /:id)
 router.get(
   "/dashboard/latest-transactions",
   protect,
-  allowRoles("super_admin", "admin", "staff", "inventory_manager", "cashier"),
+  allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier"),
   getLatestTransactions
 );
 
@@ -65,7 +65,7 @@ router.get(
 router.patch(
   "/:orderId/tracking-status",
   protect,
-  allowRoles("super_admin", "admin", "staff", "inventory_manager", "cashier"),
+  allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier"),
   patchOrderTrackingStatus
 );
 
@@ -73,7 +73,7 @@ router.patch(
 router.patch(
   "/:id/tracking",
   protect,
-  allowRoles("super_admin", "admin", "staff", "inventory_manager", "cashier"),
+  allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier"),
   patchOrderTracking
 );
 
@@ -89,6 +89,6 @@ router.patch(
 router.get("/:id", getOrderById);
 
 // @route   DELETE /api/orders/:id
-router.delete("/:id", protect, allowRoles("super_admin", "admin"), deleteOrder);
+router.delete("/:id", protect, allowRoles("super_admin", "admin", "client"), deleteOrder);
 
 module.exports = router;

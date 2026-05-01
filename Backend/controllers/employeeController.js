@@ -291,6 +291,11 @@ const listEmployees = async (req, res) => {
     } else {
       q.role = "employee";
     }
+    const isSuperAdmin = req.user.role === "super_admin";
+    const clientIdForLog = isSuperAdmin ? (req.query.clientId || "global") : req.user.clientId;
+    // Requirement 10 & 16: Log data retrieval details
+    console.log(`[Employees] listEmployees - Page: Users & roles, Role: ${req.user?.role}, ClientId: ${clientIdForLog}`);
+
     if (req.user.role === "client") {
       if (!req.user.clientId) {
         return res.status(403).json({
@@ -299,7 +304,7 @@ const listEmployees = async (req, res) => {
         });
       }
       q.clientId = req.user.clientId;
-    } else if (req.user.role === "super_admin") {
+    } else if (isSuperAdmin) {
       if (req.query.clientId) {
         q.clientId = req.query.clientId;
       }
@@ -319,6 +324,9 @@ const listEmployees = async (req, res) => {
     } else {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
+
+    // Requirement 16: Log DB query details
+    console.log(`[Employees] DB Query - Collection: employees, Filter: ${JSON.stringify(q)}`);
 
     const pageRaw = Number.parseInt(String(req.query.page || ""), 10);
     const limitRaw = Number.parseInt(String(req.query.limit || ""), 10);

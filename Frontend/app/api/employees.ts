@@ -30,25 +30,26 @@ export type CreateEmployeePayload = {
 };
 
 export const employeesApi = {
-  create: (body: CreateEmployeePayload) =>
-    ApiService.post<EmployeeRow>('/api/employees', body),
+  create: (body: CreateEmployeePayload, options?: any) =>
+    ApiService.post<EmployeeRow>('/api/employees', body, options),
 
-  listByClient: (clientId: string, roles?: string[]) => {
+  listByClient: (clientId: string, roles?: string[], options?: any) => {
     const q =
       roles && roles.length > 0
         ? `?roles=${encodeURIComponent(roles.join(','))}`
         : '';
     return ApiService.get<EmployeeRow[]>(
-      `/api/employees/client/${encodeURIComponent(clientId)}${q}`
+      `/api/employees/client/${encodeURIComponent(clientId)}${q}`,
+      options
     );
   },
 
-  list: (clientId?: string, roles?: string[]) => {
+  list: (clientId?: string, roles?: string[], options?: any) => {
     const params = new URLSearchParams();
     if (clientId) params.set('clientId', clientId);
     if (roles && roles.length > 0) params.set('roles', roles.join(','));
     const q = params.toString();
-    return ApiService.get<EmployeeRow[]>(`/api/employees${q ? `?${q}` : ''}`);
+    return ApiService.get<EmployeeRow[]>(`/api/employees${q ? `?${q}` : ''}`, options);
   },
 
   get: (id: string) =>

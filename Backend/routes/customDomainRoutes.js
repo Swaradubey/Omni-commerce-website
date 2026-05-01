@@ -11,9 +11,9 @@ const { protect, allowRoles } = require("../middleware/authMiddleware");
 
 // Routes for custom domains
 router.get("/resolve", resolveDomain);
-router.get("/", protect, allowRoles("super_admin"), getAllCustomDomains);
-router.post("/", protect, allowRoles("super_admin"), createCustomDomain);
-router.get("/:id/status", protect, allowRoles("super_admin"), checkDomainStatus);
-router.delete("/:id", protect, allowRoles("super_admin"), deleteCustomDomain);
+router.get("/", protect, allowRoles("super_admin", "client"), getAllCustomDomains);
+router.post("/", protect, allowRoles("super_admin", "client"), createCustomDomain);
+router.get("/:id/status", protect, allowRoles("super_admin", "client"), checkDomainStatus);
+router.delete("/:id", protect, allowRoles("super_admin", "client"), deleteCustomDomain);
 
 module.exports = router;

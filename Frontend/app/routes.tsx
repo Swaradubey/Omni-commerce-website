@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { AdminRoute } from './components/AdminRoute';
 import { SuperAdminRoute } from './components/SuperAdminRoute';
 import { SuperAdminOnlyRoute } from './components/SuperAdminOnlyRoute';
+import { SuperAdminOrClientRoute } from './components/SuperAdminOrClientRoute';
 import { FullAdminOnlyRoute } from './components/FullAdminOnlyRoute';
 import { HelpCenterRoute } from './components/HelpCenterRoute';
 import { SupportRoute } from './components/SupportRoute';
@@ -44,6 +45,8 @@ import { Account } from './pages/Account';
 import { WishlistPage } from './pages/WishlistPage';
 import { TrackOrder } from './pages/TrackOrder';
 import { CustomDomain } from './pages/super-admin/CustomDomain';
+import { PrivacyPolicy } from './pages/PrivacyPolicy';
+import { TermsOfService } from './pages/TermsOfService';
 
 import { RootRoute } from './components/RootRoute';
 
@@ -76,6 +79,8 @@ export const router = createBrowserRouter([
       { path: 'forgot-password', Component: ForgotPassword },
       { path: 'contact', Component: Contact },
       { path: 'about', Component: About },
+      { path: 'privacy-policy', Component: PrivacyPolicy },
+      { path: 'terms-of-service', Component: TermsOfService },
       {
         path: 'pos',
         element: (
@@ -121,9 +126,9 @@ export const router = createBrowserRouter([
           {
             path: 'dashboard/invoices',
             element: (
-              <SuperAdminOnlyRoute>
+              <SuperAdminOrClientRoute>
                 <DashboardInvoices />
-              </SuperAdminOnlyRoute>
+              </SuperAdminOrClientRoute>
             ),
           },
           {
@@ -137,9 +142,9 @@ export const router = createBrowserRouter([
           {
             path: 'dashboard/users',
             element: (
-              <SuperAdminOnlyRoute>
+              <SuperAdminOrClientRoute>
                 <DashboardUsers />
-              </SuperAdminOnlyRoute>
+              </SuperAdminOrClientRoute>
             ),
           },
           {
@@ -165,9 +170,9 @@ export const router = createBrowserRouter([
           {
             path: 'dashboard/analytics',
             element: (
-              <SuperAdminOnlyRoute>
+              <SuperAdminOrClientRoute>
                 <DashboardAnalytics />
-              </SuperAdminOnlyRoute>
+              </SuperAdminOrClientRoute>
             ),
           },
           {
@@ -230,9 +235,9 @@ export const router = createBrowserRouter([
           {
             path: 'super-admin/custom-domain',
             element: (
-              <SuperAdminOnlyRoute>
+              <SuperAdminOrClientRoute>
                 <CustomDomain />
-              </SuperAdminOnlyRoute>
+              </SuperAdminOrClientRoute>
             ),
           },
         ],

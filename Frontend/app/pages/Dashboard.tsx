@@ -129,7 +129,7 @@ export function Dashboard() {
   const [syncing, setSyncing] = useState(false);
   const loadOverview = useCallback(
     async (opts?: { silent?: boolean }): Promise<{ ok: boolean; error?: string }> => {
-      if (!staff || !isOverviewPath || isClientRole(user?.role)) {
+      if (!staff || !isOverviewPath) {
         setOverviewLoading(false);
         return { ok: true };
       }
@@ -198,8 +198,9 @@ export function Dashboard() {
   }, [user?.role, location.pathname]);
 
   useEffect(() => {
+    // Clients can now access the main dashboard overview
     if (isClientRole(user?.role) && location.pathname === '/dashboard') {
-      navigate('/dashboard/inventory', { replace: true });
+      // No redirect
     }
   }, [user?.role, location.pathname, navigate]);
 
@@ -255,9 +256,16 @@ export function Dashboard() {
     }
     if (isClientRole(user?.role)) {
       return (
+        item.href === '/dashboard' ||
         item.href === '/dashboard/products' ||
         item.href === '/dashboard/inventory' ||
-        item.href === '/dashboard/add-employee'
+        item.href === '/dashboard/orders' ||
+        item.href === '/dashboard/invoices' ||
+        item.href === '/dashboard/users' ||
+        item.href === '/super-admin/custom-domain' ||
+        item.href === '/dashboard/add-employee' ||
+        item.href === '/dashboard/analytics' ||
+        item.href === '/dashboard/support'
       );
     }
     if ('hideForSuperAdmin' in item && item.hideForSuperAdmin && isSuperAdminRole(user?.role)) {
@@ -325,7 +333,6 @@ export function Dashboard() {
     isCustomerOverview && userOverviewData === null && userOverviewError === null;
   const showOverviewSkeleton =
     isOverview &&
-    !isClientRole(user?.role) &&
     ((staff && (overviewLoading || (!overviewData && !overviewError))) || userOverviewPending);
 
   const canAccessCurrentDashboardRoute =
@@ -404,7 +411,7 @@ export function Dashboard() {
                           <SidebarMenuButton
                             asChild
                             isActive={isActive}
-                            tooltip={item.title === 'Orders' && isSuperAdminRole(user?.role) ? 'Sale' : item.title}
+                            tooltip={item.title === 'Orders' && (isSuperAdminRole(user?.role) || isClientRole(user?.role)) ? 'Sale' : item.title}
                             className={dashboardSidebarNavButtonClass(isActive, false)}
                           >
                             <Link to={href || '#'}>
@@ -415,7 +422,7 @@ export function Dashboard() {
                                   }`}
                               />
                               <span className="group-data-[collapsible=icon]:hidden flex-1 min-w-0 text-left text-[16px] font-semibold tracking-wide leading-snug">
-                                {item.title === 'Orders' && isSuperAdminRole(user?.role) ? 'Sale' : item.title}</span>
+                                {item.title === 'Orders' && (isSuperAdminRole(user?.role) || isClientRole(user?.role)) ? 'Sale' : item.title}</span>
 
                               {'badge' in item &&
                                 item.badge != null &&
@@ -626,7 +633,7 @@ export function Dashboard() {
                               analytics={overviewData}
                               staffView={staff}
                               error={overviewError}
-                              superAdminOverview={isSuperAdminRole(user?.role)}
+                              superAdminOverview={isSuperAdminRole(user?.role) || isClientRole(user?.role)}
                               userOverview={
                                 isCustomerOverview
                                   ? {
@@ -642,10 +649,10 @@ export function Dashboard() {
                             <DashboardCharts
                               analytics={isCustomerOverview ? userAnalyticsData : overviewData}
                               staffView={staff || isCustomerOverview}
-                              revenueInInr={isSuperAdminRole(user?.role)}
+                              revenueInInr={isSuperAdminRole(user?.role) || isClientRole(user?.role)}
                             />
                           </motion.div>
-                          {isSuperAdminRole(user?.role) && (
+                          {(isSuperAdminRole(user?.role) || isClientRole(user?.role)) && (
                             <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
                               <DashboardContactSummary />
                             </motion.div>
@@ -654,9 +661,9 @@ export function Dashboard() {
                             <DashboardQuickActions onSync={handleDashboardSync} syncing={syncing} />
                           </motion.div>
                           <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
-                            <DashboardRecentActivity indianRupee={isSuperAdminRole(user?.role)} />
+                            <DashboardRecentActivity indianRupee={isSuperAdminRole(user?.role) || isClientRole(user?.role)} />
                           </motion.div>
-                          {isSuperAdminRole(user?.role) && (
+                          {(isSuperAdminRole(user?.role) || isClientRole(user?.role)) && (
                             <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
                               <DashboardRecentTickets />
                             </motion.div>
@@ -679,8 +686,8 @@ export function Dashboard() {
                 >
                   <p>© 2026 Retail Verse Admin. All rights reserved.</p>
                   <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-6 mt-4 md:mt-0">
-                    <a
-                      href="#"
+                    <Link
+                      to="/privacy-policy"
                       className={
                         isOverview
                           ? 'transition-colors duration-300 hover:text-[#b8860b] dark:hover:text-amber-300'
@@ -688,9 +695,9 @@ export function Dashboard() {
                       }
                     >
                       Privacy Policy
-                    </a>
-                    <a
-                      href="#"
+                    </Link>
+                    <Link
+                      to="/terms-of-service"
                       className={
                         isOverview
                           ? 'transition-colors duration-300 hover:text-[#b8860b] dark:hover:text-amber-300'
@@ -698,7 +705,7 @@ export function Dashboard() {
                       }
                     >
                       Terms of Service
-                    </a>
+                    </Link>
                     <a
                       href="#"
                       className={

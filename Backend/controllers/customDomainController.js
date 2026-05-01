@@ -57,9 +57,21 @@ const resolveDomain = async (req, res) => {
 // @access  Private (Super Admin)
 const getAllCustomDomains = async (req, res) => {
   try {
-    const domains = await CustomDomain.find().sort({ createdAt: -1 });
+    const isSuperAdmin = req.user && req.user.role === "super_admin";
+    const clientId = req.clientId || req.user?.clientId;
+
+    // Requirement 10 & 16: Log data retrieval details
+    console.log(`[customDomain] getAllCustomDomains - Page: Custom Domains, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+
+    const query = isSuperAdmin ? {} : { clientId };
+    const domains = await CustomDomain.find(query).sort({ createdAt: -1 });
+
+    // Requirement 16: Log DB query details
+    console.log(`[customDomain] DB Query - Collection: customdomains, Filter: ${JSON.stringify(query)}, Count: ${domains.length}`);
+
     res.status(200).json({ success: true, count: domains.length, data: domains });
   } catch (error) {
+    console.error("[customDomain] getAllCustomDomains error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };

@@ -47,14 +47,14 @@ export const userApi = {
     bio?: string;
   }) => ApiService.put<ProfileUser>("/api/users/me", body),
 
-  getPlatformUsers: (params?: { page?: number; limit?: number; search?: string; role?: string }) => {
+  getPlatformUsers: (params?: { page?: number; limit?: number; search?: string; role?: string }, options?: any) => {
     const q = new URLSearchParams();
     if (params?.page != null) q.set("page", String(params.page));
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.search?.trim()) q.set("search", params.search.trim());
     if (params?.role?.trim()) q.set("role", params.role.trim());
     const suffix = q.toString() ? `?${q.toString()}` : "";
-    return ApiService.get<PlatformUsersListData>(`/api/users/platform/list${suffix}`);
+    return ApiService.get<PlatformUsersListData>(`/api/users/platform/list${suffix}`, options);
   },
 
   patchPlatformUserRole: (id: string, role: string) =>

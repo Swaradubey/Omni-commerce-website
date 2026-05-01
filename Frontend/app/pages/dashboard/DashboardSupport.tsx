@@ -88,7 +88,7 @@ export function DashboardSupport() {
   const fetchStats = async () => {
     setLoadingStats(true);
     try {
-      const res = await ApiService.get('/support-tickets/stats');
+      const res = await ApiService.get('/support-tickets/stats', { pageName: 'Support' });
       if (res.success && res.data) {
         setStats(res.data);
       }
@@ -102,13 +102,13 @@ export function DashboardSupport() {
   const fetchTickets = async () => {
     setLoadingTickets(true);
     try {
-      const res = await ApiService.get('/support-tickets/zendesk');
+      const res = await ApiService.get('/support-tickets/zendesk', { pageName: 'Support' });
       
       if (res.success && res.data && res.data.length > 0) {
         setTickets(res.data);
       } else {
         console.log("[Debug] Zendesk returned empty, falling back to Admin MongoDB tickets...");
-        const adminRes = await ApiService.get('/support-tickets/admin');
+        const adminRes = await ApiService.get('/support-tickets/admin', { pageName: 'Support' });
         if (adminRes.success && adminRes.data) {
           setTickets(adminRes.data);
         }
@@ -124,7 +124,7 @@ export function DashboardSupport() {
   const fetchSystemTickets = async () => {
     setLoadingSystemTickets(true);
     try {
-      const res = await ApiService.get('/support-tickets/admin');
+      const res = await ApiService.get('/support-tickets/admin', { pageName: 'Support' });
       if (res.success && res.data) {
         setSystemTickets(res.data);
       }
@@ -137,7 +137,7 @@ export function DashboardSupport() {
 
   const handleUpdateStatus = async (ticketId: string, newStatus: string) => {
     try {
-      const res = await ApiService.patch(`/support-tickets/${ticketId}/status`, { status: newStatus });
+      const res = await ApiService.patch(`/support-tickets/${ticketId}/status`, { status: newStatus }, { pageName: 'Support' });
       if (res.success) {
         toast.success(`Ticket marked as ${newStatus}`);
         fetchStats();
@@ -165,7 +165,7 @@ export function DashboardSupport() {
     e.preventDefault();
     setCreatingTicket(true);
     try {
-      const res = await ApiService.post('/support-tickets/zendesk', ticketForm);
+      const res = await ApiService.post('/support-tickets/zendesk', ticketForm, { pageName: 'Support' });
       if (res.success) {
         toast.success("Ticket created successfully in Zendesk.");
         setIsModalOpen(false);

@@ -1096,15 +1096,25 @@ const createOrder = async (req, res) => {
 
 const getOrders = async (req, res) => {
   try {
+    const isSuperAdmin = req.user && req.user.role === "super_admin";
     const clientId = req.clientId || (await resolveClientId(req));
-    const query = { clientId };
+    
+    // Requirement 10 & 16: Log data retrieval details
+    console.log(`[OrderController] getOrders - Page: Orders, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+
+    const query = isSuperAdmin ? {} : { clientId };
     const orders = await Order.find(query).sort("-createdAt");
+
+    // Requirement 16: Log DB query details
+    console.log(`[OrderController] DB Query - Collection: orders, Filter: ${JSON.stringify(query)}, Count: ${orders.length}`);
+
     res.json({
       success: true,
       count: orders.length,
       data: orders.map((o) => enrichOrderTracking(o)),
     });
   } catch (error) {
+    console.error("[orderController] getOrders:", error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 };
@@ -1114,16 +1124,23 @@ const getOrders = async (req, res) => {
 // @access  Private (same roles as GET /api/orders)
 const getLatestTransactions = async (req, res) => {
   try {
+    const isSuperAdmin = req.user && req.user.role === "super_admin";
     const clientId = req.clientId || (await resolveClientId(req));
     const rawLimit = parseInt(req.query.limit, 10);
     const limit = Number.isFinite(rawLimit) ? Math.min(50, Math.max(1, rawLimit)) : 12;
 
-    const query = { clientId };
+    // Requirement 10 & 16: Log data retrieval details
+    console.log(`[OrderController] getLatestTransactions - Page: Dashboard, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+
+    const query = isSuperAdmin ? {} : { clientId };
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate("user", "name email")
       .lean();
+
+    // Requirement 16: Log DB query details
+    console.log(`[OrderController] DB Query (Latest) - Collection: orders, Filter: ${JSON.stringify(query)}, Count: ${orders.length}`);
 
     const data = orders.map((o) => {
       const user = o.user && typeof o.user === "object" && !Array.isArray(o.user) ? o.user : null;
@@ -1387,10 +1404,14 @@ const patchOrderTracking = async (req, res) => {
 
 const deleteOrder = async (req, res) => {
   try {
+    const isSuperAdmin = req.user && req.user.role === "super_admin";
+    const clientId = req.clientId || (await resolveClientId(req));
     const paramId = req.params.id;
-    let order = await Order.findOne({ orderId: paramId });
+    const query = isSuperAdmin ? { orderId: paramId } : { orderId: paramId, clientId };
+    let order = await Order.findOne(query);
     if (!order && mongoose.Types.ObjectId.isValid(paramId)) {
-      order = await Order.findById(paramId);
+      const idQuery = isSuperAdmin ? { _id: paramId } : { _id: paramId, clientId };
+      order = await Order.findOne(idQuery);
     }
 
     if (order) {

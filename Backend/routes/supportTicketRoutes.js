@@ -79,10 +79,10 @@ router.get(
 
 // ── Admin routes ──────────────────────────────────────────────────────────────
 
-// GET /api/support-tickets/admin     — all tickets (admin/super_admin)
+// GET /api/support-tickets/admin     — all tickets (admin/super_admin/client)
 router.get(
   "/admin",
-  allowRoles("admin", "super_admin"),
+  allowRoles("admin", "super_admin", "client", "store_manager"),
   getAllTickets
 );
 
@@ -92,21 +92,21 @@ router.get(
 // GET /api/support-tickets/stats — Zendesk Stats
 router.get(
   "/stats",
-  allowRoles("admin", "super_admin"),
+  allowRoles("admin", "super_admin", "client", "store_manager"),
   getZendeskStats
 );
 
 // GET /api/support-tickets/zendesk — List Zendesk Tickets
 router.get(
   "/zendesk",
-  allowRoles("admin", "super_admin"),
+  allowRoles("admin", "super_admin", "client", "store_manager"),
   getZendeskTickets
 );
 
 // POST /api/support-tickets/zendesk — Create Zendesk Ticket
 router.post(
   "/zendesk",
-  allowRoles("admin", "super_admin"),
+  allowRoles("admin", "super_admin", "client", "store_manager"),
   createZendeskTicket
 );
 
@@ -152,14 +152,14 @@ router.post(
 // GET /api/support-tickets/admin — all system tickets
 router.get(
   "/admin",
-  allowRoles("admin", "super_admin"),
+  allowRoles("admin", "super_admin", "client", "store_manager"),
   getAllTickets
 );
 
 // PATCH /api/support-tickets/:id/status — update system ticket status
 router.patch(
   "/:id/status",
-  allowRoles("admin", "super_admin"),
+  allowRoles("admin", "super_admin", "client", "store_manager"),
   updateTicketStatus
 );
 

@@ -573,14 +573,13 @@ async function topProductsForWindow(start, end, clientId, limit = 3) {
 // @access  Private / admin
 const getAdminAnalytics = async (req, res) => {
   try {
-    // REMOVE dependency on resolveClientId for dashboard
-    let clientId = null;
-    if (req.user && req.user.role === "admin") {
-      clientId = req.user.clientId;
-    }
+    const isSuperAdmin = req.user && req.user.role === "super_admin";
+    // For non-super admins, we MUST use clientId for tenant isolation.
+    // req.clientId is usually set by tenantMiddleware or authMiddleware.
+    const clientId = isSuperAdmin ? null : (req.clientId || req.user?.clientId);
 
-    console.log("[Analytics Debug] role:", req.user?.role);
-    console.log("[Analytics Debug] clientId (scoped to):", clientId || "global");
+    // Requirement 10 & 16: Log data retrieval details
+    console.log(`[adminAnalytics] getAdminAnalytics - Page: Analytics, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
     console.log("[Analytics Debug] request host:", req.headers.host);
     console.log("[Analytics Debug] request origin:", req.headers.origin);
 
@@ -715,7 +714,6 @@ const getAdminAnalytics = async (req, res) => {
       periods,
     };
 
-    const isSuperAdmin = req.user && req.user.role === "super_admin";
     if (isSuperAdmin) {
       return res.json({ success: true, data: fullPayload });
     }

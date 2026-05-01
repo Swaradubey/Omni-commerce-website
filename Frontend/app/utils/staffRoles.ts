@@ -73,16 +73,15 @@ export function isRestrictedInventoryDashboardRole(role: string | undefined): bo
   );
 }
 
-/** Operational dashboard: Admin + Super Admin (excludes pure staff for customer-directory style checks when needed). */
 export function hasOperationalAdminAccess(role: string | undefined): boolean {
   const normalized = normalizeRole(role);
-  return normalized === 'admin' || normalized === 'super_admin';
+  return normalized === 'admin' || normalized === 'super_admin' || normalized === 'client';
 }
 
-/** Full admin dashboard privileges (admin + super admin). */
+/** Full admin dashboard privileges (admin + super admin + client). */
 export function hasFullAdminPrivileges(role: string | undefined): boolean {
   const normalized = normalizeRole(role);
-  return normalized === 'admin' || normalized === 'super_admin';
+  return normalized === 'admin' || normalized === 'super_admin' || normalized === 'client';
 }
 
 /** Compact badge label for header/nav (null = no badge). */

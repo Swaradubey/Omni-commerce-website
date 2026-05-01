@@ -59,7 +59,9 @@ export function DashboardOrders() {
     setIsLoading(true);
     try {
       const endpoint = isCustomer ? '/orders/my-tracking' : (isStaff ? '/orders' : '/orders/my-tracking');
-      const response = await ApiService.get(endpoint);
+      console.log('[DEBUG Frontend Sale Page] API URL:', endpoint, 'User Role:', user?.role, 'ClientId:', user?.clientId);
+      const response = await ApiService.get(endpoint, { pageName: 'Sale' });
+      console.log('[DEBUG Frontend Sale Page] API response success:', response.success, 'Orders count:', response.data?.length);
       if (response.success && response.data && Array.isArray(response.data)) {
         setOrders(response.data);
       } else {
@@ -83,7 +85,7 @@ export function DashboardOrders() {
     if (!t) return orders;
     return orders.filter((o) => {
       const id = String(o.orderId || o.id || '');
-      const name = (o.shippingAddress?.fullName || o.customer || '').toLowerCase();
+      const name = (o.shippingAddress?.fullName || o.customerName || o.customer || '').toLowerCase();
       const email = String(o.customerEmail || '').toLowerCase();
       return id.toLowerCase().includes(t) || name.includes(t) || email.includes(t);
     });
@@ -91,11 +93,17 @@ export function DashboardOrders() {
 
   const stats = useMemo(() => {
     const total = orders.length;
-    const delivered = orders.filter((o) => o.isDelivered === true).length;
+    const delivered = orders.filter((o) => o.isDelivered === true || ['completed', 'delivered'].includes((o.orderStatus || '').toLowerCase())).length;
     const inProgress = orders.filter(
-      (o) => o.isDelivered !== true && !isCancelledOrder(o)
+      (o) => o.isDelivered !== true && !isCancelledOrder(o) && !['completed', 'delivered'].includes((o.orderStatus || '').toLowerCase())
     ).length;
-    const revenue = orders.reduce((acc, o) => acc + (Number(o.totalPrice) || 0), 0);
+    const revenue = orders.reduce((acc, o) => {
+      const isPaid = o.isPaid === true || o.paymentStatus === 'paid' || o.isDelivered === true || ['completed', 'delivered'].includes((o.orderStatus || '').toLowerCase());
+      if (isPaid && !isCancelledOrder(o)) {
+        return acc + (Number(o.totalPrice || o.total) || 0);
+      }
+      return acc;
+    }, 0);
     if (isCustomer) {
       return [
         { title: 'My Orders', value: total, icon: ShoppingCart, color: 'blue' },
@@ -105,7 +113,7 @@ export function DashboardOrders() {
     }
     return [
       { title: 'Total Orders', value: total, icon: ShoppingCart, color: 'blue' },
-      { title: 'In progress', value: inProgress, icon: Clock, color: 'amber' },
+      { title: 'In Progress', value: inProgress, icon: Clock, color: 'amber' },
       { title: 'Delivered', value: delivered, icon: CheckCircle2, color: 'emerald' },
       { title: 'Revenue', value: formatINR(revenue), icon: DollarSign, color: 'indigo' },
     ];
@@ -371,7 +379,7 @@ export function DashboardOrders() {
                           <td className="px-6 py-4">
                             <div className="flex flex-col">
                               <span className="text-sm font-bold text-foreground">
-                                {order.shippingAddress?.fullName || order.customer || 'Unknown'}
+                                {order.shippingAddress?.fullName || order.customerName || order.customer || 'Unknown'}
                               </span>
                               <span className="text-[10px] text-muted-foreground">
                                 {order.createdAt

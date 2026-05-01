@@ -16,7 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../context/AuthContext';
-import { isSuperAdminRole } from '../../utils/staffRoles';
+import { isSuperAdminRole, hasFullAdminPrivileges } from '../../utils/staffRoles';
 import ApiService from '../../api/apiService';
 import {
   DropdownMenu,
@@ -82,20 +82,20 @@ export function DashboardCustomers() {
   const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
-  const isSuperAdmin = isSuperAdminRole(user?.role);
+  const canViewCustomers = hasFullAdminPrivileges(user?.role);
 
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, statusFilter]);
 
   useEffect(() => {
-    if (!isSuperAdmin || authLoading) return;
+    if (!canViewCustomers || authLoading) return;
     let cancelled = false;
     (async () => {
       try {
         setSummaryLoading(true);
         setSummaryError(null);
-        const res = await ApiService.get<CustomerSummary>('/api/admin/customers/summary');
+        const res = await ApiService.get<CustomerSummary>('/api/admin/customers/summary', { pageName: 'Customers' });
         if (cancelled) return;
         if (res.success && res.data) setSummary(res.data);
         else setSummaryError(res.message || 'Could not load customer summary');
@@ -108,10 +108,10 @@ export function DashboardCustomers() {
     return () => {
       cancelled = true;
     };
-  }, [isSuperAdmin, authLoading]);
+  }, [canViewCustomers, authLoading]);
 
   useEffect(() => {
-    if (!isSuperAdmin || authLoading) return;
+    if (!canViewCustomers || authLoading) return;
     let cancelled = false;
     (async () => {
       try {
@@ -128,7 +128,7 @@ export function DashboardCustomers() {
           total: number;
           pages: number;
           limit: number;
-        }>(`/api/admin/customers?${params.toString()}`);
+        }>(`/api/admin/customers?${params.toString()}`, { pageName: 'Customers' });
         if (cancelled) return;
         if (res.success && res.data) {
           setCustomers(res.data.customers || []);
@@ -153,7 +153,7 @@ export function DashboardCustomers() {
     return () => {
       cancelled = true;
     };
-  }, [isSuperAdmin, authLoading, page, debouncedSearch, statusFilter]);
+  }, [canViewCustomers, authLoading, page, debouncedSearch, statusFilter]);
 
   const stats = useMemo(() => {
     const fmt = (n: number) => n.toLocaleString();
@@ -201,14 +201,14 @@ export function DashboardCustomers() {
     );
   }
 
-  if (!isSuperAdmin) {
+  if (!canViewCustomers) {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-8 text-center dark:border-amber-500/30 dark:bg-amber-500/10">
         <p className="font-medium text-amber-900 dark:text-amber-100">
-          Customer analytics and directory are restricted to Super Admin.
+          Customer analytics and directory are restricted to authorized personnel.
         </p>
         <p className="mt-2 text-sm text-amber-800/80 dark:text-amber-200/80">
-          Contact a Super Admin if you need access to this data.
+          Contact a Super Admin if you believe you should have access to this data.
         </p>
       </div>
     );

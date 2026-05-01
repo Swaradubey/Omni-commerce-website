@@ -139,9 +139,16 @@ const getMyTickets = async (req, res) => {
 // @access  Private (admin / super_admin only)
 const getAllTickets = async (req, res) => {
   try {
-    if (!isAdminRole(req.user?.role)) {
+    const isSuperAdmin = req.user && req.user.role === "super_admin";
+    const isClient = req.user && req.user.role === "client";
+    const clientId = req.clientId || req.user?.clientId;
+
+    if (!isSuperAdmin && !isClient && !isAdminRole(req.user?.role)) {
       return res.status(403).json({ success: false, message: "Admin access required" });
     }
+
+    // Requirement 10 & 16: Log data retrieval details
+    console.log(`[SupportTicket] getAllTickets - Page: Support, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
 
     const { status, page = 1, limit = 50 } = req.query;
     const filter = {};
@@ -149,7 +156,15 @@ const getAllTickets = async (req, res) => {
       filter.status = status;
     }
 
+    // Apply tenant scoping for non-super_admin
+    if (!isSuperAdmin && clientId) {
+      filter.clientId = clientId;
+    }
+
     const skip = (Number(page) - 1) * Number(limit);
+
+    // Requirement 16: Log DB query details
+    console.log(`[SupportTicket] DB Query - Collection: supporttickets, Filter: ${JSON.stringify(filter)}`);
 
     const [tickets, total] = await Promise.all([
       SupportTicket.find(filter)

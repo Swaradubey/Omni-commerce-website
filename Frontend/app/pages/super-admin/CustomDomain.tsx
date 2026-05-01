@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Globe, Plus, CheckCircle2, AlertCircle, Trash2, ExternalLink, Loader2, RefreshCw, Info } from 'lucide-react';
 import { customDomainApi, CustomDomainData } from '../../api/customDomains';
 import { clientsApi, ClientRow } from '../../api/clients';
+import { useAuth } from '../../context/AuthContext';
+import { isSuperAdminRole } from '../../utils/staffRoles';
 
 export function CustomDomain() {
+  const { user } = useAuth();
+  const isSuper = isSuperAdminRole(user?.role);
   const [domains, setDomains] = useState<CustomDomainData[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,8 +26,8 @@ export function CustomDomain() {
     try {
       setLoading(true);
       const [domainsRes, clientsRes] = await Promise.all([
-        customDomainApi.getAll(),
-        clientsApi.list()
+        customDomainApi.getAll({ pageName: 'Custom Domain' }),
+        isSuper ? clientsApi.list() : Promise.resolve({ success: true, data: [] })
       ]);
 
       if (domainsRes.success && domainsRes.data) {
@@ -49,8 +53,8 @@ export function CustomDomain() {
       setSuccess(null);
       const response = await customDomainApi.create({
         domainName: domainInput.trim(),
-        clientId: selectedClientId
-      });
+        clientId: isSuper ? selectedClientId : (user?.clientId || '')
+      }, { pageName: 'Custom Domain' });
       if (response.success) {
         setSuccess(response.message || 'Domain added successfully and sent to Vercel');
         setDomainInput('');
@@ -73,11 +77,11 @@ export function CustomDomain() {
     try {
       setCheckingStatus(id);
       setError(null);
-      const response = await customDomainApi.checkStatus(id);
+      const response = await customDomainApi.checkStatus(id, { pageName: 'Custom Domain' });
       if (response.success) {
         setSuccess(`Status updated: ${response.status}`);
         // Refresh domains list to show updated status
-        const domainsRes = await customDomainApi.getAll();
+        const domainsRes = await customDomainApi.getAll({ pageName: 'Custom Domain' });
         if (domainsRes.success && domainsRes.data) {
           setDomains(domainsRes.data);
         }
@@ -93,7 +97,7 @@ export function CustomDomain() {
     if (!window.confirm('Are you sure you want to remove this domain from our system and Vercel?')) return;
 
     try {
-      const response = await customDomainApi.delete(id);
+      const response = await customDomainApi.delete(id, { pageName: 'Custom Domain' });
       if (response.success) {
         setSuccess('Domain removed successfully');
         fetchData();
@@ -148,29 +152,31 @@ export function CustomDomain() {
             <h2 className="text-lg sm:text-xl font-semibold text-slate-800 mb-4">Add New Domain</h2>
 
             <form onSubmit={handleAddDomain} className="flex flex-col lg:flex-row items-end gap-4">
-              <div className="flex-[2] space-y-2 w-full">
-                <label className="block text-lg font-medium text-slate-700">
-                  Select Client
-                </label>
-                <select
-                  value={selectedClientId}
-                  onChange={(e) => setSelectedClientId(e.target.value)}
-                  disabled={adding}
-                  className="w-full px-4 py-3 rounded-xl border transition-all duration-300 disabled:opacity-50"
-                  style={{
-                    background: '#ffffff',
-                    borderColor: 'rgba(212, 175, 55, 0.25)',
-                    color: '#1e293b',
-                  }}
-                >
-                  <option value="">Select a Client</option>
-                  {clients.map(client => (
-                    <option key={client._id} value={client._id}>
-                      {client.companyName} ({client.email})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isSuper && (
+                <div className="flex-[2] space-y-2 w-full">
+                  <label className="block text-lg font-medium text-slate-700">
+                    Select Client
+                  </label>
+                  <select
+                    value={selectedClientId}
+                    onChange={(e) => setSelectedClientId(e.target.value)}
+                    disabled={adding}
+                    className="w-full px-4 py-3 rounded-xl border transition-all duration-300 disabled:opacity-50"
+                    style={{
+                      background: '#ffffff',
+                      borderColor: 'rgba(212, 175, 55, 0.25)',
+                      color: '#1e293b',
+                    }}
+                  >
+                    <option value="">Select a Client</option>
+                    {clients.map(client => (
+                      <option key={client._id} value={client._id}>
+                        {client.companyName} ({client.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="flex-[3] space-y-2 w-full">
                 <label className="block text-lg font-medium text-slate-700">
@@ -194,7 +200,7 @@ export function CustomDomain() {
               <div className="w-full lg:w-auto">
                 <button
                   type="submit"
-                  disabled={adding || !domainInput.trim() || !selectedClientId}
+                  disabled={adding || !domainInput.trim() || (isSuper && !selectedClientId)}
                   className="w-full lg:w-auto px-8 py-3 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   style={{
                     background: 'linear-gradient(135deg, #d4af37 0%, #f5d76e 100%)',

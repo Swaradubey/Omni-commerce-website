@@ -18,19 +18,19 @@ const { getAdminAnalytics } = require("../controllers/adminAnalyticsController")
 // @route   GET /api/admin/wishlists?sort=latest
 router.get("/wishlists", protect, allowRoles("super_admin", "admin"), getAdminWishlists);
 
-// Customer directory & aggregates — Super Admin only
+// Customer directory & aggregates
 // @route   GET /api/admin/customers/summary
 // @route   GET /api/admin/customers?page=&limit=&search=&status=
 // @route   GET /api/admin/customers/:id
-router.get("/customers/summary", protect, allowRoles("super_admin"), getCustomerSummary);
-router.get("/customers", protect, allowRoles("super_admin"), getCustomers);
-router.get("/customers/:id", protect, allowRoles("super_admin"), getCustomerById);
+router.get("/customers/summary", protect, allowRoles("super_admin", "admin", "client", "store_manager"), getCustomerSummary);
+router.get("/customers", protect, allowRoles("super_admin", "admin", "client", "store_manager"), getCustomers);
+router.get("/customers/:id", protect, allowRoles("super_admin", "admin", "client", "store_manager"), getCustomerById);
 
 // @route   GET /api/admin/analytics
 router.get(
   "/analytics",
   protect,
-  allowRoles("super_admin", "admin", "staff", "inventory_manager", "cashier"),
+  allowRoles("super_admin", "admin", "client", "store_manager", "staff", "inventory_manager", "cashier"),
   getAdminAnalytics
 );
 

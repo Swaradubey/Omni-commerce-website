@@ -85,12 +85,22 @@ const updateMe = async (req, res) => {
 // @access  Super Admin
 const listPlatformUsers = async (req, res) => {
   try {
+    const isSuperAdmin = req.user && req.user.role === "super_admin";
+    const clientId = req.clientId || req.user?.clientId;
+
+    // Requirement 10 & 16: Log data retrieval details
+    console.log(`[UserController] listPlatformUsers - Page: Users & roles, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const search = String(req.query.search || "").trim();
     const roleFilter = req.query.role ? String(req.query.role).trim() : "";
 
     const q = {};
+    if (!isSuperAdmin && clientId) {
+      q.clientId = clientId;
+    }
+
     if (search) {
       const esc = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       q.$or = [{ name: new RegExp(esc, "i") }, { email: new RegExp(esc, "i") }];
@@ -98,6 +108,9 @@ const listPlatformUsers = async (req, res) => {
     if (roleFilter) {
       q.role = roleFilter;
     }
+
+    // Requirement 16: Log DB query details
+    console.log(`[UserController] DB Query - Collection: users, Filter: ${JSON.stringify(q)}`);
 
     const skip = (page - 1) * limit;
     const [users, total] = await Promise.all([
@@ -116,6 +129,7 @@ const listPlatformUsers = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("[UserController] listPlatformUsers error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -144,6 +158,16 @@ const updateUserRole = async (req, res) => {
     const target = await User.findById(id);
     if (!target) {
       return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const isSuperAdmin = req.user && req.user.role === "super_admin";
+    const clientId = req.clientId || req.user?.clientId;
+
+    if (!isSuperAdmin && clientId && String(target.clientId) !== String(clientId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. You can only manage your own staff.",
+      });
     }
 
     if (target.role === "super_admin") {

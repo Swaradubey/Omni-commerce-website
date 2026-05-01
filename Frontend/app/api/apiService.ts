@@ -45,38 +45,34 @@ interface ApiResponse<T = any> {
 class ApiService {
   private static async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit & { pageName?: string } = {}
   ): Promise<ApiResponse<T>> {
     const url = buildApiUrl(endpoint);
+    const pageName = options.pageName || "Unknown Page";
     
     // Auto-inject Authorization header if token exists
     const token = localStorage.getItem(TOKEN_KEY);
-    if (token) {
-      console.log(`[Frontend Debug] Token found in localStorage: ${token.substring(0, 10)}...`);
-    } else {
-      console.warn("[Frontend Debug] No token found in localStorage.");
-    }
-
+    
     const clientId = localStorage.getItem("retail_verse_client_id");
 
     const headers = {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(clientId ? { "x-client-id": clientId } : {}),
-      // Always send domain hints so the backend tenant resolver can identify the
-      // custom domain (e.g. retailverse.in) even when x-client-id is absent.
       "x-client-domain": window.location.hostname,
       "x-client-origin": window.location.origin,
       ...(options.headers || {}),
     };
 
     try {
-      console.log(`[Frontend Debug] Requesting ${options.method || 'GET'} ${url}`);
-      console.log(`[Frontend Debug] Headers:`, headers);
-      if (options.body) console.log(`[Frontend Debug] Payload:`, options.body);
+      // Requirement 16: Log Request URL, Method, Page Name
+      console.log(`[ApiService] [${pageName}] ${options.method || 'GET'} ${url}`);
       
       const response = await fetch(url, { ...options, headers });
       
+      // Requirement 16: Log Status
+      console.log(`[ApiService] [${pageName}] Status: ${response.status}`);
+
       // Attempt to parse JSON
       let data: any;
       try {
@@ -89,30 +85,11 @@ class ApiService {
       }
 
       if (!response.ok) {
-        // Explicit logging for user requirements
-        console.log(`[Frontend Login Debug] Final URL: ${url}`);
-        console.log(`[Frontend Login Debug] Error Status: ${response.status}`);
-        console.log(`[Frontend Login Debug] Error Message: ${data.message || response.statusText}`);
-
-        // Safe error logging
-        console.error("Safe Error Log:", {
-          url: response.url,
-          status: response.status,
-          message: data.message || response.statusText
-        });
+        console.error(`[ApiService] [${pageName}] Error:`, data.message || response.statusText);
         
-        // Handle validation errors from backend
-        if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
-           throw new Error(data.errors.map((e: any) => e.msg || e.message).join(", "));
-        }
-        
-        // Handle unauthorized (401) by clearing token
         if (response.status === 401) {
-          console.warn("[ApiService] Unauthorized access (401). Clearing token...");
           localStorage.removeItem(TOKEN_KEY);
           localStorage.removeItem("eco_shop_user");
-          localStorage.removeItem("eco_shop_impersonation_super_backup");
-          // Optional: window.location.href = "/login"; // Force redirect if needed
         }
         
         throw new Error(data.message || `Request failed with status ${response.status}`);
@@ -120,22 +97,16 @@ class ApiService {
 
       return data as ApiResponse<T>;
     } catch (error: any) {
-      console.error(`API Error [${endpoint}]:`, error.message);
-      
-      // Explicit logging for connection issues
-      if (error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
-        console.log(`[Frontend Login Debug] Failed to connect to URL: ${url}`);
-        throw new Error("Unable to connect to server. Please ensure the backend is running.");
-      }
+      console.error(`[ApiService] [${pageName}] Exception:`, error.message);
       throw error;
     }
   }
 
-  static get<T>(endpoint: string, options?: RequestInit) {
+  static get<T>(endpoint: string, options?: RequestInit & { pageName?: string }) {
     return this.request<T>(endpoint, { ...options, method: "GET" });
   }
 
-  static post<T>(endpoint: string, body: any, options?: RequestInit) {
+  static post<T>(endpoint: string, body: any, options?: RequestInit & { pageName?: string }) {
     return this.request<T>(endpoint, {
       ...options,
       method: "POST",
@@ -143,7 +114,7 @@ class ApiService {
     });
   }
 
-  static put<T>(endpoint: string, body: any, options?: RequestInit) {
+  static put<T>(endpoint: string, body: any, options?: RequestInit & { pageName?: string }) {
     return this.request<T>(endpoint, {
       ...options,
       method: "PUT",
@@ -151,7 +122,7 @@ class ApiService {
     });
   }
 
-  static patch<T>(endpoint: string, body: any, options?: RequestInit) {
+  static patch<T>(endpoint: string, body: any, options?: RequestInit & { pageName?: string }) {
     return this.request<T>(endpoint, {
       ...options,
       method: "PATCH",
@@ -159,7 +130,7 @@ class ApiService {
     });
   }
 
-  static delete<T>(endpoint: string, options?: RequestInit) {
+  static delete<T>(endpoint: string, options?: RequestInit & { pageName?: string }) {
     return this.request<T>(endpoint, { ...options, method: "DELETE" });
   }
 }

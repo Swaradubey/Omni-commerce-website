@@ -49,7 +49,7 @@ export function DashboardUsers() {
         page,
         limit,
         search: appliedSearch.trim() || undefined,
-      });
+      }, { pageName: 'Users & roles' });
       if (!res.success || !res.data) {
         throw new Error(res.message || 'Could not load users');
       }
@@ -147,7 +147,7 @@ export function DashboardUsers() {
           </div>
           <h2 className="text-2xl font-bold tracking-tight">Users & roles</h2>
           <p className="text-muted-foreground text-sm mt-1">
-            Search accounts and assign roles (Super Admin only). The seeded Super Admin account cannot be changed
+            Search accounts and assign roles. The seeded Super Admin account cannot be changed
             here.
           </p>
         </div>

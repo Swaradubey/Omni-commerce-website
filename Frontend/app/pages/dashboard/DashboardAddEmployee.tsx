@@ -65,7 +65,7 @@ export function DashboardAddEmployee() {
         password: payload.password ? '***' : '',
       });
 
-      const res = await employeesApi.create(payload);
+      const res = await employeesApi.create(payload, { pageName: 'Add Employee' });
       if (res.success) {
         toast.success(res.message || 'Employee added successfully');
         setFormData({

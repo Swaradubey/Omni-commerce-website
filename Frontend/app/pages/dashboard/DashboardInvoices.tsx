@@ -29,7 +29,7 @@ export function DashboardInvoices() {
   const fetchInvoices = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await ApiService.get('/invoices');
+      const response = await ApiService.get('/invoices', { pageName: 'Invoice' });
       if (response.success && response.data && Array.isArray(response.data)) {
         setInvoices(response.data);
       } else {

@@ -90,16 +90,16 @@ export interface UserAnalyticsData {
   };
 }
 
-export async function fetchAdminAnalytics(): Promise<AdminAnalyticsData> {
-  const res = await ApiService.get<AdminAnalyticsData>('/admin/analytics');
+export async function fetchAdminAnalytics(options?: any): Promise<AdminAnalyticsData> {
+  const res = await ApiService.get<AdminAnalyticsData>('/admin/analytics', options);
   if (!res.success || !res.data) {
     throw new Error(res.message || 'Failed to load analytics');
   }
   return res.data as AdminAnalyticsData;
 }
 
-export async function fetchUserAnalytics(): Promise<UserAnalyticsData> {
-  const res = await ApiService.get<UserAnalyticsData>('/user/analytics');
+export async function fetchUserAnalytics(options?: any): Promise<UserAnalyticsData> {
+  const res = await ApiService.get<UserAnalyticsData>('/user/analytics', options);
   if (!res.success || !res.data) {
     throw new Error(res.message || 'Failed to load user analytics');
   }
