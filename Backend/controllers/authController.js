@@ -165,15 +165,9 @@ async function tryAuthenticateSuperAdmin(normalizedEmail, password, req = null) 
     token: generateToken(synced._id, synced.email, "super_admin"),
   };
 
-  // Resolve clientId from domain if not present in user record
-  if (!data.clientId) {
-    const { resolveClientId } = require("../utils/tenantResolver");
-    const resolved = await resolveClientId(req);
-    if (resolved) {
-      data.clientId = resolved;
-      console.log(`[Auth] Super Admin: Resolved clientId from domain for login: ${resolved}`);
-    }
-  }
+  // Super Admins must always remain global (null clientId) unless explicitly 
+  // assigned one in the DB (uncommon). They should NOT inherit a clientId 
+  // from the custom domain they happened to log in from.
 
   return {
     kind: "ok",
@@ -345,9 +339,9 @@ const loginUser = async (req, res) => {
         console.error(`[Auth] Login log failed email=${normalizedEmail}:`, logErr.message);
       }
 
-      // Resolve clientId from domain if not present in user record
+      // Resolve clientId from domain if not present in user record (skip for Super Admin)
       let resolvedClientId = synced.clientId;
-      if (!resolvedClientId) {
+      if (!resolvedClientId && synced.role !== "super_admin") {
         const { resolveClientId } = require("../utils/tenantResolver");
         resolvedClientId = await resolveClientId(req);
         if (resolvedClientId) {

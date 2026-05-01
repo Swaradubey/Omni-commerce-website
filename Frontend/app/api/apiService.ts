@@ -9,6 +9,7 @@ const TOKEN_KEY = "eco_shop_token";
 function buildApiUrl(endpoint: string): string {
   const fallback = "https://omni-commerce-website.onrender.com/api";
   const raw = String(import.meta.env.VITE_API_BASE_URL ?? "").trim() || fallback;
+  console.log(`[ApiService] Using API Base URL: ${raw}`);
   const base = raw.replace(/\/+$/, "");
   let path = endpoint.trim();
   if (!path.startsWith("/")) path = `/${path}`;

@@ -77,8 +77,18 @@ async function conversionRateForWindow(start, end, clientId) {
 }
 
 async function orderTotalsForWindow(start, end, clientId) {
-  const match = { createdAt: { $gte: start, $lt: end } };
+  // Only include paid or POS orders for revenue as per requirement "only paid/completed"
+  const match = {
+    createdAt: { $gte: start, $lt: end },
+    $or: [
+      { isPaid: true },
+      { orderSource: "pos" },
+      { paymentStatus: "paid" },
+      { orderStatus: { $in: ["delivered", "completed", "shipped"] } }
+    ]
+  };
   if (clientId) match.clientId = clientId;
+
   const [agg] = await Order.aggregate([
     { $match: match },
     {
@@ -107,48 +117,17 @@ const FULFILLED_STATUS_LOWER = [
  * Sales this month: sum(totalPrice) for orders placed in [start,end) that are not cancelled
  * and match at least one “successful sale” signal (paid, POS, delivered, stage ≥ 2, or fulfilled status).
  */
+/**
+ * Sales this month: sum(totalPrice) for ALL orders placed in [start,end) regardless of status
+ * (matches requirement "SALES THIS MONTH: orders in current month").
+ */
 async function salesThisMonthForWindow(start, end, clientId) {
   const match = {
     createdAt: { $gte: start, $lt: end },
-    $or: [{ cancelledAt: { $exists: false } }, { cancelledAt: null }],
   };
   if (clientId) match.clientId = clientId;
   const [agg] = await Order.aggregate([
-    {
-      $match: match,
-    },
-    {
-      $match: {
-        $expr: {
-          $ne: [
-            { $toLower: { $trim: { input: { $toString: { $ifNull: ["$orderStatus", ""] } } } } },
-            "cancelled",
-          ],
-        },
-      },
-    },
-    {
-      $match: {
-        $expr: {
-          $or: [
-            { $eq: ["$isPaid", true] },
-            { $eq: ["$orderSource", "pos"] },
-            { $eq: ["$isDelivered", true] },
-            { $gte: [{ $ifNull: ["$currentStage", 1] }, 2] },
-            {
-              $in: [
-                {
-                  $toLower: {
-                    $trim: { input: { $toString: { $ifNull: ["$orderStatus", ""] } } },
-                  },
-                },
-                FULFILLED_STATUS_LOWER,
-              ],
-            },
-          ],
-        },
-      },
-    },
+    { $match: match },
     {
       $group: {
         _id: null,
@@ -594,12 +573,25 @@ async function topProductsForWindow(start, end, clientId, limit = 3) {
 // @access  Private / admin
 const getAdminAnalytics = async (req, res) => {
   try {
-    const clientId = req.clientId || (await resolveClientId(req));
-    console.log("[Analytics Debug] clientId:", clientId);
+    // REMOVE dependency on resolveClientId for dashboard
+    let clientId = null;
+    if (req.user && req.user.role === "admin") {
+      clientId = req.user.clientId;
+    }
+
+    console.log("[Analytics Debug] role:", req.user?.role);
+    console.log("[Analytics Debug] clientId (scoped to):", clientId || "global");
+    console.log("[Analytics Debug] request host:", req.headers.host);
+    console.log("[Analytics Debug] request origin:", req.headers.origin);
 
     const now = new Date();
     const cur = monthWindowContaining(now);
     const prev = previousMonthWindow(now);
+
+    // Get total orders for debug log
+    const debugQuery = clientId ? { clientId } : {};
+    const totalOrdersCount = await Order.countDocuments(debugQuery);
+    console.log("[Dashboard] total orders count:", totalOrdersCount);
 
     const [convCur, convPrev] = await Promise.all([
       conversionRateForWindow(cur.start, cur.end, clientId),
@@ -643,7 +635,8 @@ const getAdminAnalytics = async (req, res) => {
 
     const salesThisMonth = Math.round(salesThisMonthRaw * 100) / 100;
     const lossThisMonth = Math.round(lossThisMonthRaw * 100) / 100;
-    const profitThisMonth = Math.round((salesThisMonth - lossThisMonth) * 100) / 100;
+    // PROFIT: use total revenue for now
+    const profitThisMonth = Math.round(totCur.revenue * 100) / 100;
 
     const conversionRateChange = pctChange(convCur.rate, convPrev.rate);
     const avgOrderValueChange = pctChange(totCur.avgOrderValue, totPrev.avgOrderValue);

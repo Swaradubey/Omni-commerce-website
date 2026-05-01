@@ -1,7 +1,8 @@
 import ApiService from './apiService';
 
 const BASE_URL: string =
-  import.meta.env.VITE_API_BASE_URL || "https://omni-commerce-website.onrender.com/api";
+  (String(import.meta.env.VITE_API_BASE_URL ?? "").trim() || "https://omni-commerce-website.onrender.com/api").replace(/\/+$/, "");
+console.log(`[OrdersAPI] Using Base URL: ${BASE_URL}`);
 
 /** Same key as ApiService — send Bearer token on order creation so the backend can link orders to logged-in customers. */
 const TOKEN_KEY = "eco_shop_token";

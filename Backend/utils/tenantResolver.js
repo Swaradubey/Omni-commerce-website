@@ -39,6 +39,31 @@ function normalizeDomain(domain) {
 async function resolveClientId(req) {
   const route = req.originalUrl || req.url;
   
+  // ── 0. Super Admin Bypass ──────────────────────────────────────────────
+  // If the request contains a Super Admin token, we skip domain-based resolution
+  // to ensure they always get a global (null) clientId by default, unless 
+  // explicitly overridden by a header.
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    try {
+      const token = authHeader.split(" ")[1];
+      const jwt = require("jsonwebtoken");
+      const decoded = jwt.decode(token);
+      if (decoded && decoded.role === "super_admin") {
+        console.log(`[TenantResolver] Super Admin detected via JWT, skipping domain resolution for ${route}`);
+        
+        // However, if they explicitly sent a clientId header, respect it
+        const headerId = req.headers["x-client-id"];
+        if (headerId && headerId !== "null" && headerId !== "undefined") {
+          return String(headerId);
+        }
+        return null;
+      }
+    } catch (e) {
+      // Decode failed, proceed with normal resolution
+    }
+  }
+
   // Full debug snapshot for tenant resolution troubleshooting
   console.log("[Tenant Debug] origin:", req.headers.origin);
   console.log("[Tenant Debug] host:", req.headers.host);

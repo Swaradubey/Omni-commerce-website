@@ -465,7 +465,7 @@ export function DashboardStats({
         icon: Receipt,
         iconTint: 'from-sky-600 to-blue-700',
         ringAccent: 'from-sky-300/50 via-blue-100/30 to-sky-400/40',
-        description: 'Fulfilled & paid-intent orders',
+        description: 'All orders this month',
         path: '/dashboard/analytics',
       },
       {
@@ -487,7 +487,7 @@ export function DashboardStats({
         icon: Wallet,
         iconTint: 'from-emerald-600 to-teal-700',
         ringAccent: 'from-emerald-300/50 via-teal-100/30 to-emerald-400/40',
-        description: 'Sales minus loss',
+        description: 'Paid revenue this month',
         path: '/dashboard/analytics',
       },
     ];
