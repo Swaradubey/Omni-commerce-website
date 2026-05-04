@@ -14,8 +14,22 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
  import { productApi, Product } from '../../api/products';
+ // import { products as staticProducts } from '../../data/products';
  import { InventorySkeleton } from '../../components/inventory/InventorySkeleton';
  import { formatINR } from '../../utils/formatINR';
+import { Product as InventoryItem } from '../../types/product';
+
+function clientShopLabel(item: InventoryItem): string {
+  if (item.clientName) return item.clientName;
+  const store = item.client?.storeName?.trim();
+  const shop = item.client?.shopName?.trim();
+  const company = item.client?.companyName?.trim();
+  if (store) return store;
+  if (shop) return shop;
+  if (company) return company;
+  return 'Unassigned';
+}
+ import { slugifyProductName } from '../../utils/wishlistPayload';
 
 export function DashboardProducts() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -25,12 +39,15 @@ export function DashboardProducts() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await productApi.getAll();
+        const response = await productApi.getManage();
         if (response.success && Array.isArray(response.data)) {
           setProducts(response.data);
+        } else {
+          setProducts([]);
         }
       } catch (error) {
         console.error('Failed to fetch products', error);
+        setProducts([]);
       } finally {
         setIsLoading(false);
       }
@@ -127,6 +144,7 @@ export function DashboardProducts() {
                   <th className="px-6 py-4">Price</th>
                   <th className="px-6 py-4">Stock</th>
                   <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Client</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -189,6 +207,11 @@ export function DashboardProducts() {
                         <div className={`w-1.5 h-1.5 rounded-full ${product.stock > 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                         {product.stock > 0 ? 'Active' : 'Out of Stock'}
                       </span>
+                    </td>
+                    <td className="px-6 py-4">
+                       <span className="text-xs font-semibold text-muted-foreground truncate max-w-[120px] inline-block">
+                         {clientShopLabel(product)}
+                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

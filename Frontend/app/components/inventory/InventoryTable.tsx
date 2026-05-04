@@ -105,13 +105,14 @@ function formatDate(dateStr: string) {
 }
 
 function clientShopLabel(item: InventoryItem): string {
+  if (item.clientName) return item.clientName;
   const store = item.client?.storeName?.trim();
   const shop = item.client?.shopName?.trim();
   const company = item.client?.companyName?.trim();
   if (store) return store;
   if (shop) return shop;
   if (company) return company;
-  return 'Not assigned';
+  return 'Unassigned';
 }
 
 function relativeDate(dateStr: string) {

@@ -9,18 +9,19 @@ const {
 } = require("../utils/productFieldPermissions");
 const { formatProductWithClient } = require("../utils/formatInventoryProduct");
 const { isClientScopedRole } = require("../utils/clientScopedRoles");
-const { resolveClientId, buildScopeQuery, applyScope } = require("../utils/tenantResolver");
+const { resolveClientId, buildScopeQuery, applyScope, buildProductVisibilityFilter } = require("../utils/tenantResolver");
 
 function userOwnsClientProduct(user, product) {
   if (!user || !isClientScopedRole(user.role)) return true;
-  if (!user.clientId || !product.clientId) return false;
-  return String(product.clientId) === String(user.clientId);
+  const userClientId = user.clientId || user.assignedClient || user._id;
+  if (!userClientId || !product.clientId) return false;
+  return String(product.clientId) === String(userClientId);
 }
 
 async function loadProductFormatted(id) {
   const doc = await Product.findById(id).populate({
     path: "clientId",
-    select: "companyName shopName email",
+    select: "companyName shopName email storeName",
   });
   if (!doc) return null;
   return formatProductWithClient(doc.toObject({ virtuals: true }));
@@ -59,26 +60,9 @@ const normalizeSaleFields = (payload = {}) => {
 const getProducts = async (req, res) => {
   try {
     const { category, search, minPrice, maxPrice, isActive } = req.query;
-    const resolvedClientId = await resolveClientId(req);
-    const isGlobalRole =
-      req.user?.role === "superadmin" ||
-      req.user?.role === "super-admin" ||
-      req.user?.role === "admin" ||
-      req.user?.role === "super_admin";
-
-    // Debug logs temporarily
-    console.log("Logged in role:", req.user?.role);
-    console.log("Is global role:", isGlobalRole);
-    console.log("resolved clientId:", resolvedClientId);
-
-    let query = {};
-
-    // Only apply clientId filter if NOT a global role AND clientOnly is requested
-    if (!isGlobalRole && req.query.clientOnly === "true" && req.user?.clientId) {
-      query.clientId = req.user.clientId;
-    }
-    // Otherwise, we show ALL products (global visibility)
-    // No applyScope/buildScopeQuery here for global visibility as per request
+    
+    // Use shared visibility filter
+    let query = await buildProductVisibilityFilter(req);
 
     if (category && category !== "All Categories" && category !== "undefined" && category !== "null") {
       query.category = category;
@@ -98,6 +82,7 @@ const getProducts = async (req, res) => {
       if (minPrice && minPrice !== "undefined") query.price.$gte = Number(minPrice);
       if (maxPrice && maxPrice !== "undefined") query.price.$lte = Number(maxPrice);
     }
+
     // Non-staff (customers/guests) should only see active products
     const isStaff = req.user && (req.user.role === "admin" || req.user.role === "super_admin" || isClientScopedRole(req.user.role));
     if (!isStaff) {
@@ -106,32 +91,29 @@ const getProducts = async (req, res) => {
       query.isActive = isActive === "true";
     }
 
-
-    // Pagination parameters
+    // Pagination parameters - 0 or no limit means return all
     const page = parseInt(req.query.page, 10) || 1;
-    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 0; // 0 = no limit
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 0; 
     const skip = limit ? (page - 1) * limit : 0;
 
     const totalProducts = await Product.countDocuments(query);
 
     let dbQuery = Product.find(query)
-      .populate("clientId", "storeName companyName shopName")
+      .populate("clientId", "storeName companyName shopName email")
       .sort("-createdAt");
-    if (skip) dbQuery = dbQuery.skip(skip);
-    if (limit) dbQuery = dbQuery.limit(limit);
+    
+    if (limit > 0) {
+      dbQuery = dbQuery.skip(skip).limit(limit);
+    }
 
     const products = await dbQuery;
-    const productsFound = products.length;
-
-    // Requested debug logs
-    console.log("Product filter used:", JSON.stringify(query));
-    console.log("Products returned:", products.length);
+    console.log("Returned count:", products.length);
 
     res.status(200).json({
       success: true,
-      count: productsFound,
+      count: products.length,
       data: products,
-      products: products, // included for compatibility
+      products: products,
       totalProducts,
       page,
       totalPages: limit > 0 ? Math.ceil(totalProducts / limit) : 1
@@ -207,12 +189,8 @@ const getProductById = async (req, res) => {
 // @route   POST /api/products
 // @access  Private (Admin/Staff)
 const createProduct = async (req, res) => {
-  console.log("[Backend Debug] POST /api/products - Incoming Request Body:", req.body);
-  console.log("[Backend Debug] Authenticated User:", req.user ? { id: req.user._id, role: req.user.role } : "None");
-
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    console.warn("[Backend Debug] Validation Errors:", errors.array());
     return res.status(400).json({
       success: false,
       errors: errors.array(),
@@ -222,48 +200,63 @@ const createProduct = async (req, res) => {
   try {
     const { sku } = req.body;
     const resolvedClientId = await resolveClientId(req);
-    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    const role = req.user?.role;
     
-    let query = { sku };
-    applyScope(query, scopeQuery);
+    // Explicitly check for global roles (Super Admin / Admin)
+    const isGlobal = role === "super_admin" || role === "super-admin" || role === "superadmin" || role === "admin";
     
-    const existingProduct = await Product.findOne(query);
+    // Determine the target clientId
+    let targetClientId = req.body.clientId || resolvedClientId;
+    
+    // Safety check for non-privileged roles
+    if (!isGlobal && !targetClientId) {
+       return res.status(400).json({
+         success: false,
+         message: "Could not resolve client assignment. Please ensure you are logged in correctly."
+       });
+    }
 
+    // SKU uniqueness check (scoped to client if not global, or global if no client)
+    const skuQuery = { sku };
+    if (targetClientId) {
+      skuQuery.clientId = targetClientId;
+    } else {
+      skuQuery.clientId = null;
+    }
+    
+    const existingProduct = await Product.findOne(skuQuery);
     if (existingProduct) {
-      console.warn("[Backend Debug] SKU Conflict:", sku);
       return res.status(400).json({
         success: false,
-        message: "Product with this SKU already exists",
+        message: "Product with this SKU already exists in this scope",
       });
     }
 
-    const payload = normalizeSaleFields(req.body);
-    const role = req.user.role;
+    // Prepare data
+    const productData = normalizeSaleFields(req.body);
+    productData.createdBy = req.user._id;
+    productData.createdByRole = role;
+    productData.clientId = targetClientId || null;
 
-    if (!payload.clientId) {
-      payload.clientId = await resolveClientId(req);
+    // Fetch clientName if possible to persist it for the UI
+    if (targetClientId) {
+      const Client = require("../models/Client");
+      const client = await Client.findById(targetClientId).select("companyName shopName storeName");
+      if (client) {
+        productData.clientName = client.storeName || client.shopName || client.companyName || "";
+      }
     }
 
-    if (!payload.clientId && req.user.role !== "super_admin") {
-      console.error(`[Products] Failed to resolve clientId for user: ${req.user.email} (Role: ${req.user.role})`);
-      return res.status(400).json({ 
-        success: false, 
-        message: "Could not resolve client assignment. If you are on a custom domain, ensure it is correctly mapped." 
-      });
-    }
-
-    payload.createdBy = req.user._id;
-
-    const product = await Product.create(payload);
+    const product = await Product.create(productData);
     const formatted = await loadProductFormatted(product._id);
-    console.log("[Backend Debug] Product Created Successfully:", product._id);
+
     res.status(201).json({
       success: true,
       message: "Product created successfully",
       data: formatted,
     });
   } catch (error) {
-    console.error("[Backend Debug] createProduct Error:", error.message);
+    console.error("CREATE PRODUCT ERROR", error);
     res.status(500).json({
       success: false,
       message: "Server Error: " + error.message,
@@ -568,6 +561,8 @@ const deleteProduct = async (req, res) => {
     });
   }
 };
+
+
 
 module.exports = {
   getProducts,

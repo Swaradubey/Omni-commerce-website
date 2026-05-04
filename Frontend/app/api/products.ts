@@ -30,6 +30,13 @@ export interface Product {
   client?: ProductClientInfo | null;
 }
 
+export const inventoryApi = {
+  getManage: () => ApiService.get<Product[]>("/api/inventory/manage"),
+  create: (payload: Product) => ApiService.post("/api/inventory", payload),
+  update: (id: string, payload: Partial<Product>) => ApiService.put(`/api/inventory/${id}`, payload),
+  delete: (id: string) => ApiService.delete(`/api/inventory/${id}`),
+};
+
 export const productApi = {
   getAll: (filters?: any) => {
     // Optional: Serialize filters to query string
@@ -37,7 +44,7 @@ export const productApi = {
   },
 
   /** Scoped inventory list for dashboard (populates `client`; Super Admin sees all). */
-  getManage: () => ApiService.get<Product[]>("/api/inventory/manage"),
+  getManage: () => inventoryApi.getManage(),
   
   getOne: (id: string) => {
     return ApiService.get(`/api/products/${id}`);

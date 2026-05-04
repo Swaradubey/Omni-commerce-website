@@ -85,7 +85,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // Attach tenant resolution globally before any routes
-app.use(tenantMiddleware);
+// app.use(tenantMiddleware); // Disabled global use to follow strict middleware ordering for sensitive routes
 
 // Routes
 const authRoutes = require("./routes/authRoutes");

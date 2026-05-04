@@ -1,6 +1,7 @@
 /** Roles that operate within a single Client org (same scoping rules as `client`). */
 const CLIENT_SCOPED_ROLES = new Set([
   "client",
+  "client_admin",
   "store_manager",
   "employee",
   "staff",

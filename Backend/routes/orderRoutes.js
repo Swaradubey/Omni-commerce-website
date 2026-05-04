@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { protect, allowRoles, optionalProtect } = require("../middleware/authMiddleware");
+const tenantMiddleware = require("../middleware/tenantMiddleware");
 const {
   createOrder,
   getOrders,
@@ -16,13 +17,14 @@ const {
 } = require("../controllers/orderController");
 
 // @route   POST /api/orders (optional JWT — links order to logged-in customer when token present)
-router.post("/", optionalProtect, createOrder);
+router.post("/", optionalProtect, tenantMiddleware, createOrder);
 
 // @route   GET /api/orders/my-tracking (logged-in customer — own orders + tracking)
 router.get(
   "/my-tracking",
   protect,
-  allowRoles("user", "customer", "admin", "super_admin", "staff", "inventory_manager", "cashier"),
+  allowRoles("user", "customer", "admin", "super_admin", "staff", "inventory_manager", "cashier", "client_admin"),
+  tenantMiddleware,
   getMyOrdersTracking
 );
 
@@ -31,6 +33,7 @@ router.get(
   "/me/dashboard-overview",
   protect,
   allowRoles("user", "customer"),
+  tenantMiddleware,
   getUserDashboardOverview
 );
 
@@ -38,7 +41,8 @@ router.get(
 router.get(
   "/track",
   protect,
-  allowRoles("user", "customer", "admin", "super_admin", "staff", "inventory_manager", "cashier"),
+  allowRoles("user", "customer", "admin", "super_admin", "staff", "inventory_manager", "cashier", "client_admin"),
+  tenantMiddleware,
   getOrderTrackingByIdentifier
 );
 
@@ -46,18 +50,20 @@ router.get(
 router.get(
   "/track/:identifier",
   protect,
-  allowRoles("user", "customer", "admin", "super_admin", "staff", "inventory_manager", "cashier"),
+  allowRoles("user", "customer", "admin", "super_admin", "staff", "inventory_manager", "cashier", "client_admin"),
+  tenantMiddleware,
   getOrderTrackingByIdentifier
 );
 
 // @route   GET /api/orders (dashboard — admin/staff only)
-router.get("/", protect, allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier"), getOrders);
+router.get("/", protect, allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier", "client_admin"), tenantMiddleware, getOrders);
 
 // @route   GET /api/orders/dashboard/latest-transactions (must be before /:id)
 router.get(
   "/dashboard/latest-transactions",
   protect,
-  allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier"),
+  allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier", "client_admin"),
+  tenantMiddleware,
   getLatestTransactions
 );
 
@@ -65,7 +71,8 @@ router.get(
 router.patch(
   "/:orderId/tracking-status",
   protect,
-  allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier"),
+  allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier", "client_admin"),
+  tenantMiddleware,
   patchOrderTrackingStatus
 );
 
@@ -73,7 +80,8 @@ router.patch(
 router.patch(
   "/:id/tracking",
   protect,
-  allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier"),
+  allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier", "client_admin"),
+  tenantMiddleware,
   patchOrderTracking
 );
 
@@ -81,14 +89,15 @@ router.patch(
 router.patch(
   "/:orderId/cancel",
   protect,
-  allowRoles("user", "customer", "admin", "super_admin"),
+  allowRoles("user", "customer", "admin", "super_admin", "client_admin"),
+  tenantMiddleware,
   cancelOrder
 );
 
 // @route   GET /api/orders/:id (public for order confirmation by id)
-router.get("/:id", getOrderById);
+router.get("/:id", tenantMiddleware, getOrderById);
 
 // @route   DELETE /api/orders/:id
-router.delete("/:id", protect, allowRoles("super_admin", "admin", "client"), deleteOrder);
+router.delete("/:id", protect, allowRoles("super_admin", "admin", "client", "client_admin"), tenantMiddleware, deleteOrder);
 
 module.exports = router;

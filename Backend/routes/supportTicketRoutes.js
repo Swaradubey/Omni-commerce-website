@@ -15,8 +15,10 @@ const {
   addZendeskTicketComment,
 } = require("../controllers/supportTicketController");
 
+const tenantMiddleware = require("../middleware/tenantMiddleware");
+
 // All routes require authentication
-router.use(protect);
+router.use(protect, tenantMiddleware);
 
 // ── User routes ───────────────────────────────────────────────────────────────
 

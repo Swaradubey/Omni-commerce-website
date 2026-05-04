@@ -17,12 +17,14 @@ import { ProductDetailModal } from '../components/inventory/ProductDetailModal';
 import { StoreManagerModal } from '../components/inventory/StoreManagerModal';
 import { EmployeeModal } from '../components/inventory/EmployeeModal';
 import { SortConfig, type InventoryItem } from '../types/inventory';
-import { productApi, Product } from '../api/products';
+import { productApi, inventoryApi, Product } from '../api/products';
+// import { products as staticProducts } from '../data/products';
 import { clientsApi, type ClientRow } from '../api/clients';
 import { employeesApi, type EmployeeRow } from '../api/employees';
 import { storeManagersApi, type StoreManager } from '../api/storeManagers';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
+import { slugifyProductName } from '../utils/wishlistPayload';
 import {
   canAccessInventoryEditor,
   canAdjustInventoryStock,
@@ -87,15 +89,16 @@ export function Inventory() {
   const fetchAllProducts = async () => {
     setIsLoading(true);
     try {
-      const response = await productApi.getManage();
-
-      if (response.success) {
-        setProducts((response.data as Product[]) || []);
+      const response = await inventoryApi.getManage();
+      if (response.success && Array.isArray(response.data)) {
+        setProducts(response.data);
       } else {
-        throw new Error(response.message || 'Failed to fetch products');
+        setProducts([]);
       }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to fetch products');
+      console.error('Failed to fetch inventory products', error);
+      setProducts([]);
+      toast.error(error.message || 'Failed to fetch dynamic products.');
     } finally {
       setIsLoading(false);
     }
@@ -270,7 +273,7 @@ export function Inventory() {
           toast.error('You are not allowed to add products');
           return;
         }
-        const response = await productApi.create(productData as Product);
+        const response = await inventoryApi.create(productData as Product);
         if (response.success) {
           await fetchAllProducts();
           toast.success('Product created successfully');
@@ -287,7 +290,7 @@ export function Inventory() {
           else if (pd.name !== undefined) body.title = pd.name;
           if (pd.description !== undefined) body.description = pd.description;
         }
-        const response = await productApi.update(selectedProduct._id, body);
+        const response = await inventoryApi.update(selectedProduct._id, body);
         if (response.success) {
           await fetchAllProducts();
           toast.success(response.message || 'Product updated successfully');
@@ -305,7 +308,7 @@ export function Inventory() {
   const handleDeleteConfirmed = async () => {
     if (!productToDelete?._id) return;
     try {
-      const response = await productApi.delete(productToDelete._id);
+      const response = await inventoryApi.delete(productToDelete._id);
       if (response.success) {
         setProducts(prev => prev.filter(p => p._id !== productToDelete._id));
         toast.success('Product deleted successfully');

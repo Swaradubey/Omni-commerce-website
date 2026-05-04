@@ -11,22 +11,25 @@ const {
   deleteInventoryItem 
 } = require("../controllers/inventoryController");
 const { protect, allowRoles, optionalProtect } = require("../middleware/authMiddleware");
+const tenantMiddleware = require("../middleware/tenantMiddleware");
 
 // Public routes for fetching (Optional auth for scoping)
-router.get("/", optionalProtect, getInventory);
+router.get("/", optionalProtect, tenantMiddleware, getInventory);
 router.get(
   "/manage",
   protect,
-  allowRoles("super_admin", "admin", "inventory_manager", "client", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "inventory_manager", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  tenantMiddleware,
   getInventoryManage
 );
-router.get("/:id", optionalProtect, getInventoryById);
+router.get("/:id", optionalProtect, tenantMiddleware, getInventoryById);
 
 // Protected routes for management (create/update/delete/stock: admin only)
 router.post(
   "/",
   protect,
-  allowRoles("super_admin", "admin", "client", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  tenantMiddleware,
   [
     check("name", "Name is required").not().isEmpty(),
     check("sku", "SKU is required").not().isEmpty(),
@@ -40,14 +43,16 @@ router.post(
 router.put(
   "/:id",
   protect,
-  allowRoles("super_admin", "admin", "inventory_manager", "client", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "inventory_manager", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  tenantMiddleware,
   updateInventoryItem
 );
 
 router.patch(
   "/:id/stock",
   protect,
-  allowRoles("super_admin", "admin", "client", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  tenantMiddleware,
   [check("stock", "Stock count is required").isNumeric()],
   updateStock
 );
@@ -55,7 +60,8 @@ router.patch(
 router.delete(
   "/:id",
   protect,
-  allowRoles("super_admin", "admin", "client", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  tenantMiddleware,
   deleteInventoryItem
 );
 

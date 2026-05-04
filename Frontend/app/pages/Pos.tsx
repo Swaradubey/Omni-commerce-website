@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { productApi, Product } from '../api/products';
+import { products as staticProducts } from '../data/products';
 import { wishlistApi } from '../api/wishlist';
 import { useAuth } from '../context/AuthContext';
 import { ImpersonationBanner } from '../components/ImpersonationBanner';
@@ -230,33 +231,79 @@ export function Pos() {
     const clientIdForCache = localStorage.getItem('retail_verse_client_id') || undefined;
 
     try {
+      let dbProducts: Product[] = [];
       if (online) {
         try {
           const response = await productApi.getManage();
           if (response.success && Array.isArray(response.data)) {
-            const list = response.data as Product[];
-            setProducts(list);
+            dbProducts = response.data as Product[];
             setProductSource('live');
-            await savePosProductsCache(list, clientIdForCache);
-            return;
+            await savePosProductsCache(dbProducts, clientIdForCache);
           }
         } catch {
-          /* fall through to cache */
+          const cached = await loadPosProductsCache(clientIdForCache);
+          if (cached && cached.length > 0) {
+            dbProducts = cached;
+            setProductSource('cache');
+          }
+        }
+      } else {
+        const cached = await loadPosProductsCache(clientIdForCache);
+        if (cached && cached.length > 0) {
+          dbProducts = cached;
+          setProductSource('cache');
         }
       }
 
-      const cached = await loadPosProductsCache(clientIdForCache);
-      if (cached && cached.length > 0) {
-        setProducts(cached);
-        setProductSource('cache');
-        return;
-      }
+      // Merge logic similar to Shop.tsx
+      const normalizedStatic = staticProducts.map(p => ({
+        _id: `static-${p.id}`,
+        name: p.name,
+        sku: p.sku || `SKU-${p.id}`,
+        price: p.price,
+        category: p.category,
+        stock: p.stock,
+        image: p.image,
+        isActive: true,
+        updatedAt: new Date().toISOString()
+      } as Product));
 
-      setProducts([]);
+      const merged = [...dbProducts, ...normalizedStatic];
+      
+      // Deduplicate by Name (case insensitive) or SKU
+      const unique: Product[] = [];
+      const seenNames = new Set<string>();
+      const seenSkus = new Set<string>();
+
+      merged.forEach(p => {
+        const nameKey = p.name.toLowerCase().trim();
+        const skuKey = p.sku?.toLowerCase().trim() || '';
+        
+        if (!seenNames.has(nameKey) && (!skuKey || !seenSkus.has(skuKey))) {
+          unique.push(p);
+          seenNames.add(nameKey);
+          if (skuKey) seenSkus.add(skuKey);
+        }
+      });
+
+      setProducts(unique);
+      if (unique.length === 0) setProductSource('none');
+      
+    } catch (err: unknown) {
+      console.error('POS fetchProducts error:', err);
+      // Fallback to static only on major error
+      const normalizedStatic = staticProducts.map(p => ({
+        _id: `static-${p.id}`,
+        name: p.name,
+        sku: p.sku || `SKU-${p.id}`,
+        price: p.price,
+        category: p.category,
+        stock: p.stock,
+        image: p.image,
+        isActive: true
+      } as Product));
+      setProducts(normalizedStatic);
       setProductSource('none');
-      if (online) {
-        toast.error('Failed to load products');
-      }
     } finally {
       setIsLoading(false);
     }

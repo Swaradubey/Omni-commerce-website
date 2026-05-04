@@ -70,9 +70,14 @@ class ApiService {
     const isPrivileged = userRole === "admin" || userRole === "super_admin";
     
     // Priority for x-client-id:
-    // 1. User's own clientId or linkedClientId (works for admins, managers, and assigned customers)
+    // 1. User's own clientId or linkedClientId or assignedClient (works for admins, managers, and assigned customers)
     // 2. localStorage retail_verse_client_id if guest or unassigned
-    let clientId = userClientId || localStorage.getItem("retail_verse_client_id");
+    let clientId = 
+      userClientId || 
+      (localStorage.getItem("eco_shop_user") ? JSON.parse(localStorage.getItem("eco_shop_user")!).assignedClient : null) ||
+      (localStorage.getItem("eco_shop_user") ? JSON.parse(localStorage.getItem("eco_shop_user")!).tenantId : null) ||
+      (localStorage.getItem("eco_shop_user") ? JSON.parse(localStorage.getItem("eco_shop_user")!).storeId : null) ||
+      localStorage.getItem("retail_verse_client_id");
 
     // Clean up clientId to avoid sending "null" or "undefined" as strings
     if (clientId === "null" || clientId === "undefined" || !clientId) {
@@ -82,7 +87,7 @@ class ApiService {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(clientId ? { "x-client-id": clientId } : {}),
+      ...(clientId ? { "x-client-id": String(clientId) } : {}),
       "x-client-domain": window.location.hostname,
       "x-client-origin": window.location.origin,
       ...(options.headers as Record<string, string> || {}),

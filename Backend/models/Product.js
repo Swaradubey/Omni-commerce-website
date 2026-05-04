@@ -63,10 +63,18 @@ const productSchema = new mongoose.Schema(
       ref: "Client",
       default: null,
     },
+    clientName: {
+      type: String,
+      default: "",
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
+    },
+    createdByRole: {
+      type: String,
+      default: "",
     },
   },
   {

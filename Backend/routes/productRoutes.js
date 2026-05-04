@@ -11,27 +11,28 @@ const {
   deleteProduct,
 } = require("../controllers/productController");
 const { protect, allowRoles, optionalProtect } = require("../middleware/authMiddleware");
+const tenantMiddleware = require("../middleware/tenantMiddleware");
 
 /**
  * @route   GET /api/products
  * @desc    Get all products
  * @access  Public (Optional auth for scoping)
  */
-router.get("/", optionalProtect, getProducts);
+router.get("/", optionalProtect, tenantMiddleware, getProducts);
 
 /**
  * @route   GET /api/products/featured
  * @desc    Get featured products
  * @access  Public (Optional auth for scoping)
  */
-router.get("/featured", optionalProtect, getFeaturedProducts);
+router.get("/featured", optionalProtect, tenantMiddleware, getFeaturedProducts);
 
 /**
  * @route   GET /api/products/:id
  * @desc    Get single product
  * @access  Public (Optional auth for scoping)
  */
-router.get("/:id", optionalProtect, getProductById);
+router.get("/:id", optionalProtect, tenantMiddleware, getProductById);
 
 /**
  * @route   POST /api/products
@@ -41,7 +42,8 @@ router.get("/:id", optionalProtect, getProductById);
 router.post(
   "/",
   protect,
-  allowRoles("super_admin", "admin", "client", "store_manager", "employee", "staff", "seo_manager", "inventory_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "inventory_manager", "counter_manager"),
+  tenantMiddleware,
   [
     check("name", "Name is required").not().isEmpty(),
     check("sku", "SKU is required").not().isEmpty(),
@@ -60,7 +62,8 @@ router.post(
 router.put(
   "/:id",
   protect,
-  allowRoles("super_admin", "admin", "inventory_manager", "client", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "inventory_manager", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
+  tenantMiddleware,
   updateProduct
 );
 
@@ -72,7 +75,8 @@ router.put(
 router.patch(
   "/:id/stock",
   protect,
-  allowRoles("super_admin", "admin", "client", "store_manager", "employee", "staff", "seo_manager", "inventory_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "inventory_manager", "counter_manager"),
+  tenantMiddleware,
   [check("stock", "Stock count is required").isInt({ min: 0 })],
   updateProductStock
 );
@@ -85,7 +89,8 @@ router.patch(
 router.delete(
   "/:id",
   protect,
-  allowRoles("super_admin", "admin", "client", "store_manager", "employee", "staff", "seo_manager", "inventory_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "inventory_manager", "counter_manager"),
+  tenantMiddleware,
   deleteProduct
 );
 
