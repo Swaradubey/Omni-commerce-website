@@ -9,7 +9,7 @@ const {
 } = require("../utils/productFieldPermissions");
 const { formatProductWithClient } = require("../utils/formatInventoryProduct");
 const { isClientScopedRole } = require("../utils/clientScopedRoles");
-const { resolveClientId } = require("../utils/tenantResolver");
+const { resolveClientId, buildScopeQuery, applyScope } = require("../utils/tenantResolver");
 
 function userOwnsClientProduct(user, product) {
   if (!user || !isClientScopedRole(user.role)) return true;
@@ -59,22 +59,21 @@ const normalizeSaleFields = (payload = {}) => {
 const getProducts = async (req, res) => {
   try {
     const { category, search, minPrice, maxPrice, isActive } = req.query;
+    const resolvedClientId = await resolveClientId(req);
+    
+    // Debug log for resolved clientId
+    console.log("resolved clientId:", resolvedClientId);
+    console.log("user role:", req.user?.role);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    
+    let query = {};
+    applyScope(query, scopeQuery);
 
-    console.log("[Tenant Debug] origin:", req.headers.origin);
-    console.log("[Tenant Debug] host:", req.headers.host);
-    console.log("[Tenant Debug] x-client-domain:", req.headers["x-client-domain"]);
-    console.log("[Tenant Debug] user role:", req.user?.role);
-    console.log("[Tenant Debug] user clientId:", req.user?.clientId);
-    console.log("[Tenant Debug] resolved clientId:", req.clientId);
-
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
-    let query = { clientId };
-
-    if (!clientId) {
-      console.warn("[Products] No clientId resolved for getProducts");
+    if (category && category !== "All Categories" && category !== "undefined" && category !== "null") {
+      query.category = category;
     }
-    if (category && category !== "All Categories") query.category = category;
-    if (search) {
+    
+    if (search && search !== "undefined" && search !== "null") {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { sku: { $regex: search, $options: "i" } },
@@ -82,21 +81,53 @@ const getProducts = async (req, res) => {
         { description: { $regex: search, $options: "i" } }
       ];
     }
-    if (minPrice || maxPrice) {
-      query.price = {};
-      if (minPrice) query.price.$gte = Number(minPrice);
-      if (maxPrice) query.price.$lte = Number(maxPrice);
-    }
-    if (isActive !== undefined) query.isActive = isActive === "true";
 
-    const products = await Product.find(query).sort("-createdAt");
-    
+    if ((minPrice && minPrice !== "undefined") || (maxPrice && maxPrice !== "undefined")) {
+      query.price = {};
+      if (minPrice && minPrice !== "undefined") query.price.$gte = Number(minPrice);
+      if (maxPrice && maxPrice !== "undefined") query.price.$lte = Number(maxPrice);
+    }
+    // Non-staff (customers/guests) should only see active products
+    const isStaff = req.user && (req.user.role === "admin" || req.user.role === "super_admin" || isClientScopedRole(req.user.role));
+    if (!isStaff) {
+      query.isActive = true;
+    } else if (isActive !== undefined) {
+      query.isActive = isActive === "true";
+    }
+
+
+    // Pagination parameters
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 0; // 0 = no limit
+    const skip = limit ? (page - 1) * limit : 0;
+
+    const totalProducts = await Product.countDocuments(query);
+
+    let dbQuery = Product.find(query).sort("-createdAt");
+    if (skip) dbQuery = dbQuery.skip(skip);
+    if (limit) dbQuery = dbQuery.limit(limit);
+
+    const products = await dbQuery;
+    const productsFound = products.length;
+
+    // Requested debug logs
+    console.log("logged in role:", req.user?.role);
+    console.log("logged in user id:", req.user?._id);
+    console.log("resolved clientId:", resolvedClientId);
+    console.log("inventory filter:", JSON.stringify(query));
+    console.log("products returned:", products.length);
+
     res.status(200).json({
       success: true,
-      count: products.length,
+      count: productsFound,
       data: products,
+      products: products, // included for compatibility
+      totalProducts,
+      page,
+      totalPages: limit > 0 ? Math.ceil(totalProducts / limit) : 1
     });
   } catch (error) {
+    console.error("GET PRODUCTS ERROR", error);
     res.status(500).json({
       success: false,
       message: "Server Error: " + error.message,
@@ -109,8 +140,10 @@ const getProducts = async (req, res) => {
 // @access  Public
 const getFeaturedProducts = async (req, res) => {
   try {
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
-    let query = { isFeatured: true, isActive: true, clientId };
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    let query = { isFeatured: true, isActive: true };
+    applyScope(query, scopeQuery);
 
     const products = await Product.find(query)
       .select(
@@ -136,9 +169,10 @@ const getFeaturedProducts = async (req, res) => {
 // @access  Public
 const getProductById = async (req, res) => {
   try {
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };
-    if (clientId) query.clientId = clientId;
+    applyScope(query, scopeQuery);
 
     const product = await Product.findOne(query);
     if (!product) {
@@ -177,10 +211,11 @@ const createProduct = async (req, res) => {
 
   try {
     const { sku } = req.body;
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     
     let query = { sku };
-    if (clientId) query.clientId = clientId;
+    applyScope(query, scopeQuery);
     
     const existingProduct = await Product.findOne(query);
 
@@ -253,9 +288,10 @@ const updateProduct = async (req, res) => {
       console.log(`PUT /api/products/${req.params.id} - Role: ${role}`);
     }
     
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };
-    if (clientId) query.clientId = clientId;
+    applyScope(query, scopeQuery);
 
     const product = await Product.findOne(query);
     if (!product) {
@@ -383,7 +419,7 @@ const updateProduct = async (req, res) => {
 
     if (normalizedPayload.sku && normalizedPayload.sku !== product.sku) {
       let skuQuery = { sku: normalizedPayload.sku };
-      if (clientId) skuQuery.clientId = clientId;
+      applyScope(skuQuery, scopeQuery);
       
       const existingProduct = await Product.findOne(skuQuery);
       if (existingProduct) {
@@ -451,9 +487,10 @@ const updateProductStock = async (req, res) => {
       });
     }
 
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };
-    if (clientId) query.clientId = clientId;
+    applyScope(query, scopeQuery);
 
     const existing = await Product.findOne(query);
     if (!existing) {
@@ -491,9 +528,10 @@ const updateProductStock = async (req, res) => {
 // @access  Private (Admin/Staff)
 const deleteProduct = async (req, res) => {
   try {
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };
-    if (clientId) query.clientId = clientId;
+    applyScope(query, scopeQuery);
 
     const product = await Product.findOne(query);
     if (!product) {

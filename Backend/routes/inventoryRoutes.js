@@ -10,17 +10,17 @@ const {
   updateStock, 
   deleteInventoryItem 
 } = require("../controllers/inventoryController");
-const { protect, allowRoles } = require("../middleware/authMiddleware");
+const { protect, allowRoles, optionalProtect } = require("../middleware/authMiddleware");
 
-// Public routes for fetching
-router.get("/", getInventory);
+// Public routes for fetching (Optional auth for scoping)
+router.get("/", optionalProtect, getInventory);
 router.get(
   "/manage",
   protect,
   allowRoles("super_admin", "admin", "inventory_manager", "client", "store_manager", "employee", "staff", "seo_manager", "counter_manager"),
   getInventoryManage
 );
-router.get("/:id", getInventoryById);
+router.get("/:id", optionalProtect, getInventoryById);
 
 // Protected routes for management (create/update/delete/stock: admin only)
 router.post(

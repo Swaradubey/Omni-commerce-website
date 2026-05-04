@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
 import { ProductCard } from '../components/ProductCard';
-import { products as staticProducts } from '../data/products';
 import { 
   Search, 
   SlidersHorizontal, 
@@ -19,6 +18,7 @@ import {
   TabletSmartphone
 } from 'lucide-react';
  import { productApi, Product as DynamicProduct } from '../api/products';
+ import { products as staticProducts } from '../data/products';
  import { Product as ShopProduct } from '../types/product';
  import { useAuth } from '../context/AuthContext';
  import { wishlistApi } from '../api/wishlist';
@@ -45,6 +45,7 @@ export function Shop() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [dynamicProducts, setDynamicProducts] = useState<ShopProduct[]>([]);
+  const [backendTotal, setBackendTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [wishlistKeySet, setWishlistKeySet] = useState<Set<string>>(() => new Set());
@@ -79,6 +80,12 @@ export function Shop() {
     const fetchDynamicProducts = async () => {
       try {
         setIsLoading(true);
+        const apiUrl = "/api/products";
+        const clientId = user?.clientId || user?.linkedClientId || localStorage.getItem("retail_verse_client_id");
+        console.log("User shop API URL:", apiUrl);
+        console.log("Logged in user:", user);
+        console.log("clientId sent:", clientId);
+
         const response = await productApi.getAll();
         if (response.success && Array.isArray(response.data)) {
           const normalized = response.data.map((p: DynamicProduct) => ({
@@ -98,21 +105,53 @@ export function Shop() {
             sku: p.sku
           } as ShopProduct & { sku?: string }));
           setDynamicProducts(normalized);
+          setBackendTotal(response.totalProducts || normalized.length);
+          
+          // Requested debug logs
+          console.log("role:", user?.role);
+          console.log("clientId sent:", clientId);
+          console.log("dynamicProducts length:", normalized.length);
+          console.log("staticProducts length:", staticProducts.length);
+        } else {
+          console.log('[Shop] No dynamic products returned or success false');
+          console.log("role:", user?.role);
+          console.log("dynamicProducts length: 0");
+          console.log("staticProducts length:", staticProducts.length);
         }
-      } catch (err) {
-        console.error('Failed to fetch dynamic products:', err);
-        setError('Could not load all products. Showing static items only.');
+      } catch (err: any) {
+        console.error('[Shop] API error fetching dynamic products:', err.message);
+        // We don't block with error state so static products still show
+        setError('Dynamic inventory could not be loaded, showing demo products.');
+        console.log("dynamicProducts length: 0 (error)");
+        console.log("staticProducts length:", staticProducts.length);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchDynamicProducts();
-  }, []);
+  }, [user]);
 
   const allProducts = useMemo(() => {
-    const merged = [...staticProducts, ...dynamicProducts];
-    const unique = Array.from(new Map(merged.map(p => [p.id, p])).values());
+    const merged = [...dynamicProducts, ...staticProducts];
+    
+    // Deduplicate by ID and Name
+    const unique: ShopProduct[] = [];
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
+
+    merged.forEach(p => {
+      const id = (p._id || p.id)?.toString() || '';
+      const name = p.name?.toLowerCase().trim() || '';
+      
+      if (id && !seenIds.has(id) && name && !seenNames.has(name)) {
+        unique.push(p);
+        seenIds.add(id);
+        seenNames.add(name);
+      }
+    });
+
+    console.log("finalProducts length:", unique.length);
     return unique;
   }, [dynamicProducts]);
 
@@ -175,8 +214,10 @@ export function Shop() {
         result.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
     }
 
+    console.log("filteredProducts length:", result.length);
+    if (error) console.log("api error:", error);
     return result;
-  }, [allProducts, selectedCategory, showSaleOnly, searchQuery, priceRange, sortBy]);
+  }, [allProducts, selectedCategory, showSaleOnly, searchQuery, priceRange, sortBy, error]);
 
   const handleCategoryChange = (category: string) => {
     const params = new URLSearchParams(searchParams);

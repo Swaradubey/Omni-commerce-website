@@ -105,3 +105,67 @@ export async function fetchUserAnalytics(options?: any): Promise<UserAnalyticsDa
   }
   return res.data as UserAnalyticsData;
 }
+
+export async function fetchSuperAdminOverview(options?: any): Promise<AdminAnalyticsData> {
+  const res = await ApiService.get<any>('/superadmin/overview', options);
+  if (!res.success || !res.data) {
+    throw new Error(res.message || 'Failed to load super admin overview');
+  }
+  const d = res.data;
+
+  // Map the new backend format to the existing AdminAnalyticsData interface
+  // to keep the frontend components working without changes
+  const mappedData: AdminAnalyticsData = {
+    analyticsScope: 'full',
+    summary: {
+      totalRevenue: d.totalRevenue,
+      totalRevenueChange: 0,
+      totalRevenueTrend: 'neutral',
+      activeCustomers: d.activeCustomers,
+      activeCustomersChange: 0,
+      activeCustomersTrend: 'neutral',
+      newCustomersThisMonth: d.newCustomers,
+      newCustomersChange: 0,
+      newCustomersTrend: 'neutral',
+      conversionRate: d.conversionRate,
+      conversionRateChange: 0,
+      conversionRateTrend: 'neutral',
+      orderCount: d.totalOrdersThisMonth,
+      orderCountChange: 0,
+      orderCountTrend: 'neutral',
+      avgOrderValue: d.totalOrdersThisMonth > 0 ? d.totalRevenue / d.totalOrdersThisMonth : 0,
+      avgOrderValueChange: 0,
+      avgOrderValueTrend: 'neutral',
+      customerLifetimeValue: d.activeCustomers > 0 ? d.totalRevenue / d.activeCustomers : 0,
+      customerLifetimeValueChange: 0,
+      customerLifetimeValueTrend: 'neutral',
+      sessions: d.liveCustomers || 0,
+      sessionsChange: 0,
+      sessionsTrend: 'neutral',
+      salesThisMonth: d.salesThisMonth,
+      lossThisMonth: d.lossThisMonth,
+      profitThisMonth: d.profitThisMonth,
+    },
+    revenueFlow: (d.salesAnalytics || []).map((s: any) => ({
+      name: new Date(s.date).toLocaleDateString('en-US', { weekday: 'short' }),
+      date: s.date,
+      sales: s.revenue,
+      orders: s.orders
+    })).reverse(), // Reversing to show oldest to newest if backend returns newest to oldest
+    topCategories: (d.categoryDistribution || []).map((c: any, idx: number) => ({
+      name: c.category,
+      value: c.totalSales,
+      percent: c.totalSales > 0 ? (c.totalSales / d.salesThisMonth) * 100 : 0,
+      color: ['#3b82f6', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#f43f5e'][idx % 7] || '#3b82f6'
+    })),
+    topProducts: []
+  };
+
+  // Fix percent if salesThisMonth is 0
+  const catTotal = mappedData.topCategories.reduce((acc, curr) => acc + curr.value, 0);
+  if (catTotal > 0) {
+    mappedData.topCategories.forEach(c => c.percent = (c.value / catTotal) * 100);
+  }
+
+  return mappedData;
+}

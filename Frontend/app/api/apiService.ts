@@ -53,15 +53,39 @@ class ApiService {
     // Auto-inject Authorization header if token exists
     const token = localStorage.getItem(TOKEN_KEY);
     
-    const clientId = localStorage.getItem("retail_verse_client_id");
+    // Get user from storage to check role and clientId
+    let userRole = "";
+    let userClientId = null;
+    try {
+      const storedUser = localStorage.getItem("eco_shop_user");
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        userRole = parsed.role || "";
+        userClientId = parsed.clientId || parsed.linkedClientId || null;
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
 
-    const headers = {
+    const isPrivileged = userRole === "admin" || userRole === "super_admin";
+    
+    // Priority for x-client-id:
+    // 1. User's own clientId or linkedClientId (works for admins, managers, and assigned customers)
+    // 2. localStorage retail_verse_client_id if guest or unassigned
+    let clientId = userClientId || localStorage.getItem("retail_verse_client_id");
+
+    // Clean up clientId to avoid sending "null" or "undefined" as strings
+    if (clientId === "null" || clientId === "undefined" || !clientId) {
+      clientId = null;
+    }
+
+    const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(clientId ? { "x-client-id": clientId } : {}),
       "x-client-domain": window.location.hostname,
       "x-client-origin": window.location.origin,
-      ...(options.headers || {}),
+      ...(options.headers as Record<string, string> || {}),
     };
 
     try {

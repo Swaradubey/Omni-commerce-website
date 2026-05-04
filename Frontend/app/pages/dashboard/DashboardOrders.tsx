@@ -9,6 +9,7 @@ import {
   Route,
   DollarSign,
   Trash2,
+  Receipt,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -20,10 +21,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
+import { useNavigate } from 'react-router';
 import ApiService from '../../api/apiService';
 import { patchOrderTrackingStatus } from '../../api/orders';
 import { useAuth } from '../../context/AuthContext';
-import { hasFullAdminPrivileges, isStaffRole, isCustomerAccountRole } from '../../utils/staffRoles';
+import { hasFullAdminPrivileges, isStaffRole, isCustomerAccountRole, isSuperAdminRole } from '../../utils/staffRoles';
 import { OrderTrackingTimeline, type TimelineStage } from '../../components/orders/OrderTrackingTimeline';
  import { toast } from 'sonner';
  import { formatINR } from '../../utils/formatINR';
@@ -45,9 +47,11 @@ function isCancelledOrder(o: any): boolean {
 
 export function DashboardOrders() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = hasFullAdminPrivileges(user?.role);
   const isStaff = isStaffRole(user?.role);
   const isCustomer = isCustomerAccountRole(user?.role);
+  const isSuperAdmin = isSuperAdminRole(user?.role);
 
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -410,6 +414,18 @@ export function DashboardOrders() {
                           <td className="px-6 py-4 text-right">
                             {isAdmin ? (
                           <div className="flex justify-end gap-2">
+                            {isSuperAdmin && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="rounded-lg border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                                onClick={() => navigate(`/super-admin/invoice/${order.orderId}`)}
+                              >
+                                <Receipt className="mr-1.5 h-3.5 w-3.5" />
+                                Invoice
+                              </Button>
+                            )}
                             <Button
                               type="button"
                               variant="outline"

@@ -1,5 +1,12 @@
 const Order = require("../models/Order");
 const User = require("../models/User");
+const { 
+  resolveClientId: resolveTenant, 
+  buildScopeQuery, 
+  applyScope 
+} = require("../utils/tenantResolver");
+
+
 
 /** Same storefront roles as adminCustomerController — denominator for conversion-style metrics. */
 const CUSTOMER_ROLES = ["user", "customer"];
@@ -58,9 +65,9 @@ function pctChange(current, previous) {
  * Guest checkout and walk-in POS without a linked User are excluded from the numerator so the rate stays bounded
  * against the registered-customer denominator.
  */
-async function conversionRateForWindow(start, end, clientId) {
+async function conversionRateForWindow(start, end, scopeQuery) {
   const userQuery = { role: { $in: CUSTOMER_ROLES } };
-  if (clientId) userQuery.clientId = clientId;
+  applyScope(userQuery, scopeQuery);
   const registered = await User.countDocuments(userQuery);
   if (registered === 0) return { rate: 0, registered };
 
@@ -68,7 +75,7 @@ async function conversionRateForWindow(start, end, clientId) {
     createdAt: { $gte: start, $lt: end },
     user: { $exists: true, $ne: null },
   };
-  if (clientId) orderQuery.clientId = clientId;
+  applyScope(orderQuery, scopeQuery);
 
   const withUser = await Order.distinct("user", orderQuery);
   const purchasers = withUser.filter((id) => id != null).length;
@@ -76,7 +83,7 @@ async function conversionRateForWindow(start, end, clientId) {
   return { rate, registered, purchasers };
 }
 
-async function orderTotalsForWindow(start, end, clientId) {
+async function orderTotalsForWindow(start, end, scopeQuery) {
   // Only include paid or POS orders for revenue as per requirement "only paid/completed"
   const match = {
     createdAt: { $gte: start, $lt: end },
@@ -87,7 +94,7 @@ async function orderTotalsForWindow(start, end, clientId) {
       { orderStatus: { $in: ["delivered", "completed", "shipped"] } }
     ]
   };
-  if (clientId) match.clientId = clientId;
+  applyScope(match, scopeQuery);
 
   const [agg] = await Order.aggregate([
     { $match: match },
@@ -121,11 +128,11 @@ const FULFILLED_STATUS_LOWER = [
  * Sales this month: sum(totalPrice) for ALL orders placed in [start,end) regardless of status
  * (matches requirement "SALES THIS MONTH: orders in current month").
  */
-async function salesThisMonthForWindow(start, end, clientId) {
+async function salesThisMonthForWindow(start, end, scopeQuery) {
   const match = {
     createdAt: { $gte: start, $lt: end },
   };
-  if (clientId) match.clientId = clientId;
+  applyScope(match, scopeQuery);
   const [agg] = await Order.aggregate([
     { $match: match },
     {
@@ -139,12 +146,12 @@ async function salesThisMonthForWindow(start, end, clientId) {
 }
 
 /** Refunds recorded in the window (by refundedAt). */
-async function lossFromRefundsForWindow(start, end, clientId) {
+async function lossFromRefundsForWindow(start, end, scopeQuery) {
   const match = {
     refundAmount: { $gt: 0 },
     refundedAt: { $gte: start, $lt: end },
   };
-  if (clientId) match.clientId = clientId;
+  applyScope(match, scopeQuery);
   const [agg] = await Order.aggregate([
     {
       $match: match,
@@ -157,12 +164,12 @@ async function lossFromRefundsForWindow(start, end, clientId) {
 /**
  * Cancellations in the window: sum(totalPrice) when no refund amount is stored (avoids double-count with refund loss).
  */
-async function lossFromCancellationsForWindow(start, end, clientId) {
+async function lossFromCancellationsForWindow(start, end, scopeQuery) {
   const match = {
     cancelledAt: { $gte: start, $lt: end },
     $or: [{ refundAmount: { $exists: false } }, { refundAmount: null }, { refundAmount: 0 }],
   };
-  if (clientId) match.clientId = clientId;
+  applyScope(match, scopeQuery);
   const [agg] = await Order.aggregate([
     {
       $match: match,
@@ -172,10 +179,10 @@ async function lossFromCancellationsForWindow(start, end, clientId) {
   return agg?.t ?? 0;
 }
 
-async function lossThisMonthForWindow(start, end, clientId) {
+async function lossThisMonthForWindow(start, end, scopeQuery) {
   const [a, b] = await Promise.all([
-    lossFromRefundsForWindow(start, end, clientId),
-    lossFromCancellationsForWindow(start, end, clientId),
+    lossFromRefundsForWindow(start, end, scopeQuery),
+    lossFromCancellationsForWindow(start, end, scopeQuery),
   ]);
   return a + b;
 }
@@ -184,9 +191,9 @@ async function lossThisMonthForWindow(start, end, clientId) {
  * Distinct "active ordering customers" in [start, end): same identity keys as conversion/CLV
  * (linked User id, else normalized customerEmail on the order). Orders with neither are excluded.
  */
-async function activeOrderingCustomersCountForWindow(start, end, clientId) {
+async function activeOrderingCustomersCountForWindow(start, end, scopeQuery) {
   const match = { createdAt: { $gte: start, $lt: end } };
-  if (clientId) match.clientId = clientId;
+  applyScope(match, scopeQuery);
   const [agg] = await Order.aggregate([
     { $match: match },
     {
@@ -217,8 +224,9 @@ async function activeOrderingCustomersCountForWindow(start, end, clientId) {
  * Customer lifetime value (all-time):
  * total revenue from valid orders / count of distinct paying identities (user id or normalized guest email on orders).
  */
-async function customerLifetimeValueAllTime(clientId) {
-  const match = clientId ? { clientId } : {};
+async function customerLifetimeValueAllTime(scopeQuery) {
+  const match = {};
+  applyScope(match, scopeQuery);
   const [revAgg] = await Order.aggregate([
     { $match: match },
     {
@@ -264,18 +272,18 @@ async function customerLifetimeValueAllTime(clientId) {
  * Documented as "monthly active registered customers" rather than raw HTTP sessions.
  */
 /** New storefront registrations (user/customer role) created in [start, end). */
-async function newCustomersForWindow(start, end, clientId) {
+async function newCustomersForWindow(start, end, scopeQuery) {
   const query = {
     role: { $in: CUSTOMER_ROLES },
     createdAt: { $gte: start, $lt: end },
   };
-  if (clientId) query.clientId = clientId;
+  applyScope(query, scopeQuery);
   return User.countDocuments(query);
 }
 
-async function monthlyActiveCustomers(start, end, clientId) {
+async function monthlyActiveCustomers(start, end, scopeQuery) {
   const match = { role: { $in: CUSTOMER_ROLES } };
-  if (clientId) match.clientId = clientId;
+  applyScope(match, scopeQuery);
   const [agg] = await User.aggregate([
     { $match: match },
     {
@@ -301,9 +309,9 @@ async function monthlyActiveCustomers(start, end, clientId) {
  * MoM trend for CLV: compares average revenue per distinct paying identity (user or email) within each calendar month.
  * This is not the lifetime CLV delta (that would need historical snapshots); it is documented as a revenue-intensity trend.
  */
-async function monthlyRevenuePerPayer(start, end, clientId) {
+async function monthlyRevenuePerPayer(start, end, scopeQuery) {
   const match = { createdAt: { $gte: start, $lt: end } };
-  if (clientId) match.clientId = clientId;
+  applyScope(match, scopeQuery);
   const rows = await Order.aggregate([
     { $match: match },
     {
@@ -345,7 +353,7 @@ async function monthlyRevenuePerPayer(start, end, clientId) {
 }
 
 /** Last 7 local days (including today): label + total revenue (website + POS). */
-async function revenueFlowLast7Days(clientId) {
+async function revenueFlowLast7Days(scopeQuery) {
   const now = new Date();
   const days = [];
   const short = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -353,7 +361,7 @@ async function revenueFlowLast7Days(clientId) {
     const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 0, 0, 0, 0);
     const next = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1, 0, 0, 0, 0);
     const match = { createdAt: { $gte: day, $lt: next } };
-    if (clientId) match.clientId = clientId;
+    applyScope(match, scopeQuery);
     const [agg] = await Order.aggregate([
       { $match: match },
       {
@@ -382,9 +390,9 @@ const PIE_COLORS = ["#3b82f6", "#ec4899", "#10b981", "#f59e0b", "#8b5cf6", "#06b
  * Category revenue for orders in [start, end): join line items to Product when productId is a valid ObjectId.
  * Orders without resolvable category bucket as "Uncategorized".
  */
-async function topCategoriesForWindow(start, end, clientId, limit = 8) {
+async function topCategoriesForWindow(start, end, scopeQuery, limit = 8) {
   const match = { createdAt: { $gte: start, $lt: end } };
-  if (clientId) match.clientId = clientId;
+  applyScope(match, scopeQuery);
   const rows = await Order.aggregate([
     { $match: match },
     { $unwind: "$items" },
@@ -476,13 +484,13 @@ async function topCategoriesForWindow(start, end, clientId, limit = 8) {
 }
 
 /** Top products by line revenue in window; growth vs previous window of equal length. */
-async function topProductsForWindow(start, end, clientId, limit = 3) {
+async function topProductsForWindow(start, end, scopeQuery, limit = 3) {
   const prevStart = new Date(start.getTime() - (end.getTime() - start.getTime()));
   const prevEnd = start;
 
   const productLineStages = (windowStart, windowEnd) => {
     const match = { createdAt: { $gte: windowStart, $lt: windowEnd } };
-    if (clientId) match.clientId = clientId;
+    applyScope(match, scopeQuery);
     return [
       { $match: match },
       { $unwind: "$items" },
@@ -573,63 +581,76 @@ async function topProductsForWindow(start, end, clientId, limit = 3) {
 // @access  Private / admin
 const getAdminAnalytics = async (req, res) => {
   try {
-    const isSuperAdmin = req.user && req.user.role === "super_admin";
-    // For non-super admins, we MUST use clientId for tenant isolation.
-    // req.clientId is usually set by tenantMiddleware or authMiddleware.
-    const clientId = isSuperAdmin ? null : (req.user?.clientId || req.clientId);
+    const userId = req.user?._id;
+    const userRole = req.user?.role;
+    const resolvedClientId = await resolveTenant(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
 
-    // Requirement 10 & 16: Log data retrieval details
-    console.log(`[adminAnalytics] getAdminAnalytics - Page: Analytics, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
-    console.log("[Analytics Debug] request host:", req.headers.host);
-    console.log("[Analytics Debug] request origin:", req.headers.origin);
+    const isSuperAdmin = userRole === "super_admin";
+
+    // Get total orders for debug log
+    const debugQuery = Object.keys(scopeQuery).length > 0 ? scopeQuery : {};
+    const totalOrdersFound = await Order.countDocuments(debugQuery);
+
+    // Requirement 5: Add detailed debug logs
+    console.log("ADMIN OVERVIEW DEBUG", {
+      origin: req.headers.origin,
+      host: req.headers.host,
+      userId: req.user?._id,
+      email: req.user?.email,
+      role: req.user?.role,
+      userClientId: req.user?.clientId,
+      linkedClientId: req.user?.linkedClientId,
+      headerClientId: req.headers["x-client-id"],
+      resolvedClientId,
+      scopeQuery,
+      totalOrdersFound
+    });
+
+    console.log(`[adminAnalytics] getAdminAnalytics - Page: Analytics, Role: ${userRole}, Scope: ${JSON.stringify(scopeQuery)}`);
 
     const now = new Date();
     const cur = monthWindowContaining(now);
     const prev = previousMonthWindow(now);
 
-    // Get total orders for debug log
-    const debugQuery = clientId ? { clientId } : {};
-    const totalOrdersCount = await Order.countDocuments(debugQuery);
-    console.log("[Dashboard] total orders count:", totalOrdersCount);
-
     const [convCur, convPrev] = await Promise.all([
-      conversionRateForWindow(cur.start, cur.end, clientId),
-      conversionRateForWindow(prev.start, prev.end, clientId),
+      conversionRateForWindow(cur.start, cur.end, scopeQuery),
+      conversionRateForWindow(prev.start, prev.end, scopeQuery),
     ]);
 
     const [totCur, totPrev] = await Promise.all([
-      orderTotalsForWindow(cur.start, cur.end, clientId),
-      orderTotalsForWindow(prev.start, prev.end, clientId),
+      orderTotalsForWindow(cur.start, cur.end, scopeQuery),
+      orderTotalsForWindow(prev.start, prev.end, scopeQuery),
     ]);
 
-    const clv = await customerLifetimeValueAllTime(clientId);
+    const clv = await customerLifetimeValueAllTime(scopeQuery);
     const [mrpCur, mrpPrev] = await Promise.all([
-      monthlyRevenuePerPayer(cur.start, cur.end, clientId),
-      monthlyRevenuePerPayer(prev.start, prev.end, clientId),
+      monthlyRevenuePerPayer(cur.start, cur.end, scopeQuery),
+      monthlyRevenuePerPayer(prev.start, prev.end, scopeQuery),
     ]);
 
     const [mauCur, mauPrev] = await Promise.all([
-      monthlyActiveCustomers(cur.start, cur.end, clientId),
-      monthlyActiveCustomers(prev.start, prev.end, clientId),
+      monthlyActiveCustomers(cur.start, cur.end, scopeQuery),
+      monthlyActiveCustomers(prev.start, prev.end, scopeQuery),
     ]);
 
     const [newCustCur, newCustPrev] = await Promise.all([
-      newCustomersForWindow(cur.start, cur.end, clientId),
-      newCustomersForWindow(prev.start, prev.end, clientId),
+      newCustomersForWindow(cur.start, cur.end, scopeQuery),
+      newCustomersForWindow(prev.start, prev.end, scopeQuery),
     ]);
 
     const [activeCustCur, activeCustPrev] = await Promise.all([
-      activeOrderingCustomersCountForWindow(cur.start, cur.end, clientId),
-      activeOrderingCustomersCountForWindow(prev.start, prev.end, clientId),
+      activeOrderingCustomersCountForWindow(cur.start, cur.end, scopeQuery),
+      activeOrderingCustomersCountForWindow(prev.start, prev.end, scopeQuery),
     ]);
 
     const [revenueFlow, topCategories, topProducts, salesThisMonthRaw, lossThisMonthRaw] =
       await Promise.all([
-        revenueFlowLast7Days(clientId),
-        topCategoriesForWindow(cur.start, cur.end, clientId),
-        topProductsForWindow(cur.start, cur.end, clientId, 3),
-        salesThisMonthForWindow(cur.start, cur.end, clientId),
-        lossThisMonthForWindow(cur.start, cur.end, clientId),
+        revenueFlowLast7Days(scopeQuery),
+        topCategoriesForWindow(cur.start, cur.end, scopeQuery),
+        topProductsForWindow(cur.start, cur.end, scopeQuery, 3),
+        salesThisMonthForWindow(cur.start, cur.end, scopeQuery),
+        lossThisMonthForWindow(cur.start, cur.end, scopeQuery),
       ]);
 
     const salesThisMonth = Math.round(salesThisMonthRaw * 100) / 100;

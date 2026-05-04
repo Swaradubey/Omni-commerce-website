@@ -100,6 +100,17 @@ export function Inventory() {
   };
 
   useEffect(() => {
+    if (products.length > 0) {
+      console.log("inventory products received:", products.length);
+      console.log("product client info:", products.map(p => ({
+        name: p.name,
+        clientId: p.clientId || (typeof p.client === 'string' ? p.client : p.client?._id),
+        clientName: p.client?.shopName || p.client?.companyName || 'Not assigned'
+      })));
+    }
+  }, [products]);
+
+  useEffect(() => {
     fetchAllProducts();
   }, []);
 

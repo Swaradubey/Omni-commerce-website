@@ -45,6 +45,9 @@ import { Account } from './pages/Account';
 import { WishlistPage } from './pages/WishlistPage';
 import { TrackOrder } from './pages/TrackOrder';
 import { CustomDomain } from './pages/super-admin/CustomDomain';
+import { SuperAdminClients } from './pages/super-admin/SuperAdminClients';
+import { SuperAdminClientDetail } from './pages/super-admin/SuperAdminClientDetail';
+import { InvoiceDetail } from './pages/super-admin/InvoiceDetail';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { TermsOfService } from './pages/TermsOfService';
 
@@ -238,6 +241,30 @@ export const router = createBrowserRouter([
               <SuperAdminOrClientRoute>
                 <CustomDomain />
               </SuperAdminOrClientRoute>
+            ),
+          },
+          {
+            path: 'super-admin/clients',
+            element: (
+              <SuperAdminOnlyRoute>
+                <SuperAdminClients />
+              </SuperAdminOnlyRoute>
+            ),
+          },
+          {
+            path: 'super-admin/clients/:clientId',
+            element: (
+              <SuperAdminOnlyRoute>
+                <SuperAdminClientDetail />
+              </SuperAdminOnlyRoute>
+            ),
+          },
+          {
+            path: 'super-admin/invoice/:orderId',
+            element: (
+              <SuperAdminOnlyRoute>
+                <InvoiceDetail />
+              </SuperAdminOnlyRoute>
             ),
           },
         ],

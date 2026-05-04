@@ -10,28 +10,28 @@ const {
   updateProductStock,
   deleteProduct,
 } = require("../controllers/productController");
-const { protect, allowRoles } = require("../middleware/authMiddleware");
+const { protect, allowRoles, optionalProtect } = require("../middleware/authMiddleware");
 
 /**
  * @route   GET /api/products
  * @desc    Get all products
- * @access  Public
+ * @access  Public (Optional auth for scoping)
  */
-router.get("/", getProducts);
+router.get("/", optionalProtect, getProducts);
 
 /**
  * @route   GET /api/products/featured
  * @desc    Get featured products
- * @access  Public
+ * @access  Public (Optional auth for scoping)
  */
-router.get("/featured", getFeaturedProducts);
+router.get("/featured", optionalProtect, getFeaturedProducts);
 
 /**
  * @route   GET /api/products/:id
  * @desc    Get single product
- * @access  Public
+ * @access  Public (Optional auth for scoping)
  */
-router.get("/:id", getProductById);
+router.get("/:id", optionalProtect, getProductById);
 
 /**
  * @route   POST /api/products

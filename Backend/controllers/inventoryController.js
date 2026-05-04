@@ -12,7 +12,7 @@ const {
   formatProductWithClient,
 } = require("../utils/formatInventoryProduct");
 const { isClientScopedRole } = require("../utils/clientScopedRoles");
-const { resolveClientId } = require("../utils/tenantResolver");
+const { resolveClientId, buildScopeQuery, applyScope } = require("../utils/tenantResolver");
 
 function userOwnsClientProduct(user, product) {
   if (!user || !isClientScopedRole(user.role)) return true;
@@ -28,20 +28,36 @@ const INVENTORY_MANAGER_TITLE_DESC_SUCCESS =
 // @access  Private
 const getInventoryManage = async (req, res) => {
   try {
-    console.log("[Tenant Debug] origin:", req.headers.origin);
-    console.log("[Tenant Debug] host:", req.headers.host);
-    console.log("[Tenant Debug] x-client-domain:", req.headers["x-client-domain"]);
-    console.log("[Tenant Debug] user role:", req.user?.role);
-    console.log("[Tenant Debug] user clientId:", req.user?.clientId);
-    console.log("[Tenant Debug] resolved clientId:", req.clientId);
-
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
-    let query = { clientId };
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    
+    let query = {};
+    applyScope(query, scopeQuery);
 
     const rows = await Product.find(query)
       .sort("-createdAt")
       .populate({ path: "clientId", select: "companyName shopName email" })
       .lean();
+
+    const productsFound = rows.length;
+
+    console.log("logged in role:", req.user?.role);
+    console.log("logged in user id:", req.user?._id);
+    console.log("resolved clientId:", resolvedClientId);
+    console.log("inventory filter:", JSON.stringify(query));
+    console.log("products returned:", productsFound);
+
+    // Also log for POS if this is the POS call
+    if (req.originalUrl.includes("/pos") || req.headers["x-page-name"] === "Pos") {
+      console.log("POS ADMIN DEBUG", {
+        endpoint: req.originalUrl,
+        role: req.user?.role,
+        userId: req.user?._id,
+        resolvedClientId,
+        posProductQuery: query,
+        productsFound
+      });
+    }
 
     return res.json({
       success: true,
@@ -64,10 +80,11 @@ const createInventoryItem = async (req, res) => {
 
   try {
     const { sku } = req.body;
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     
     let query = { sku };
-    if (clientId) query.clientId = clientId;
+    applyScope(query, scopeQuery);
     
     const itemExists = await Product.findOne(query);
 
@@ -79,7 +96,12 @@ const createInventoryItem = async (req, res) => {
     const role = req.user.role;
 
     if (!payload.clientId) {
-      payload.clientId = clientId;
+      payload.clientId = resolvedClientId;
+    }
+
+    // Support for multiple fields if they were provided in the body but not as clientId
+    if (!payload.clientId) {
+      payload.clientId = req.body.client || req.body.client_id || req.body.storeId || req.body.createdBy;
     }
 
     if (!payload.clientId && req.user.role !== "super_admin") {
@@ -112,11 +134,21 @@ const createInventoryItem = async (req, res) => {
 const getInventory = async (req, res) => {
   try {
     const { category, search, minPrice, maxPrice, inStock } = req.query;
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
-    let query = { clientId };
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    
+    let query = {};
+    applyScope(query, scopeQuery);
 
     if (category) query.category = category;
-    if (search) query.name = { $regex: search, $options: "i" };
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { sku: { $regex: search, $options: "i" } },
+        { category: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } }
+      ];
+    }
     if (minPrice || maxPrice) {
       query.price = {};
       if (minPrice) query.price.$gte = Number(minPrice);
@@ -125,7 +157,21 @@ const getInventory = async (req, res) => {
     if (inStock === "true") query.stock = { $gt: 0 };
     if (inStock === "false") query.stock = 0;
 
+
     const inventory = await Product.find(query).sort("-createdAt");
+    const productsFound = inventory.length;
+
+    console.log("INVENTORY ADMIN DEBUG (List)", {
+      endpoint: req.originalUrl,
+      role: req.user?.role,
+      userId: req.user?._id,
+      userClientId: req.user?.clientId,
+      resolvedClientId,
+      query: req.query,
+      inventoryQuery: query,
+      productsFound
+    });
+
     res.json({
       success: true,
       data: inventory,
@@ -140,9 +186,10 @@ const getInventory = async (req, res) => {
 // @access  Public
 const getInventoryById = async (req, res) => {
   try {
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };
-    if (clientId) query.clientId = clientId;
+    applyScope(query, scopeQuery);
 
     const item = await Product.findOne(query);
     if (item) {
@@ -161,9 +208,10 @@ const getInventoryById = async (req, res) => {
 const updateInventoryItem = async (req, res) => {
   try {
     const role = req.user.role;
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };
-    if (clientId) query.clientId = clientId;
+    applyScope(query, scopeQuery);
 
     const item = await Product.findOne(query);
     if (!item) {
@@ -331,9 +379,10 @@ const updateInventoryItem = async (req, res) => {
 // @access  Private (Admin/Staff)
 const updateStock = async (req, res) => {
   try {
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };
-    if (clientId) query.clientId = clientId;
+    applyScope(query, scopeQuery);
 
     const existing = await Product.findOne(query);
     if (!existing) {
@@ -345,7 +394,11 @@ const updateStock = async (req, res) => {
         message: "You are not allowed to update this inventory item",
       });
     }
-    existing.stock = stock;
+    const { stock } = req.body;
+    if (stock === undefined || isNaN(Number(stock))) {
+      return res.status(400).json({ success: false, message: "Valid stock count is required" });
+    }
+    existing.stock = Number(stock);
     const item = await existing.save({ validateBeforeSave: true });
     const populated = await Product.findById(item._id)
       .populate({ path: "clientId", select: "companyName shopName email" })
@@ -365,9 +418,10 @@ const updateStock = async (req, res) => {
 // @access  Private (Admin/Staff)
 const deleteInventoryItem = async (req, res) => {
   try {
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };
-    if (clientId) query.clientId = clientId;
+    applyScope(query, scopeQuery);
 
     const item = await Product.findOne(query);
     if (!item) {

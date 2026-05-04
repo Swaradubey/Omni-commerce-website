@@ -64,7 +64,7 @@ import {
   isSuperAdminRole,
   normalizeRole,
 } from '../utils/staffRoles';
-import { fetchAdminAnalytics, fetchUserAnalytics, type AdminAnalyticsData, type UserAnalyticsData } from '../api/analytics';
+import { fetchAdminAnalytics, fetchUserAnalytics, fetchSuperAdminOverview, type AdminAnalyticsData, type UserAnalyticsData } from '../api/analytics';
 import { fetchUserDashboardOverview, type UserDashboardOverviewData } from '../api/orders';
 import { ImpersonationBanner } from '../components/ImpersonationBanner';
 import { toast } from 'sonner';
@@ -82,6 +82,7 @@ const sidebarItems = [
   { title: "Invoice", icon: Receipt, href: "/dashboard/invoices", superAdminOnly: true },
   { title: "Customers", icon: Users, href: "/dashboard/customers", superAdminOnly: true },
   { title: "Users & roles", icon: UserCog, href: "/dashboard/users", superAdminOnly: true },
+  { title: "Clients", icon: Building2, href: "/super-admin/clients", superAdminOnly: true },
   { title: "Add Client", icon: Building2, href: "/dashboard/clients", superAdminOnly: true },
   { title: "Add Custom Domain", icon: Globe, href: "/super-admin/custom-domain", superAdminOnly: true },
   { title: "Add Employee", icon: UserPlus, href: "/dashboard/add-employee", staffOnly: true, hideForSuperAdmin: true },
@@ -138,7 +139,15 @@ export function Dashboard() {
       }
       setOverviewError(null);
       try {
-        const d = await fetchAdminAnalytics();
+        let d: AdminAnalyticsData;
+        if (isSuperAdminRole(user?.role)) {
+          console.log('[Dashboard] Fetching /api/superadmin/overview');
+          d = await fetchSuperAdminOverview();
+          console.log('[Dashboard] SuperAdmin Overview Data:', d);
+        } else {
+          console.log('[Dashboard] Fetching /api/admin/analytics');
+          d = await fetchAdminAnalytics();
+        }
         setOverviewData(d);
         return { ok: true };
       } catch (e: unknown) {

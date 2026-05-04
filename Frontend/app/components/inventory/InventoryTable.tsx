@@ -105,8 +105,10 @@ function formatDate(dateStr: string) {
 }
 
 function clientShopLabel(item: InventoryItem): string {
-  const s = item.client?.shopName?.trim();
-  if (s) return s;
+  const shop = item.client?.shopName?.trim();
+  const company = item.client?.companyName?.trim();
+  if (shop) return shop;
+  if (company) return company;
   return 'Not assigned';
 }
 

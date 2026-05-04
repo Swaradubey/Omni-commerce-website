@@ -6,7 +6,11 @@ const User = require("../models/User");
 const TrackOrder = require("../models/TrackOrder");
 const Invoice = require("../models/Invoice");
 const shiprocketService = require("../services/shiprocketService");
-const { resolveClientId } = require("../utils/tenantResolver");
+const { 
+  resolveClientId, 
+  buildScopeQuery, 
+  applyScope 
+} = require("../utils/tenantResolver");
 
 /** Standard stages (1–6) for timeline UI */
 const TRACKING_STAGE_LABELS = [
@@ -1097,12 +1101,14 @@ const createOrder = async (req, res) => {
 const getOrders = async (req, res) => {
   try {
     const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     
     // Requirement 10 & 16: Log data retrieval details
-    console.log(`[OrderController] getOrders - Page: Orders, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+    console.log(`[OrderController] getOrders - Page: Orders, Role: ${req.user?.role}, resolvedClientId: ${resolvedClientId || "global"}`);
 
-    const query = isSuperAdmin ? {} : { clientId };
+    const query = {};
+    applyScope(query, scopeQuery);
     const orders = await Order.find(query).sort("-createdAt");
 
     // Requirement 16: Log DB query details
@@ -1125,14 +1131,16 @@ const getOrders = async (req, res) => {
 const getLatestTransactions = async (req, res) => {
   try {
     const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     const rawLimit = parseInt(req.query.limit, 10);
     const limit = Number.isFinite(rawLimit) ? Math.min(50, Math.max(1, rawLimit)) : 12;
 
     // Requirement 10 & 16: Log data retrieval details
-    console.log(`[OrderController] getLatestTransactions - Page: Dashboard, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+    console.log(`[OrderController] getLatestTransactions - Page: Dashboard, Role: ${req.user?.role}, resolvedClientId: ${resolvedClientId || "global"}`);
 
-    const query = isSuperAdmin ? {} : { clientId };
+    const query = {};
+    applyScope(query, scopeQuery);
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
