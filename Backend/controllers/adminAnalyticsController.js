@@ -576,7 +576,7 @@ const getAdminAnalytics = async (req, res) => {
     const isSuperAdmin = req.user && req.user.role === "super_admin";
     // For non-super admins, we MUST use clientId for tenant isolation.
     // req.clientId is usually set by tenantMiddleware or authMiddleware.
-    const clientId = isSuperAdmin ? null : (req.clientId || req.user?.clientId);
+    const clientId = isSuperAdmin ? null : (req.user?.clientId || req.clientId);
 
     // Requirement 10 & 16: Log data retrieval details
     console.log(`[adminAnalytics] getAdminAnalytics - Page: Analytics, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);

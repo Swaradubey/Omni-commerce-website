@@ -6,7 +6,7 @@ const Invoice = require("../models/Invoice");
 const getInvoices = async (req, res) => {
   try {
     const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.clientId || req.user?.clientId;
+    const clientId = req.user?.clientId || req.clientId;
 
     // Requirement 10 & 16: Log data retrieval details
     console.log(`[invoiceController] getInvoices - Page: Invoices, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
@@ -30,7 +30,7 @@ const getInvoices = async (req, res) => {
 const getInvoiceById = async (req, res) => {
   try {
     const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.clientId || req.user?.clientId;
+    const clientId = req.user?.clientId || req.clientId;
 
     console.log(`[invoiceController] getInvoiceById - ID: ${req.params.id}, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
 

@@ -35,7 +35,7 @@ const getInventoryManage = async (req, res) => {
     console.log("[Tenant Debug] user clientId:", req.user?.clientId);
     console.log("[Tenant Debug] resolved clientId:", req.clientId);
 
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { clientId };
 
     const rows = await Product.find(query)
@@ -64,7 +64,7 @@ const createInventoryItem = async (req, res) => {
 
   try {
     const { sku } = req.body;
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     
     let query = { sku };
     if (clientId) query.clientId = clientId;
@@ -112,7 +112,7 @@ const createInventoryItem = async (req, res) => {
 const getInventory = async (req, res) => {
   try {
     const { category, search, minPrice, maxPrice, inStock } = req.query;
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { clientId };
 
     if (category) query.category = category;
@@ -140,7 +140,7 @@ const getInventory = async (req, res) => {
 // @access  Public
 const getInventoryById = async (req, res) => {
   try {
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { _id: req.params.id };
     if (clientId) query.clientId = clientId;
 
@@ -161,7 +161,7 @@ const getInventoryById = async (req, res) => {
 const updateInventoryItem = async (req, res) => {
   try {
     const role = req.user.role;
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { _id: req.params.id };
     if (clientId) query.clientId = clientId;
 
@@ -331,7 +331,7 @@ const updateInventoryItem = async (req, res) => {
 // @access  Private (Admin/Staff)
 const updateStock = async (req, res) => {
   try {
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { _id: req.params.id };
     if (clientId) query.clientId = clientId;
 
@@ -365,7 +365,7 @@ const updateStock = async (req, res) => {
 // @access  Private (Admin/Staff)
 const deleteInventoryItem = async (req, res) => {
   try {
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { _id: req.params.id };
     if (clientId) query.clientId = clientId;
 

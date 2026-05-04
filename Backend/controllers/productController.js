@@ -67,7 +67,7 @@ const getProducts = async (req, res) => {
     console.log("[Tenant Debug] user clientId:", req.user?.clientId);
     console.log("[Tenant Debug] resolved clientId:", req.clientId);
 
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { clientId };
 
     if (!clientId) {
@@ -109,7 +109,7 @@ const getProducts = async (req, res) => {
 // @access  Public
 const getFeaturedProducts = async (req, res) => {
   try {
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { isFeatured: true, isActive: true, clientId };
 
     const products = await Product.find(query)
@@ -136,7 +136,7 @@ const getFeaturedProducts = async (req, res) => {
 // @access  Public
 const getProductById = async (req, res) => {
   try {
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { _id: req.params.id };
     if (clientId) query.clientId = clientId;
 
@@ -177,7 +177,7 @@ const createProduct = async (req, res) => {
 
   try {
     const { sku } = req.body;
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     
     let query = { sku };
     if (clientId) query.clientId = clientId;
@@ -253,7 +253,7 @@ const updateProduct = async (req, res) => {
       console.log(`PUT /api/products/${req.params.id} - Role: ${role}`);
     }
     
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { _id: req.params.id };
     if (clientId) query.clientId = clientId;
 
@@ -451,7 +451,7 @@ const updateProductStock = async (req, res) => {
       });
     }
 
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { _id: req.params.id };
     if (clientId) query.clientId = clientId;
 
@@ -491,7 +491,7 @@ const updateProductStock = async (req, res) => {
 // @access  Private (Admin/Staff)
 const deleteProduct = async (req, res) => {
   try {
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let query = { _id: req.params.id };
     if (clientId) query.clientId = clientId;
 

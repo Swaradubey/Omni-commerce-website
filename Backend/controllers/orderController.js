@@ -521,7 +521,7 @@ function sanitizePaymentDetails(details) {
 // @access  Public
 const createOrder = async (req, res) => {
   try {
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     console.log("-----------------------------------------");
     const payloadKeys =
       req.body && typeof req.body === "object" && !Array.isArray(req.body)
@@ -1097,7 +1097,7 @@ const createOrder = async (req, res) => {
 const getOrders = async (req, res) => {
   try {
     const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     
     // Requirement 10 & 16: Log data retrieval details
     console.log(`[OrderController] getOrders - Page: Orders, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
@@ -1125,7 +1125,7 @@ const getOrders = async (req, res) => {
 const getLatestTransactions = async (req, res) => {
   try {
     const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     const rawLimit = parseInt(req.query.limit, 10);
     const limit = Number.isFinite(rawLimit) ? Math.min(50, Math.max(1, rawLimit)) : 12;
 
@@ -1191,7 +1191,7 @@ const getOrderById = async (req, res) => {
       return res.status(400).json({ success: false, message: "Order id is required" });
     }
 
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     let order = await Order.findOne({ orderId: raw, clientId });
     if (!order && mongoose.Types.ObjectId.isValid(raw)) {
       order = await Order.findOne({ _id: raw, clientId });
@@ -1212,7 +1212,7 @@ const getOrderById = async (req, res) => {
 // @access  Private (user, customer)
 const getMyOrdersTracking = async (req, res) => {
   try {
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     const isAdmin = req.user && ["admin", "super_admin", "manager", "staff", "inventory_manager", "cashier"].includes(req.user.role);
     const query = isAdmin ? (clientId ? { clientId } : {}) : { user: req.user._id };
     
@@ -1405,7 +1405,7 @@ const patchOrderTracking = async (req, res) => {
 const deleteOrder = async (req, res) => {
   try {
     const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.clientId || (await resolveClientId(req));
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
     const paramId = req.params.id;
     const query = isSuperAdmin ? { orderId: paramId } : { orderId: paramId, clientId };
     let order = await Order.findOne(query);

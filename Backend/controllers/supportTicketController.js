@@ -141,7 +141,7 @@ const getAllTickets = async (req, res) => {
   try {
     const isSuperAdmin = req.user && req.user.role === "super_admin";
     const isClient = req.user && req.user.role === "client";
-    const clientId = req.clientId || req.user?.clientId;
+    const clientId = req.user?.clientId || req.clientId;
 
     if (!isSuperAdmin && !isClient && !isAdminRole(req.user?.role)) {
       return res.status(403).json({ success: false, message: "Admin access required" });

@@ -58,7 +58,7 @@ const resolveDomain = async (req, res) => {
 const getAllCustomDomains = async (req, res) => {
   try {
     const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.clientId || req.user?.clientId;
+    const clientId = req.user?.clientId || req.clientId;
 
     // Requirement 10 & 16: Log data retrieval details
     console.log(`[customDomain] getAllCustomDomains - Page: Custom Domains, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);

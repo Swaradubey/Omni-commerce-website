@@ -86,7 +86,7 @@ const updateMe = async (req, res) => {
 const listPlatformUsers = async (req, res) => {
   try {
     const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.clientId || req.user?.clientId;
+    const clientId = req.user?.clientId || req.clientId;
 
     // Requirement 10 & 16: Log data retrieval details
     console.log(`[UserController] listPlatformUsers - Page: Users & roles, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
@@ -161,7 +161,7 @@ const updateUserRole = async (req, res) => {
     }
 
     const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.clientId || req.user?.clientId;
+    const clientId = req.user?.clientId || req.clientId;
 
     if (!isSuperAdmin && clientId && String(target.clientId) !== String(clientId)) {
       return res.status(403).json({
