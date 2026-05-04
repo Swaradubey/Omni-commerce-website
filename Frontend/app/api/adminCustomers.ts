@@ -44,4 +44,6 @@ export type CustomerDetailResponse = {
 export const adminCustomersApi = {
   getCustomerById: (id: string) =>
     ApiService.get<CustomerDetailResponse>(`/api/admin/customers/${id}`),
+  getMyCustomers: () =>
+    ApiService.get<any>('/api/customers/my-customers'),
 };

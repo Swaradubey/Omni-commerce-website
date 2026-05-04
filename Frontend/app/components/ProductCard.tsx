@@ -189,9 +189,16 @@ export function ProductCard({
       {/* Content */}
       <div className="p-5">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="truncate text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6b7280]">
-            {product.category}
-          </p>
+          <div className="flex flex-col gap-0.5">
+            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6b7280]">
+              {product.category}
+            </p>
+            {(product.client?.storeName || product.client?.shopName || product.client?.companyName) && (
+              <p className="truncate text-[10px] font-medium text-blue-600/80">
+                Sold by: {product.client?.storeName || product.client?.shopName || product.client?.companyName}
+              </p>
+            )}
+          </div>
 
           <div className="flex items-center gap-1 rounded-full bg-[#f8f8f8] px-2.5 py-1">
             <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />

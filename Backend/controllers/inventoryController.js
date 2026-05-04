@@ -29,23 +29,35 @@ const INVENTORY_MANAGER_TITLE_DESC_SUCCESS =
 const getInventoryManage = async (req, res) => {
   try {
     const resolvedClientId = await resolveClientId(req);
-    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
-    
+    const isGlobalRole =
+      req.user?.role === "superadmin" ||
+      req.user?.role === "super-admin" ||
+      req.user?.role === "admin" ||
+      req.user?.role === "super_admin";
+
+    // Debug logs temporarily
+    console.log("Logged in role:", req.user?.role);
+    console.log("Is global role:", isGlobalRole);
+    console.log("resolved clientId:", resolvedClientId);
+
     let query = {};
-    applyScope(query, scopeQuery);
+    
+    // Only apply clientId filter if NOT a global role AND clientOnly is requested
+    if (!isGlobalRole && req.query.clientOnly === "true" && req.user?.clientId) {
+      query.clientId = req.user.clientId;
+    }
+    // Otherwise, show ALL products for global visibility
 
     const rows = await Product.find(query)
       .sort("-createdAt")
-      .populate({ path: "clientId", select: "companyName shopName email" })
+      .populate({ path: "clientId", select: "companyName shopName storeName email" })
       .lean();
 
     const productsFound = rows.length;
 
-    console.log("logged in role:", req.user?.role);
-    console.log("logged in user id:", req.user?._id);
-    console.log("resolved clientId:", resolvedClientId);
-    console.log("inventory filter:", JSON.stringify(query));
-    console.log("products returned:", productsFound);
+    // Requested debug logs
+    console.log("Product filter used:", JSON.stringify(query));
+    console.log("Products returned:", productsFound);
 
     // Also log for POS if this is the POS call
     if (req.originalUrl.includes("/pos") || req.headers["x-page-name"] === "Pos") {
@@ -135,10 +147,24 @@ const getInventory = async (req, res) => {
   try {
     const { category, search, minPrice, maxPrice, inStock } = req.query;
     const resolvedClientId = await resolveClientId(req);
-    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
-    
+    const isGlobalRole =
+      req.user?.role === "superadmin" ||
+      req.user?.role === "super-admin" ||
+      req.user?.role === "admin" ||
+      req.user?.role === "super_admin";
+
+    // Debug logs temporarily
+    console.log("Logged in role:", req.user?.role);
+    console.log("Is global role:", isGlobalRole);
+    console.log("resolved clientId:", resolvedClientId);
+
     let query = {};
-    applyScope(query, scopeQuery);
+    
+    // Only apply clientId filter if NOT a global role AND clientOnly is requested
+    if (!isGlobalRole && req.query.clientOnly === "true" && req.user?.clientId) {
+      query.clientId = req.user.clientId;
+    }
+    // Otherwise, show ALL products for global visibility
 
     if (category) query.category = category;
     if (search) {
@@ -158,19 +184,14 @@ const getInventory = async (req, res) => {
     if (inStock === "false") query.stock = 0;
 
 
-    const inventory = await Product.find(query).sort("-createdAt");
+    const inventory = await Product.find(query)
+      .populate("clientId", "storeName companyName shopName")
+      .sort("-createdAt");
     const productsFound = inventory.length;
 
-    console.log("INVENTORY ADMIN DEBUG (List)", {
-      endpoint: req.originalUrl,
-      role: req.user?.role,
-      userId: req.user?._id,
-      userClientId: req.user?.clientId,
-      resolvedClientId,
-      query: req.query,
-      inventoryQuery: query,
-      productsFound
-    });
+    // Requested debug logs
+    console.log("Product filter used:", JSON.stringify(query));
+    console.log("Products returned:", productsFound);
 
     res.json({
       success: true,

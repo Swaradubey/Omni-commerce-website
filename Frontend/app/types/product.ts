@@ -17,6 +17,14 @@ export interface Product {
   reviews: number;
   featured?: boolean;
   sku?: string;
+  clientId?: string;
+  client?: {
+    _id?: string;
+    companyName?: string;
+    shopName?: string;
+    storeName?: string;
+    email?: string;
+  } | null;
 }
 
 export interface CartItem extends Product {

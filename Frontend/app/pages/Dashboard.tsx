@@ -80,7 +80,7 @@ const sidebarItems = [
   { title: "Super Admin", icon: Shield, href: "/super-admin", superAdminOnly: true, hideForSuperAdmin: true },
   { title: "Orders", icon: ShoppingCart, href: "/dashboard/orders", hideForUser: false },
   { title: "Invoice", icon: Receipt, href: "/dashboard/invoices", superAdminOnly: true },
-  { title: "Customers", icon: Users, href: "/dashboard/customers", superAdminOnly: true },
+  { title: "Customers", icon: Users, href: "/dashboard/customers", adminOnly: true },
   { title: "Users & roles", icon: UserCog, href: "/dashboard/users", superAdminOnly: true },
   { title: "Clients", icon: Building2, href: "/super-admin/clients", superAdminOnly: true },
   { title: "Add Client", icon: Building2, href: "/dashboard/clients", superAdminOnly: true },
@@ -270,6 +270,7 @@ export function Dashboard() {
         item.href === '/dashboard/inventory' ||
         item.href === '/dashboard/orders' ||
         item.href === '/dashboard/invoices' ||
+        item.href === '/dashboard/customers' ||
         item.href === '/dashboard/users' ||
         item.href === '/super-admin/custom-domain' ||
         item.href === '/dashboard/add-employee' ||

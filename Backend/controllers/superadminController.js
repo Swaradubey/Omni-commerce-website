@@ -450,8 +450,11 @@ const getOverview = async (req, res) => {
     const paidRevenueThisMonth = paidMonthAgg[0]?.total || 0;
     const profitThisMonth = paidRevenueThisMonth - lossThisMonth;
 
-    // Live Customers
-    const liveCustomers = 12;
+    // Live Customers: Count users active in the last 15 minutes
+    const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60000);
+    const liveCustomers = await User.countDocuments({
+      lastActiveAt: { $gte: fifteenMinutesAgo }
+    });
 
     // 8. Sales Analytics (last 7 days)
     const salesAnalytics = [];

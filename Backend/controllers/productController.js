@@ -60,14 +60,25 @@ const getProducts = async (req, res) => {
   try {
     const { category, search, minPrice, maxPrice, isActive } = req.query;
     const resolvedClientId = await resolveClientId(req);
-    
-    // Debug log for resolved clientId
+    const isGlobalRole =
+      req.user?.role === "superadmin" ||
+      req.user?.role === "super-admin" ||
+      req.user?.role === "admin" ||
+      req.user?.role === "super_admin";
+
+    // Debug logs temporarily
+    console.log("Logged in role:", req.user?.role);
+    console.log("Is global role:", isGlobalRole);
     console.log("resolved clientId:", resolvedClientId);
-    console.log("user role:", req.user?.role);
-    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
-    
+
     let query = {};
-    applyScope(query, scopeQuery);
+
+    // Only apply clientId filter if NOT a global role AND clientOnly is requested
+    if (!isGlobalRole && req.query.clientOnly === "true" && req.user?.clientId) {
+      query.clientId = req.user.clientId;
+    }
+    // Otherwise, we show ALL products (global visibility)
+    // No applyScope/buildScopeQuery here for global visibility as per request
 
     if (category && category !== "All Categories" && category !== "undefined" && category !== "null") {
       query.category = category;
@@ -103,7 +114,9 @@ const getProducts = async (req, res) => {
 
     const totalProducts = await Product.countDocuments(query);
 
-    let dbQuery = Product.find(query).sort("-createdAt");
+    let dbQuery = Product.find(query)
+      .populate("clientId", "storeName companyName shopName")
+      .sort("-createdAt");
     if (skip) dbQuery = dbQuery.skip(skip);
     if (limit) dbQuery = dbQuery.limit(limit);
 
@@ -111,11 +124,8 @@ const getProducts = async (req, res) => {
     const productsFound = products.length;
 
     // Requested debug logs
-    console.log("logged in role:", req.user?.role);
-    console.log("logged in user id:", req.user?._id);
-    console.log("resolved clientId:", resolvedClientId);
-    console.log("inventory filter:", JSON.stringify(query));
-    console.log("products returned:", products.length);
+    console.log("Product filter used:", JSON.stringify(query));
+    console.log("Products returned:", products.length);
 
     res.status(200).json({
       success: true,

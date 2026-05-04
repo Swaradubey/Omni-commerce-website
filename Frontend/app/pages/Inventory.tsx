@@ -59,6 +59,8 @@ export function Inventory() {
   const [search, setSearch] = useState('');
   const [stockStatus, setStockStatus] = useState<string | 'all'>('all');
   const [category, setCategory] = useState('All Categories');
+  const [minPrice, setMinPrice] = useState(0);
+  const [maxPrice, setMaxPrice] = useState(999999);
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'updatedAt',
     direction: 'desc',
@@ -216,6 +218,14 @@ export function Inventory() {
       result = result.filter((item) => (item.category?.toLowerCase().trim() || '') === targetCategory);
     }
 
+    // Price range filter
+    if (minPrice > 0 || maxPrice < 999999) {
+      result = result.filter((item) => {
+        const price = item.price ?? 0;
+        return price >= minPrice && price <= maxPrice;
+      });
+    }
+
     result.sort((a, b) => {
       const dir = sortConfig.direction === 'asc' ? 1 : -1;
       switch (sortConfig.key) {
@@ -233,7 +243,7 @@ export function Inventory() {
     });
 
     return result;
-  }, [inventoryItems, search, stockStatus, category, sortConfig]);
+  }, [inventoryItems, search, stockStatus, category, minPrice, maxPrice, sortConfig]);
 
   // Pagination
   const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
@@ -244,7 +254,7 @@ export function Inventory() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, stockStatus, category]);
+  }, [search, stockStatus, category, minPrice, maxPrice]);
 
   const handleSort = useCallback((key: SortConfig['key']) => {
     setSortConfig((prev) => ({
@@ -486,6 +496,10 @@ export function Inventory() {
                 onStockStatusChange={setStockStatus as any}
                 category={category}
                 onCategoryChange={setCategory}
+                minPrice={minPrice}
+                onMinPriceChange={setMinPrice}
+                maxPrice={maxPrice}
+                onMaxPriceChange={setMaxPrice}
               />
 
               {/* Table */}

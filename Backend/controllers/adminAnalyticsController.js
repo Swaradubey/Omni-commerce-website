@@ -90,7 +90,7 @@ async function orderTotalsForWindow(start, end, scopeQuery) {
     $or: [
       { isPaid: true },
       { orderSource: "pos" },
-      { paymentStatus: "paid" },
+      { paymentStatus: { $in: ["paid", "completed", "success"] } },
       { orderStatus: { $in: ["delivered", "completed", "shipped"] } }
     ]
   };
@@ -102,7 +102,7 @@ async function orderTotalsForWindow(start, end, scopeQuery) {
       $group: {
         _id: null,
         orderCount: { $sum: 1 },
-        revenue: { $sum: { $ifNull: ["$totalPrice", 0] } },
+        revenue: { $sum: { $ifNull: ["$totalPrice", { $ifNull: ["$totalAmount", { $ifNull: ["$grandTotal", { $ifNull: ["$amount", 0] }] }] }] } },
       },
     },
   ]);
@@ -138,7 +138,7 @@ async function salesThisMonthForWindow(start, end, scopeQuery) {
     {
       $group: {
         _id: null,
-        sales: { $sum: { $ifNull: ["$totalPrice", 0] } },
+        sales: { $sum: { $ifNull: ["$totalPrice", { $ifNull: ["$totalAmount", { $ifNull: ["$grandTotal", { $ifNull: ["$amount", 0] }] }] }] } },
       },
     },
   ]);
@@ -655,8 +655,8 @@ const getAdminAnalytics = async (req, res) => {
 
     const salesThisMonth = Math.round(salesThisMonthRaw * 100) / 100;
     const lossThisMonth = Math.round(lossThisMonthRaw * 100) / 100;
-    // PROFIT: use total revenue for now
-    const profitThisMonth = Math.round(totCur.revenue * 100) / 100;
+    // PROFIT: salesThisMonth - lossThisMonth
+    const profitThisMonth = Math.round((totCur.revenue - lossThisMonth) * 100) / 100;
 
     const conversionRateChange = pctChange(convCur.rate, convPrev.rate);
     const avgOrderValueChange = pctChange(totCur.avgOrderValue, totPrev.avgOrderValue);

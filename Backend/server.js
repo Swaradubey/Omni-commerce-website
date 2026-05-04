@@ -22,15 +22,17 @@ const allowedOrigins = [
   "https://www.storesetgo.online",
   "https://retailverse.in",
   "https://www.retailverse.in",
-  "https://retail-verse-website-bj2s.vercel.app"
+  "https://retail-verse-website-bj2s.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:5174",
+  "http://localhost:4173",
 ];
 
 // Add environment variable origin(s) if they exist
 if (process.env.CLIENT_ORIGIN) {
-  const envOrigins = process.env.CLIENT_ORIGIN.split(',').map(o => o.trim());
+  const envOrigins = process.env.CLIENT_ORIGIN.split(',').map(o => o.trim()).filter(Boolean);
   allowedOrigins.push(...envOrigins);
-} else {
-  allowedOrigins.push("http://localhost:5173", "http://localhost:3000");
 }
 
 app.use(cors({
@@ -102,6 +104,7 @@ const clientRoutes = require("./routes/clientRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 const storeManagerRoutes = require("./routes/storeManagerRoutes");
 const superadminRoutes = require("./routes/superadminRoutes");
+const customerRoutes = require("./routes/customerRoutes");
 const helpCenterRoutes = require("./routes/helpCenterRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const supportTicketRoutes = require("./routes/supportTicketRoutes");
@@ -127,6 +130,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/track-orders", trackOrderRoutes);
 app.use("/api/admin-login", adminLoginRoutes);
 app.use("/api/clients", clientRoutes);
+app.use("/api/customers", customerRoutes);
 app.use("/api/store-managers", storeManagerRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/help-center", helpCenterRoutes);

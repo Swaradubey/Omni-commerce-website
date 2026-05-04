@@ -1085,6 +1085,24 @@ export function Pos() {
                     ) : (
                       <Package2 className="w-10 h-10 text-gray-300" />
                     )}
+                    {/* Quick-add button */}
+                    <button
+                      type="button"
+                      title={product.stock > 0 ? 'Add to Cart' : 'Out of stock'}
+                      aria-label={`Add ${product.name} to cart`}
+                      disabled={product.stock < 1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addToCart(product);
+                      }}
+                      className={`absolute bottom-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full shadow-md transition-all duration-200 hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${
+                        product.stock > 0
+                          ? 'bg-purple-600 text-white hover:bg-purple-700 focus-visible:ring-purple-500'
+                          : 'cursor-not-allowed bg-gray-300 text-gray-500'
+                      }`}
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={2.5} />
+                    </button>
                   </div>
                   <h3 className="font-semibold text-sm line-clamp-2 text-[#111111] mb-1">{product.name}</h3>
                   <div className="text-xs text-gray-500 mb-2">{product.category}</div>

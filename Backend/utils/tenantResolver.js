@@ -60,11 +60,13 @@ async function resolveClientId(req) {
   console.log("[Tenant Debug] user role:", user?.role);
   console.log("[Tenant Debug] user clientId:", user?.clientId);
 
-  // ── 0. Super Admin Bypass ──────────────────────────────────────────────
-  // Super admin remains global unless they explicitly want a specific client scope
-  if (user && user.role === "super_admin") {
-    console.log(`[TenantResolver] super_admin detected, skipping domain resolution for ${route}`);
-    // For Super Admin, we only scope if explicitly requested via query or body.
+  // ── 0. Global Admin Bypass ──────────────────────────────────────────────
+  // Super admin and Admin remain global unless they explicitly want a specific client scope
+  const isGlobalAdmin = user && (user.role === "super_admin" || user.role === "super-admin" || user.role === "superadmin" || user.role === "admin");
+  
+  if (isGlobalAdmin) {
+    console.log(`[TenantResolver] global admin detected (${user.role}), skipping domain resolution for ${route}`);
+    // For Global Admin, we only scope if explicitly requested via query or body.
     // We ignore the x-client-id header which may be auto-injected from a previous session.
     const queryId = req.query?.clientId || req.body?.clientId;
     if (queryId && queryId !== "null" && queryId !== "undefined") {
@@ -176,11 +178,12 @@ function buildScopeQuery(user, resolvedClientId) {
   }
   
   // 2. Platform Admins: Global by default, but can be scoped if a specific clientId is resolved
-  const isSuperAdmin = user.role === "super_admin";
-  const isAdminWithNoClient = user.role === "admin" && !isValid(user.clientId);
+  const isSuperAdmin = user.role === "super_admin" || user.role === "superadmin" || user.role === "super-admin";
+  const isAdmin = user.role === "admin";
+  const isAdminWithNoClient = isAdmin && !isValid(user.clientId);
 
-  if (isSuperAdmin) {
-    // Super Admin should see everything unless they are explicitly filtering by a client ID.
+  if (isSuperAdmin || isAdmin) {
+    // Super Admin and Admin should see everything unless they are explicitly filtering by a client ID.
     return isValid(resolvedClientId) ? { clientId: String(resolvedClientId) } : {};
   }
 

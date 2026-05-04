@@ -48,6 +48,7 @@ type CustomerRow = {
   lastLoginAt?: string | null;
   lastActiveAt?: string | null;
   profilePhoto?: string;
+  phone?: string;
 };
 
 function useDebouncedValue<T>(value: T, delay: number): T {
@@ -83,13 +84,17 @@ export function DashboardCustomers() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
   const canViewCustomers = hasFullAdminPrivileges(user?.role);
+  const isSuperAdmin = isSuperAdminRole(user?.role);
 
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, statusFilter]);
 
   useEffect(() => {
-    if (!canViewCustomers || authLoading) return;
+    if (!canViewCustomers || authLoading || !isSuperAdmin) {
+      if (!isSuperAdmin) setSummaryLoading(false); // Handled by list fetch below
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -108,7 +113,7 @@ export function DashboardCustomers() {
     return () => {
       cancelled = true;
     };
-  }, [canViewCustomers, authLoading]);
+  }, [canViewCustomers, authLoading, isSuperAdmin]);
 
   useEffect(() => {
     if (!canViewCustomers || authLoading) return;
@@ -123,19 +128,61 @@ export function DashboardCustomers() {
           status: statusFilter,
         });
         if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
+        
+        const endpoint = !isSuperAdmin ? '/api/customers/my-customers' : `/api/admin/customers?${params.toString()}`;
+        
         const res = await ApiService.get<{
           customers: CustomerRow[];
-          total: number;
-          pages: number;
-          limit: number;
-        }>(`/api/admin/customers?${params.toString()}`, { pageName: 'Customers' });
+          total?: number;
+          pages?: number;
+          limit?: number;
+          stats?: CustomerSummary;
+        }>(endpoint, { pageName: 'Customers' });
+        
         if (cancelled) return;
+        
         if (res.success && res.data) {
-          setCustomers(res.data.customers || []);
+          const data = res.data;
+          let loadedCustomers = data.customers || [];
+          
+          if (!isSuperAdmin) {
+             // Client search and filter on frontend since backend returns all
+             if (statusFilter !== 'all') {
+               loadedCustomers = loadedCustomers.filter(c => c.status === statusFilter);
+             }
+             if (debouncedSearch.trim()) {
+               const lowerSearch = debouncedSearch.toLowerCase();
+               loadedCustomers = loadedCustomers.filter(c => 
+                 (c.name && c.name.toLowerCase().includes(lowerSearch)) || 
+                 (c.email && c.email.toLowerCase().includes(lowerSearch))
+               );
+             }
+             
+             // Use backend stats if available, otherwise calculate
+             if (data.stats) {
+               setSummary(data.stats);
+             } else {
+               const totalCust = data.customers?.length || 0;
+               const activeMem = data.customers?.filter(c => c.status === 'active').length || 0;
+               const now = new Date();
+               const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+               const newThisM = data.customers?.filter(c => c.createdAt && new Date(c.createdAt) >= startOfMonth).length || 0;
+               
+               setSummary({
+                 totalCustomers: totalCust,
+                 activeMembers: activeMem,
+                 newThisMonth: newThisM,
+                 churnRate: totalCust > 0 ? ((totalCust - activeMem) / totalCust) * 100 : 0
+               });
+             }
+             setSummaryLoading(false);
+          }
+          
+          setCustomers(loadedCustomers);
           setListMeta({
-            total: res.data.total ?? 0,
-            pages: res.data.pages ?? 1,
-            limit: res.data.limit ?? PAGE_SIZE,
+            total: !isSuperAdmin ? loadedCustomers.length : (data.total ?? 0),
+            pages: !isSuperAdmin ? 1 : (data.pages ?? 1),
+            limit: !isSuperAdmin ? loadedCustomers.length : (data.limit ?? PAGE_SIZE),
           });
         } else {
           setListError(res.message || 'Could not load customers');
@@ -344,7 +391,10 @@ export function DashboardCustomers() {
                           </div>
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-foreground">{customer.name}</span>
-                            <span className="text-[10px] text-muted-foreground">{customer.email}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {customer.email}
+                              {customer.phone && ` • ${customer.phone}`}
+                            </span>
                           </div>
                         </div>
                       </td>

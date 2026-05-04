@@ -19,6 +19,10 @@ interface InventoryFiltersProps {
   onStockStatusChange: (value: StockStatus | 'all') => void;
   category: string;
   onCategoryChange: (value: string) => void;
+  minPrice?: number;
+  onMinPriceChange?: (value: number) => void;
+  maxPrice?: number;
+  onMaxPriceChange?: (value: number) => void;
 }
 
 const chipVariants = {
@@ -34,17 +38,30 @@ export function InventoryFilters({
   onStockStatusChange,
   category,
   onCategoryChange,
+  minPrice,
+  onMinPriceChange,
+  maxPrice,
+  onMaxPriceChange,
 }: InventoryFiltersProps) {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const isPriceFiltered =
+    (minPrice !== undefined && minPrice !== 0) ||
+    (maxPrice !== undefined && maxPrice !== 999999);
+
   const activeFilterCount =
-    (stockStatus !== 'all' ? 1 : 0) + (category !== 'All Categories' ? 1 : 0) + (search ? 1 : 0);
+    (stockStatus !== 'all' ? 1 : 0) +
+    (category !== 'All Categories' ? 1 : 0) +
+    (search ? 1 : 0) +
+    (isPriceFiltered ? 1 : 0);
 
   const clearAllFilters = () => {
     onSearchChange('');
     onStockStatusChange('all');
     onCategoryChange('All Categories');
+    onMinPriceChange?.(0);
+    onMaxPriceChange?.(999999);
   };
 
   return (
@@ -59,9 +76,8 @@ export function InventoryFilters({
           {/* Search */}
           <div className="group relative min-w-0 flex-1">
             <Search
-              className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 transition-colors duration-300 ${
-                isSearchFocused ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
-              }`}
+              className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 transition-colors duration-300 ${isSearchFocused ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
+                }`}
             />
             <Input
               ref={searchRef}
@@ -70,11 +86,10 @@ export function InventoryFilters({
               onChange={(e) => onSearchChange(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
-              className={`h-12 rounded-2xl border bg-white/90 pl-11 pr-11 text-[15px] shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] placeholder:text-slate-400 dark:bg-white/[0.06] dark:placeholder:text-slate-500 ${
-                isSearchFocused
-                  ? 'border-indigo-300/90 ring-2 ring-indigo-500/15 dark:border-indigo-500/50 dark:ring-indigo-500/20'
-                  : 'border-slate-200/90 hover:border-slate-300 dark:border-white/[0.1] dark:hover:border-white/20'
-              }`}
+              className={`h-12 rounded-2xl border bg-white/90 pl-11 pr-11 text-[15px] shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] placeholder:text-slate-400 dark:bg-white/[0.06] dark:placeholder:text-slate-500 ${isSearchFocused
+                ? 'border-indigo-300/90 ring-2 ring-indigo-500/15 dark:border-indigo-500/50 dark:ring-indigo-500/20'
+                : 'border-slate-200/90 hover:border-slate-300 dark:border-white/[0.1] dark:hover:border-white/20'
+                }`}
             />
             <AnimatePresence>
               {search && (
@@ -141,6 +156,50 @@ export function InventoryFilters({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Price Range Filter */}
+          {(onMinPriceChange || onMaxPriceChange) && (
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <span className="shrink-0 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                Price Range
+              </span>
+              <div className="flex flex-1 items-center gap-2">
+                <div className="relative flex-1">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400">₹</span>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Min"
+                    value={minPrice === 0 || minPrice === undefined ? '' : minPrice}
+                    onChange={(e) => onMinPriceChange?.(e.target.value === '' ? 0 : Number(e.target.value))}
+                    className="h-10 w-full rounded-xl border border-slate-200/90 bg-white/90 pl-7 pr-3 text-sm text-slate-800 shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-200 placeholder:text-slate-400 focus:border-indigo-300/90 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-white/[0.1] dark:bg-white/[0.06] dark:text-white dark:placeholder:text-slate-500"
+                  />
+                </div>
+                <span className="text-slate-400 dark:text-slate-500">—</span>
+                <div className="relative flex-1">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400">₹</span>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Max"
+                    value={maxPrice === 999999 || maxPrice === undefined ? '' : maxPrice}
+                    onChange={(e) => onMaxPriceChange?.(e.target.value === '' ? 999999 : Number(e.target.value))}
+                    className="h-10 w-full rounded-xl border border-slate-200/90 bg-white/90 pl-7 pr-3 text-sm text-slate-800 shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-200 placeholder:text-slate-400 focus:border-indigo-300/90 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-white/[0.1] dark:bg-white/[0.06] dark:text-white dark:placeholder:text-slate-500"
+                  />
+                </div>
+                {isPriceFiltered && (
+                  <button
+                    type="button"
+                    onClick={() => { onMinPriceChange?.(0); onMaxPriceChange?.(999999); }}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100/90 text-slate-500 transition-colors hover:bg-slate-200/90 hover:text-slate-700 dark:bg-white/10 dark:text-slate-400 dark:hover:bg-white/15"
+                    title="Clear price filter"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -158,11 +217,10 @@ export function InventoryFilters({
               whileTap={{ scale: 0.98 }}
               transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
               onClick={() => onCategoryChange(isActive ? 'All Categories' : cat)}
-              className={`relative overflow-hidden rounded-full px-4 py-2 text-xs font-semibold tracking-wide transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                isActive
-                  ? 'border border-indigo-200/80 bg-gradient-to-r from-indigo-50 via-white to-violet-50 text-indigo-900 shadow-[0_4px_16px_-4px_rgba(79,70,229,0.25)] ring-1 ring-indigo-200/60 dark:border-indigo-500/30 dark:from-indigo-950/80 dark:via-slate-900/40 dark:to-violet-950/60 dark:text-indigo-100 dark:ring-indigo-500/20'
-                  : 'border border-slate-200/80 bg-white/70 text-slate-600 shadow-sm hover:border-slate-300 hover:bg-white hover:shadow-md dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:border-white/15 dark:hover:bg-white/[0.07]'
-              }`}
+              className={`relative overflow-hidden rounded-full px-4 py-2 text-xs font-semibold tracking-wide transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isActive
+                ? 'border border-indigo-200/80 bg-gradient-to-r from-indigo-50 via-white to-violet-50 text-indigo-900 shadow-[0_4px_16px_-4px_rgba(79,70,229,0.25)] ring-1 ring-indigo-200/60 dark:border-indigo-500/30 dark:from-indigo-950/80 dark:via-slate-900/40 dark:to-violet-950/60 dark:text-indigo-100 dark:ring-indigo-500/20'
+                : 'border border-slate-200/80 bg-white/70 text-slate-600 shadow-sm hover:border-slate-300 hover:bg-white hover:shadow-md dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:border-white/15 dark:hover:bg-white/[0.07]'
+                }`}
             >
               {cat}
             </motion.button>
