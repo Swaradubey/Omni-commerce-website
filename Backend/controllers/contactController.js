@@ -1,5 +1,6 @@
 const Contact = require("../models/Contact");
 const { validationResult } = require("express-validator");
+const { isValidObjectId } = require("../utils/tenantResolver");
 
 // @desc    Submit contact form
 // @route   POST /api/contact
@@ -46,6 +47,9 @@ const getContacts = async (req, res) => {
 // @access  Private (Admin/Staff)
 const getContactById = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: "Contact request not found (Invalid ID)" });
+    }
     const contact = await Contact.findById(req.params.id);
     if (contact) {
       res.json({ success: true, data: contact });
@@ -62,6 +66,9 @@ const getContactById = async (req, res) => {
 // @access  Private (Admin/Staff)
 const updateContactStatus = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: "Contact request not found (Invalid ID)" });
+    }
     const contact = await Contact.findById(req.params.id);
     if (contact) {
       contact.status = req.body.status || contact.status;
@@ -84,6 +91,9 @@ const updateContactStatus = async (req, res) => {
 // @access  Private (Admin/Staff)
 const deleteContact = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: "Contact request not found (Invalid ID)" });
+    }
     const contact = await Contact.findByIdAndDelete(req.params.id);
     if (contact) {
       res.json({ success: true, message: "Contact entry removed safely" });

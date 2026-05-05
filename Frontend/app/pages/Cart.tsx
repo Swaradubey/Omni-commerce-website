@@ -1,10 +1,16 @@
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { useCart } from '../context/CartContext';
-import { Trash2, Plus, Minus, ShoppingBag } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Trash2, Plus, Minus, ShoppingBag, MessageSquare } from 'lucide-react';
 import { formatINR } from '../utils/formatINR';
+import { QuoteRequestDialog } from '../components/QuoteRequestDialog';
+import { toast } from 'sonner';
 
 export function Cart() {
   const { cart, removeFromCart, updateQuantity, cartTotal, cartCount } = useCart();
+  const { user } = useAuth();
+  const [isQuoteDialogOpen, setIsQuoteDialogOpen] = useState(false);
 
   const shipping = cartTotal > 50 ? 0 : 10;
   const total = cartTotal + shipping;
@@ -28,6 +34,14 @@ export function Cart() {
       </div>
     );
   }
+
+  const quoteProducts = cart.map(item => ({
+    productId: item._id || item.id,
+    name: item.name,
+    quantity: item.quantity,
+    price: item.salePrice || item.price,
+    clientId: item.clientId
+  }));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -158,6 +172,20 @@ export function Cart() {
                 Proceed to Checkout
               </Link>
 
+              <button
+                onClick={() => {
+                  if (!user) {
+                    toast.error('Please sign in to request a quote');
+                    return;
+                  }
+                  setIsQuoteDialogOpen(true);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 text-white rounded-lg font-semibold hover:bg-amber-600 transition-colors mb-3"
+              >
+                <MessageSquare className="w-4 h-4" />
+                Request Custom Quote
+              </button>
+
               <div className="text-center">
                 <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -170,6 +198,13 @@ export function Cart() {
           </div>
         </div>
       </div>
+
+      <QuoteRequestDialog 
+        isOpen={isQuoteDialogOpen} 
+        onClose={() => setIsQuoteDialogOpen(false)}
+        products={quoteProducts}
+      />
     </div>
   );
 }
+

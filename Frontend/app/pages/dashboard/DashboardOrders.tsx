@@ -10,6 +10,14 @@ import {
   DollarSign,
   Trash2,
   Receipt,
+  Eye,
+  CreditCard,
+  Truck,
+  Calendar,
+  User as UserIcon,
+  Mail,
+  Phone,
+  Package,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -57,10 +65,14 @@ export function DashboardOrders() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [manageOrder, setManageOrder] = useState<any | null>(null);
+  const [viewOrder, setViewOrder] = useState<any | null>(null);
   const [trackingSubmitting, setTrackingSubmitting] = useState(false);
+  const [backendStats, setBackendStats] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const endpoint = isCustomer ? '/orders/my-tracking' : (isStaff ? '/orders' : '/orders/my-tracking');
       console.log('[DEBUG Frontend Sale Page] API URL:', endpoint, 'User Role:', user?.role, 'ClientId:', user?.clientId);
@@ -68,17 +80,26 @@ export function DashboardOrders() {
       console.log('[DEBUG Frontend Sale Page] API response success:', response.success, 'Orders count:', response.data?.length);
       if (response.success && response.data && Array.isArray(response.data)) {
         setOrders(response.data);
+        if (response.stats) {
+          setBackendStats(response.stats);
+        }
       } else {
         setOrders([]);
+        if (!response.success && response.message) {
+          setError(response.message);
+          toast.error(response.message);
+        }
       }
-    } catch (error) {
-      console.error('Failed to fetch orders', error);
+    } catch (err: any) {
+      console.error('Failed to fetch orders', err);
       setOrders([]);
-      toast.error('Could not load orders. Check that the server is running.');
+      const msg = err.message || 'Could not load orders. Check that the server is running.';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
-  }, [isStaff, isCustomer]);
+  }, [isStaff, isCustomer, user]);
 
   useEffect(() => {
     void fetchOrders();
@@ -96,6 +117,16 @@ export function DashboardOrders() {
   }, [orders, searchTerm]);
 
   const stats = useMemo(() => {
+    // Priority to backend stats if available and not searching
+    if (backendStats && !searchTerm.trim() && !isCustomer) {
+      return [
+        { title: 'Total Orders', value: backendStats.totalOrders, icon: ShoppingCart, color: 'blue' },
+        { title: 'In Progress', value: backendStats.inProgress, icon: Clock, color: 'amber' },
+        { title: 'Delivered', value: backendStats.delivered, icon: CheckCircle2, color: 'emerald' },
+        { title: 'Revenue', value: formatINR(backendStats.revenue), icon: DollarSign, color: 'indigo' },
+      ];
+    }
+
     const total = orders.length;
     const delivered = orders.filter((o) => o.isDelivered === true || ['completed', 'delivered'].includes((o.orderStatus || '').toLowerCase())).length;
     const inProgress = orders.filter(
@@ -108,6 +139,7 @@ export function DashboardOrders() {
       }
       return acc;
     }, 0);
+
     if (isCustomer) {
       return [
         { title: 'My Orders', value: total, icon: ShoppingCart, color: 'blue' },
@@ -121,7 +153,8 @@ export function DashboardOrders() {
       { title: 'Delivered', value: delivered, icon: CheckCircle2, color: 'emerald' },
       { title: 'Revenue', value: formatINR(revenue), icon: DollarSign, color: 'indigo' },
     ];
-  }, [orders, isCustomer]);
+  }, [orders, isCustomer, backendStats, searchTerm]);
+
 
   const currentStageForOrder = (o: any) => {
     const s = o?.currentStageResolved ?? o?.currentStage;
@@ -299,6 +332,20 @@ export function DashboardOrders() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          {error && (
+            <div className="mx-6 my-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+              <p className="font-bold">Error loading orders</p>
+              <p>{error}</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-2 h-8 border-rose-200 text-rose-600 hover:bg-rose-100"
+                onClick={() => void fetchOrders()}
+              >
+                Try Again
+              </Button>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-gray-50/50 text-[12px] font-bold tracking-wider text-muted-foreground uppercase dark:bg-white/[0.02]">
@@ -314,6 +361,7 @@ export function DashboardOrders() {
                   ) : (
                     <>
                       <th className="px-6 py-4">Customer</th>
+                      {isSuperAdmin && <th className="px-6 py-4">Store</th>}
                       <th className="px-6 py-4">Items</th>
                       <th className="px-6 py-4">Total</th>
                       <th className="px-6 py-4">Status</th>
@@ -325,14 +373,20 @@ export function DashboardOrders() {
               <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={isCustomer ? 5 : 6} className="px-6 py-12 text-center text-sm text-muted-foreground">
-                      Loading orders…
+                    <td colSpan={isCustomer ? 5 : (isSuperAdmin ? 7 : 6)} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                        Loading orders…
+                      </div>
                     </td>
                   </tr>
                 ) : filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={isCustomer ? 5 : 6} className="px-6 py-12 text-center text-sm text-muted-foreground">
-                      {isCustomer ? 'You haven\'t placed any orders yet.' : 'No orders match your search.'}
+                    <td colSpan={isCustomer ? 5 : (isSuperAdmin ? 7 : 6)} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                      <div className="flex flex-col items-center gap-2">
+                        <ShoppingCart className="h-8 w-8 text-gray-300" />
+                        <p>{isCustomer ? 'You haven\'t placed any orders yet.' : 'No orders match your search.'}</p>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -392,6 +446,13 @@ export function DashboardOrders() {
                               </span>
                             </div>
                           </td>
+                          {isSuperAdmin && (
+                            <td className="px-6 py-4">
+                              <span className="text-xs font-medium text-muted-foreground">
+                                {order.clientId?.businessName || order.clientId?.name || 'Main Store'}
+                              </span>
+                            </td>
+                          )}
                           <td className="px-6 py-4">
                             <span className="text-sm font-medium">
                               {Array.isArray(order.items) ? order.items.length : order.items || 0} items
@@ -412,45 +473,56 @@ export function DashboardOrders() {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            {isAdmin ? (
-                          <div className="flex justify-end gap-2">
-                            {isSuperAdmin && (
+                            <div className="flex justify-end gap-2">
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="rounded-lg border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40"
-                                onClick={() => navigate(`/super-admin/invoice/${order.orderId}`)}
+                                className="rounded-lg border-stone-200 text-stone-700 hover:bg-stone-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-white/5"
+                                onClick={() => setViewOrder(order)}
                               >
-                                <Receipt className="mr-1.5 h-3.5 w-3.5" />
-                                Invoice
+                                <Eye className="mr-1.5 h-3.5 w-3.5" />
+                                View
                               </Button>
-                            )}
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="rounded-lg border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40"
-                              onClick={() => setManageOrder(order)}
-                            >
-                              <Route className="mr-1.5 h-3.5 w-3.5" />
-                              Manage tracking
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="rounded-lg border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
-                              onClick={() => handleDeleteOrder(order._id || order.orderId)}
-                            >
-                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                              Delete
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Admin only</span>
-                        )}
-                      </td>
+                              {isAdmin && (
+                                <>
+                                  {isSuperAdmin && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-lg border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                                      onClick={() => navigate(`/super-admin/invoice/${order.orderId}`)}
+                                    >
+                                      <Receipt className="mr-1.5 h-3.5 w-3.5" />
+                                      Invoice
+                                    </Button>
+                                  )}
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-lg border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40"
+                                    onClick={() => setManageOrder(order)}
+                                  >
+                                    <Route className="mr-1.5 h-3.5 w-3.5" />
+                                    Manage
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-lg border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                                    onClick={() => handleDeleteOrder(order._id || order.orderId)}
+                                  >
+                                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                    Delete
+                                  </Button>
+                                </>
+                              )}
+                              {!isAdmin && <span className="text-xs text-muted-foreground">Limited access</span>}
+                            </div>
+                          </td>
                         </>
                       )}
                     </motion.tr>
@@ -535,6 +607,203 @@ export function DashboardOrders() {
             )}
             {manageOrder && isCancelledOrder(manageOrder) && (
               <span className="text-xs text-rose-600">Cancelled order.</span>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewOrder} onOpenChange={(open) => !open && setViewOrder(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl border-stone-200 sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-blue-600" />
+              Order Details
+            </DialogTitle>
+            <DialogDescription>
+              Full order information and customer details for Order #{viewOrder?.orderId || viewOrder?.id}
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewOrder && (
+            <div className="grid gap-6 py-4 md:grid-cols-2">
+              <div className="space-y-6">
+                {/* Customer Info */}
+                <section className="space-y-3">
+                  <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                    <UserIcon className="h-4 w-4" />
+                    Customer Information
+                  </h3>
+                  <div className="rounded-xl border border-stone-100 bg-stone-50/50 p-4 dark:border-white/5 dark:bg-white/5">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Name:</span>
+                        <span className="font-bold">{viewOrder.shippingAddress?.fullName || viewOrder.customerName || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Email:</span>
+                        <span className="font-medium text-blue-600 dark:text-blue-400">
+                          <a href={`mailto:${viewOrder.customerEmail || viewOrder.user?.email || viewOrder.shippingAddress?.email}`} className="flex items-center gap-1">
+                            <Mail className="h-3 w-3" />
+                            {viewOrder.customerEmail || viewOrder.user?.email || viewOrder.shippingAddress?.email || 'N/A'}
+                          </a>
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Phone:</span>
+                        <span className="font-medium">
+                          <a href={`tel:${viewOrder.shippingAddress?.phone}`} className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            {viewOrder.shippingAddress?.phone || 'N/A'}
+                          </a>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Shipping Address */}
+                <section className="space-y-3">
+                  <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                    <Truck className="h-4 w-4" />
+                    Shipping Details
+                  </h3>
+                  <div className="rounded-xl border border-stone-100 bg-stone-50/50 p-4 dark:border-white/5 dark:bg-white/5">
+                    <div className="text-sm leading-relaxed">
+                      {viewOrder.shippingAddress ? (
+                        <>
+                          <p className="font-bold">{viewOrder.shippingAddress.address}</p>
+                          <p>{viewOrder.shippingAddress.city}, {viewOrder.shippingAddress.state} {viewOrder.shippingAddress.zipCode}</p>
+                          <p>{viewOrder.shippingAddress.country}</p>
+                        </>
+                      ) : (
+                        <p className="italic text-muted-foreground">No shipping address provided (POS/In-store)</p>
+                      )}
+                    </div>
+                    {viewOrder.trackingId && (
+                      <div className="mt-3 pt-3 border-t border-stone-100 dark:border-white/5">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Tracking ID:</span>
+                          <span className="font-mono font-bold text-blue-600">{viewOrder.trackingId}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {/* Payment Info */}
+                <section className="space-y-3">
+                  <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                    <CreditCard className="h-4 w-4" />
+                    Payment Information
+                  </h3>
+                  <div className="rounded-xl border border-stone-100 bg-stone-50/50 p-4 dark:border-white/5 dark:bg-white/5">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Method:</span>
+                        <span className="font-bold uppercase">{viewOrder.paymentMethod || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Status:</span>
+                        <span className={`font-bold uppercase ${viewOrder.paymentStatus === 'paid' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {viewOrder.paymentStatus || 'Pending'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Total Amount:</span>
+                        <span className="text-lg font-black">{formatINR(viewOrder.totalPrice || 0)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div className="space-y-6">
+                {/* Order Items */}
+                <section className="space-y-3">
+                  <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                    <ShoppingCart className="h-4 w-4" />
+                    Order Items
+                  </h3>
+                  <div className="rounded-xl border border-stone-100 bg-white shadow-sm dark:border-white/5 dark:bg-black/20 overflow-hidden">
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="sticky top-0 bg-stone-50 dark:bg-white/5">
+                          <tr>
+                            <th className="px-4 py-2 font-bold">Item</th>
+                            <th className="px-4 py-2 text-center font-bold">Qty</th>
+                            <th className="px-4 py-2 text-right font-bold">Price</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-100 dark:divide-white/5">
+                          {Array.isArray(viewOrder.items) && viewOrder.items.length > 0 ? (
+                            viewOrder.items.map((item: any, i: number) => (
+                              <tr key={i}>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-3">
+                                    {item.image && (
+                                      <img src={item.image} alt={item.name} className="h-8 w-8 rounded object-cover" />
+                                    )}
+                                    <span className="font-medium line-clamp-1">{item.name}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-center">{item.quantity}</td>
+                                <td className="px-4 py-3 text-right font-bold">{formatINR(item.price)}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground italic">
+                                No item details available
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="bg-stone-50 p-3 dark:bg-white/5">
+                      <div className="flex justify-between items-center px-1">
+                        <span className="text-xs font-bold uppercase text-muted-foreground">Order Total</span>
+                        <span className="text-xl font-black text-blue-600">{formatINR(viewOrder.totalPrice || 0)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Status Timeline */}
+                <section className="space-y-3">
+                  <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                    <Calendar className="h-4 w-4" />
+                    Timeline & Status
+                  </h3>
+                  <div className="rounded-xl border border-stone-100 bg-stone-50/50 p-4 dark:border-white/5 dark:bg-white/5">
+                    <div className="mb-4 flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">Placed on:</span>
+                      <span className="text-xs font-medium">
+                        {viewOrder.createdAt ? new Date(viewOrder.createdAt).toLocaleString() : 'N/A'}
+                      </span>
+                    </div>
+                    <OrderTrackingTimeline stages={stagesForModal(viewOrder)} variant="light" />
+                  </div>
+                </section>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setViewOrder(null)}>
+              Close
+            </Button>
+            {isAdmin && !isCancelledOrder(viewOrder) && !viewOrder?.isDelivered && (
+              <Button 
+                type="button" 
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => {
+                  setManageOrder(viewOrder);
+                  setViewOrder(null);
+                }}
+              >
+                Update Tracking
+              </Button>
             )}
           </DialogFooter>
         </DialogContent>

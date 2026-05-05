@@ -4,6 +4,7 @@ const Employee = require("../models/Employee");
 const User = require("../models/User");
 const Client = require("../models/Client");
 const { resolveStaffClientId, canAccessStaffRecord } = require("../utils/staffAccess");
+const { isValidObjectId } = require("../utils/tenantResolver");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMPLOYEE_MANAGED_ROLES = new Set(["employee", "staff", "seo_manager", "store_manager", "inventory_manager", "counter_manager"]);
@@ -36,10 +37,6 @@ function buildRoleQueryFilter(roles) {
   return { $in: expanded };
 }
 
-function isValidObjectId(id) {
-  return id != null && mongoose.isValidObjectId(String(id));
-}
-
 async function loadClientShopName(clientId) {
   const c = await Client.findById(clientId).select("shopName companyName").lean();
   if (!c) return "";
@@ -55,7 +52,6 @@ async function resolveAdminFallbackClientId(user) {
   }
 
   // If this admin has already created any staff rows, reuse that client scope.
-  // This keeps Admin -> Employee creation working without requiring explicit clientId.
   const recentCreatedStaff = await Employee.findOne({
     createdBy: user._id,
     clientId: { $exists: true, $ne: null },
@@ -70,7 +66,6 @@ async function resolveAdminFallbackClientId(user) {
   const adminEmail = String(user.email || "").trim().toLowerCase();
   const adminUserId = user._id || null;
 
-  // Infer an admin scope client only when there is exactly one clear candidate.
   const candidates = await Client.find({
     $or: [
       ...(adminUserId ? [{ userId: adminUserId }, { createdBy: adminUserId }] : []),
@@ -188,7 +183,10 @@ const createEmployee = async (req, res) => {
     });
   }
 
-  const clientOid = new mongoose.Types.ObjectId(ctx.clientId);
+  if (!isValidObjectId(ctx.clientId)) {
+    return res.status(400).json({ success: false, message: "Invalid client ID scope" });
+  }
+  const clientOid = new mongoose.Types.ObjectId(String(ctx.clientId));
   const clientExists = await Client.exists({ _id: clientOid });
   if (!clientExists) {
     return res.status(404).json({ success: false, message: "Client not found" });
@@ -325,8 +323,9 @@ const listEmployees = async (req, res) => {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
-    // Requirement 16: Log DB query details
-    console.log(`[Employees] DB Query - Collection: employees, Filter: ${JSON.stringify(q)}`);
+    console.log("-----------------------------------------");
+    console.log("role:", req.user?.role, "clientId:", clientIdForLog, "query:", JSON.stringify(q));
+    console.log("-----------------------------------------");
 
     const pageRaw = Number.parseInt(String(req.query.page || ""), 10);
     const limitRaw = Number.parseInt(String(req.query.limit || ""), 10);

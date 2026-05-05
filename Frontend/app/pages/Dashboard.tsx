@@ -78,7 +78,7 @@ const sidebarItems = [
   { title: "Track Order", icon: Truck, href: "/track-order", hideForInventoryManager: true, hideForSuperAdmin: true },
   { title: "Wishlist Activity", icon: Activity, href: "/dashboard/wishlist-activity", adminOnly: true, hideForSuperAdmin: true },
   { title: "Super Admin", icon: Shield, href: "/super-admin", superAdminOnly: true, hideForSuperAdmin: true },
-  { title: "Orders", icon: ShoppingCart, href: "/dashboard/orders", hideForUser: false },
+  { title: "Orders", icon: ShoppingCart, href: "/dashboard/orders", hideForUser: false, hideForSuperAdmin: true },
   { title: "Invoice", icon: Receipt, href: "/dashboard/invoices", superAdminOnly: true },
   { title: "Customers", icon: Users, href: "/dashboard/customers", adminOnly: true },
   { title: "Users & roles", icon: UserCog, href: "/dashboard/users", superAdminOnly: true },
@@ -278,6 +278,11 @@ export function Dashboard() {
         item.href === '/dashboard/support'
       );
     }
+    if (normalizeRole(user?.role) === 'admin') {
+      if (item.title === 'Orders' || item.title === 'Track Order') {
+        return false;
+      }
+    }
     if ('hideForSuperAdmin' in item && item.hideForSuperAdmin && isSuperAdminRole(user?.role)) {
       return false;
     }
@@ -421,7 +426,13 @@ export function Dashboard() {
                           <SidebarMenuButton
                             asChild
                             isActive={isActive}
-                            tooltip={item.title === 'Orders' && (isSuperAdminRole(user?.role) || isClientRole(user?.role)) ? 'Sale' : item.title}
+                            tooltip={
+                              item.title === 'Orders' && (isSuperAdminRole(user?.role) || isClientRole(user?.role))
+                                ? 'Sale'
+                                : item.title === 'Invoice'
+                                  ? 'Quotes and Invoice'
+                                  : item.title
+                            }
                             className={dashboardSidebarNavButtonClass(isActive, false)}
                           >
                             <Link to={href || '#'}>
@@ -432,7 +443,11 @@ export function Dashboard() {
                                   }`}
                               />
                               <span className="group-data-[collapsible=icon]:hidden flex-1 min-w-0 text-left text-[16px] font-semibold tracking-wide leading-snug">
-                                {item.title === 'Orders' && (isSuperAdminRole(user?.role) || isClientRole(user?.role)) ? 'Sale' : item.title}</span>
+                                {item.title === 'Orders' && (isSuperAdminRole(user?.role) || isClientRole(user?.role))
+                                  ? 'Sale'
+                                  : item.title === 'Invoice'
+                                    ? 'Quotes and Invoice'
+                                    : item.title}</span>
 
                               {'badge' in item &&
                                 item.badge != null &&
@@ -670,9 +685,11 @@ export function Dashboard() {
                           <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
                             <DashboardQuickActions onSync={handleDashboardSync} syncing={syncing} />
                           </motion.div>
-                          <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
-                            <DashboardRecentActivity indianRupee={isSuperAdminRole(user?.role) || isClientRole(user?.role)} />
-                          </motion.div>
+                          {(isSuperAdminRole(user?.role) || isClientRole(user?.role)) && (
+                            <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
+                              <DashboardRecentActivity indianRupee={isSuperAdminRole(user?.role) || isClientRole(user?.role)} />
+                            </motion.div>
+                          )}
                           {(isSuperAdminRole(user?.role) || isClientRole(user?.role)) && (
                             <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
                               <DashboardRecentTickets />

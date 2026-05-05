@@ -11,6 +11,15 @@ const {
   buildScopeQuery, 
   applyScope 
 } = require("../utils/tenantResolver");
+const Client = require("../models/Client");
+const { normalizeRole } = require("../utils/clientScopedRoles");
+
+const isValidObjectId = (id) => {
+  if (id === null || id === undefined) return false;
+  const s = String(id).trim();
+  if (!s || s === "null" || s === "undefined" || s === "all" || s === "super_admin" || s === "admin") return false;
+  return mongoose.Types.ObjectId.isValid(s);
+};
 
 /** Standard stages (1–6) for timeline UI */
 const TRACKING_STAGE_LABELS = [
@@ -1100,95 +1109,205 @@ const createOrder = async (req, res) => {
 
 const getOrders = async (req, res) => {
   try {
-    const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const resolvedClientId = await resolveClientId(req);
-    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
-    
-    // Requirement 10 & 16: Log data retrieval details
-    console.log(`[OrderController] getOrders - Page: Orders, Role: ${req.user?.role}, resolvedClientId: ${resolvedClientId || "global"}`);
+    const normalizedRole = normalizeRole(req.user?.role);
+    const isSuperAdmin = normalizedRole === "super_admin";
+    const isAdmin = normalizedRole === "admin";
 
-    const query = {};
-    applyScope(query, scopeQuery);
-    const orders = await Order.find(query).sort("-createdAt");
+    let scopeQuery = {};
+    if (isSuperAdmin || isAdmin) {
+      // Super Admin and Admin: Use explicit clientId if provided, else global
+      const explicitClientId = req.query?.clientId || req.headers["x-client-id"];
+      if (isValidObjectId(explicitClientId)) {
+        scopeQuery = { clientId: String(explicitClientId) };
+      }
+    } else {
+      // For other roles, use the standard scoping logic
+      const resolvedClientId = await resolveClientId(req);
+      scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    }
 
-    // Requirement 16: Log DB query details
-    console.log(`[OrderController] DB Query - Collection: orders, Filter: ${JSON.stringify(query)}, Count: ${orders.length}`);
+    const query = { isDeleted: { $ne: true } };
+    if (scopeQuery && Object.keys(scopeQuery).length > 0) {
+      applyScope(query, scopeQuery);
+    }
 
-    res.json({
-      success: true,
-      count: orders.length,
-      data: orders.map((o) => enrichOrderTracking(o)),
+    // Fetch orders with sort latest first
+    const orders = await Order.find(query)
+      .sort({ createdAt: -1 })
+      .populate("user", "name email")
+      .populate({
+        path: "clientId",
+        select: "name businessName email logo",
+        options: { strictPopulate: false }
+      })
+      .lean();
+
+    // Calculate stats
+    let totalRevenue = 0;
+    let deliveredCount = 0;
+    let inProgressCount = 0;
+
+    const data = orders.map((o) => {
+      try {
+        const enriched = enrichOrderTracking(o);
+        
+        // Use normalized status for stats
+        const status = (enriched.orderStatusResolved || enriched.orderStatus || enriched.status || "").toLowerCase();
+        const isCancelled = enriched.isCancelled === true || status === "cancelled";
+        const isDelivered = enriched.isDelivered === true || status === "delivered" || status === "completed";
+        const isPaid = enriched.isPaid === true || enriched.paymentStatus === "paid" || isDelivered;
+
+        if (!isCancelled) {
+          if (isDelivered) {
+            deliveredCount++;
+          } else {
+            inProgressCount++;
+          }
+          if (isPaid) {
+            totalRevenue += Number(enriched.totalPrice || 0);
+          }
+        }
+
+        return enriched;
+      } catch (err) {
+        console.warn("[DEBUG getOrders] Error enriching order:", o?._id, err.message);
+        return o; // Return original if enrichment fails
+      }
     });
+
+    const response = {
+      success: true,
+      count: data.length,
+      totalOrders: data.length,
+      inProgress: inProgressCount,
+      delivered: deliveredCount,
+      revenue: totalRevenue,
+      stats: {
+        totalOrders: data.length,
+        inProgress: inProgressCount,
+        delivered: deliveredCount,
+        revenue: totalRevenue,
+      },
+      data: data,
+    };
+
+    console.log("[DEBUG getOrders] API Response Shape:", Object.keys(response).join(", "));
+    console.log("-----------------------------------------");
+
+    res.json(response);
   } catch (error) {
-    console.error("[orderController] getOrders:", error.message);
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[DEBUG getOrders] CRITICAL ERROR:", error);
+    res.status(200).json({
+      success: false,
+      message: "Could not load orders",
+      error: error.message,
+      totalOrders: 0,
+      inProgress: 0,
+      delivered: 0,
+      revenue: 0,
+      data: [],
+      stats: {
+        totalOrders: 0,
+        inProgress: 0,
+        delivered: 0,
+        revenue: 0,
+      }
+    });
   }
 };
+
 
 // @desc    Dashboard overview — latest orders (website + POS), newest first
 // @route   GET /api/orders/dashboard/latest-transactions?limit=
 // @access  Private (same roles as GET /api/orders)
 const getLatestTransactions = async (req, res) => {
   try {
-    const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const resolvedClientId = await resolveClientId(req);
-    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
-    const rawLimit = parseInt(req.query.limit, 10);
-    const limit = Number.isFinite(rawLimit) ? Math.min(50, Math.max(1, rawLimit)) : 12;
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const normalizedRole = normalizeRole(req.user?.role);
+    const isSuperAdmin = normalizedRole === "super_admin";
+    const isAdmin = normalizedRole === "admin";
 
-    // Requirement 10 & 16: Log data retrieval details
-    console.log(`[OrderController] getLatestTransactions - Page: Dashboard, Role: ${req.user?.role}, resolvedClientId: ${resolvedClientId || "global"}`);
+    let scopeQuery = {};
+    if (isSuperAdmin || isAdmin) {
+      const explicitClientId = req.query?.clientId || req.headers["x-client-id"];
+      if (isValidObjectId(explicitClientId)) {
+        scopeQuery = { clientId: String(explicitClientId) };
+      }
+    } else {
+      const resolvedClientId = await resolveClientId(req);
+      scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    }
 
-    const query = {};
-    applyScope(query, scopeQuery);
+    const query = { isDeleted: { $ne: true } };
+    if (scopeQuery && Object.keys(scopeQuery).length > 0) {
+      applyScope(query, scopeQuery);
+    }
+
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate("user", "name email")
+      .populate({
+        path: "clientId",
+        select: "name businessName email",
+        options: { strictPopulate: false }
+      })
       .lean();
 
-    // Requirement 16: Log DB query details
-    console.log(`[OrderController] DB Query (Latest) - Collection: orders, Filter: ${JSON.stringify(query)}, Count: ${orders.length}`);
+    // Transform records — skip nulls or broken entries, never throw
+    const data = orders
+      .map((o) => {
+        if (!o) return null;
+        try {
+          const displayId = o.orderId || String(o._id);
 
-    const data = orders.map((o) => {
-      const user = o.user && typeof o.user === "object" && !Array.isArray(o.user) ? o.user : null;
-      const shipping =
-        o.shippingAddress && typeof o.shippingAddress === "object" ? o.shippingAddress : {};
+          const customerName =
+            (o.customerName && String(o.customerName).trim()) ||
+            (o.user?.name && String(o.user.name).trim()) ||
+            (o.shippingAddress?.fullName && String(o.shippingAddress.fullName).trim()) ||
+            "Guest Customer";
 
-      const customerName =
-        (user && user.name && String(user.name).trim()) ||
-        (o.customerName && String(o.customerName).trim()) ||
-        (shipping.fullName && String(shipping.fullName).trim()) ||
-        "Guest customer";
+          const customerEmail =
+            (o.customerEmail && String(o.customerEmail).trim()) ||
+            (o.user?.email && String(o.user.email).trim()) ||
+            (o.shippingAddress?.email && String(o.shippingAddress.email).trim()) ||
+            null;
 
-      const customerEmail =
-        (user && user.email && String(user.email).trim()) ||
-        (o.customerEmail && String(o.customerEmail).trim()) ||
-        (shipping.email && String(shipping.email).trim()) ||
-        null;
+          let orderStatusResolved = o.orderStatus || "placed";
+          try {
+            const enriched = enrichOrderTracking(o);
+            orderStatusResolved = enriched.orderStatusResolved || orderStatusResolved;
+          } catch (_) {
+            // enrichOrderTracking is non-critical for the list view
+          }
 
-      const orderStatusResolved =
-        String(o.orderStatus || "").toLowerCase() === "cancelled"
-          ? "cancelled"
-          : o.orderStatus || (o.isDelivered ? "delivered" : "placed");
+          return {
+            id: String(o._id),
+            orderId: displayId,
+            customerName,
+            customerEmail,
+            totalPrice: Number(o.totalPrice) || 0,
+            orderStatus: orderStatusResolved,
+            trackingStatus: o.trackingStatus || null,
+            createdAt: o.createdAt ? (o.createdAt.toISOString ? o.createdAt.toISOString() : o.createdAt) : null,
+            orderSource: o.orderSource || null,
+            isDelivered: !!o.isDelivered,
+            itemCount: Array.isArray(o.items) ? o.items.length : 0,
+          };
+        } catch (mapErr) {
+          console.warn("[DEBUG getLatestTransactions] skipping order:", o?._id, mapErr.message);
+          return null;
+        }
+      })
+      .filter((item) => item !== null);
 
-      return {
-        id: String(o._id),
-        orderId: o.orderId,
-        customerName,
-        customerEmail,
-        totalPrice: o.totalPrice,
-        orderStatus: orderStatusResolved,
-        trackingStatus: o.trackingStatus || null,
-        createdAt: o.createdAt,
-        orderSource: o.orderSource || null,
-        isDelivered: !!o.isDelivered,
-      };
-    });
+    console.log("[DEBUG getLatestTransactions] Final data count:", data.length);
+    console.log("-----------------------------------------");
 
     res.json({ success: true, count: data.length, data });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[DEBUG getLatestTransactions] CRITICAL ERROR:", error);
+    res.json({ success: true, count: 0, data: [] });
   }
 };
 
@@ -1199,19 +1318,65 @@ const getOrderById = async (req, res) => {
       return res.status(400).json({ success: false, message: "Order id is required" });
     }
 
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
-    let order = await Order.findOne({ orderId: raw, clientId });
-    if (!order && mongoose.Types.ObjectId.isValid(raw)) {
-      order = await Order.findOne({ _id: raw, clientId });
+    const normalizedRole = normalizeRole(req.user?.role);
+    const isSuperAdmin = normalizedRole === "super_admin";
+
+    let scopeQuery = {};
+    if (!isSuperAdmin) {
+      const resolvedClientId = await resolveClientId(req);
+      scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     }
 
+    // Build a flexible query to find by orderId or Mongo _id
+    const query = {
+      $or: [
+        { orderId: raw },
+        ...(isValidObjectId(raw) ? [{ _id: raw }] : [])
+      ]
+    };
+    
+    // Apply tenant scoping ONLY if not Super Admin
+    if (!isSuperAdmin) {
+      applyScope(query, scopeQuery);
+    }
+
+    const order = await Order.findOne(query)
+      .populate("user", "name email")
+      .populate({
+        path: "clientId",
+        select: "name businessName email logo",
+        options: { strictPopulate: false }
+      });
+
     if (order) {
-      res.json({ success: true, data: enrichOrderTracking(order) });
+      // Use enrichOrderTracking to ensure safe defaults for the UI
+      const data = enrichOrderTracking(order);
+      
+      // Ensure items array is safe even if malformed in DB
+      if (!Array.isArray(data.items)) {
+        data.items = [];
+      }
+
+      res.json({ success: true, data });
     } else {
+      // Check if order exists at all (ignoring scope) to provide better error context
+      const existsIgnoringScope = await Order.findOne({
+        $or: [
+          { orderId: raw },
+          ...(mongoose.Types.ObjectId.isValid(raw) ? [{ _id: raw }] : [])
+        ]
+      }).select("_id orderId");
+
+      if (existsIgnoringScope) {
+        console.warn(`[OrderController] Order ${raw} found but blocked by scope:`, scopeQuery);
+        return res.status(403).json({ success: false, message: "Order found but you do not have permission to access it" });
+      }
+
       res.status(404).json({ success: false, message: "Order not found" });
     }
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("[OrderController] getOrderById error:", error.message);
+    res.status(500).json({ success: false, message: "Error fetching order details" });
   }
 };
 
@@ -1220,15 +1385,24 @@ const getOrderById = async (req, res) => {
 // @access  Private (user, customer)
 const getMyOrdersTracking = async (req, res) => {
   try {
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const resolvedClientId = await resolveClientId(req);
+    const clientId = req.user?.clientId || req.clientId || resolvedClientId;
     const isAdmin = req.user && ["admin", "super_admin", "manager", "staff", "inventory_manager", "cashier"].includes(req.user.role);
-    const query = isAdmin ? (clientId ? { clientId } : {}) : { user: req.user._id };
+    
+    const query = {};
+    if (!isAdmin) {
+      query.user = req.user._id;
+    } else if (isValidObjectId(clientId)) {
+      query.clientId = String(clientId);
+    }
     
     const limit = isAdmin ? 20 : 50;
 
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
+      .populate("user", "name email")
+      .populate("clientId", "name businessName email logo")
       .lean();
     const data = orders.map((doc) => enrichOrderTracking(doc));
     res.json({ success: true, count: data.length, data });
@@ -1264,9 +1438,9 @@ const getOrderTrackingByIdentifier = async (req, res) => {
       orConditions.push({ shiprocketOrderId: raw });
       orConditions.push({ shiprocketShipmentId: raw });
     }
-    if (mongoose.Types.ObjectId.isValid(raw) && String(raw).length === 24) {
+    if (isValidObjectId(raw)) {
       try {
-        orConditions.push({ _id: new mongoose.Types.ObjectId(raw) });
+        orConditions.push({ _id: new mongoose.Types.ObjectId(String(raw)) });
       } catch (_) {
         /* ignore */
       }
@@ -1412,12 +1586,14 @@ const patchOrderTracking = async (req, res) => {
 
 const deleteOrder = async (req, res) => {
   try {
-    const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
+    const normalizedRole = normalizeRole(req.user?.role);
+    const isSuperAdmin = normalizedRole === "super_admin";
+    
+    const clientId = !isSuperAdmin ? (req.user?.clientId || req.clientId || (await resolveClientId(req))) : null;
     const paramId = req.params.id;
     const query = isSuperAdmin ? { orderId: paramId } : { orderId: paramId, clientId };
     let order = await Order.findOne(query);
-    if (!order && mongoose.Types.ObjectId.isValid(paramId)) {
+    if (!order && isValidObjectId(paramId)) {
       const idQuery = isSuperAdmin ? { _id: paramId } : { _id: paramId, clientId };
       order = await Order.findOne(idQuery);
     }

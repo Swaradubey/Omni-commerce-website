@@ -12,7 +12,7 @@ const {
   formatProductWithClient,
 } = require("../utils/formatInventoryProduct");
 const { isClientScopedRole } = require("../utils/clientScopedRoles");
-const { resolveClientId, buildScopeQuery, applyScope, buildProductVisibilityFilter } = require("../utils/tenantResolver");
+const { resolveClientId, buildScopeQuery, applyScope, buildProductVisibilityFilter, isValidObjectId } = require("../utils/tenantResolver");
 
 function userOwnsClientProduct(user, product) {
   if (!user || !isClientScopedRole(user.role)) return true;
@@ -213,6 +213,9 @@ const getInventory = async (req, res) => {
     const productsFound = inventory.length;
 
     // Requested debug logs
+    console.log("-----------------------------------------");
+    console.log("role:", req.user?.role, "clientId:", resolvedClientId, "query:", JSON.stringify(query));
+    console.log("-----------------------------------------");
     console.log("Product query filter:", JSON.stringify(query));
     console.log("Products returned:", productsFound);
 
@@ -230,6 +233,9 @@ const getInventory = async (req, res) => {
 // @access  Public
 const getInventoryById = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: "Inventory item not found (Invalid ID)" });
+    }
     const resolvedClientId = await resolveClientId(req);
     const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };
@@ -251,6 +257,9 @@ const getInventoryById = async (req, res) => {
 // @access  Private (same field rules as PUT /api/products/:id)
 const updateInventoryItem = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: "Inventory item not found (Invalid ID)" });
+    }
     const role = req.user.role;
     const resolvedClientId = await resolveClientId(req);
     const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
@@ -423,6 +432,9 @@ const updateInventoryItem = async (req, res) => {
 // @access  Private (Admin/Staff)
 const updateStock = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: "Inventory item not found (Invalid ID)" });
+    }
     const resolvedClientId = await resolveClientId(req);
     const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };
@@ -462,6 +474,9 @@ const updateStock = async (req, res) => {
 // @access  Private (Admin/Staff)
 const deleteInventoryItem = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: "Inventory item not found (Invalid ID)" });
+    }
     const resolvedClientId = await resolveClientId(req);
     const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };

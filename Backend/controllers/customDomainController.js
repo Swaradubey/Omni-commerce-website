@@ -1,6 +1,7 @@
 const CustomDomain = require("../models/CustomDomain");
 const Client = require("../models/Client");
 const vercelService = require("../services/vercelService");
+const { isValidObjectId } = require("../utils/tenantResolver");
 
 // @desc    Resolve a custom domain
 // @route   GET /api/custom-domains/resolve
@@ -64,6 +65,9 @@ const getAllCustomDomains = async (req, res) => {
     console.log(`[customDomain] getAllCustomDomains - Page: Custom Domains, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
 
     const query = isSuperAdmin ? {} : { clientId };
+    console.log("-----------------------------------------");
+    console.log("role:", req.user?.role, "clientId:", clientId, "query:", JSON.stringify(query));
+    console.log("-----------------------------------------");
     const domains = await CustomDomain.find(query).sort({ createdAt: -1 });
 
     // Requirement 16: Log DB query details
@@ -178,6 +182,9 @@ const createCustomDomain = async (req, res) => {
 // @access  Private (Super Admin)
 const checkDomainStatus = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: "Custom domain not found (Invalid ID)" });
+    }
     const customDomain = await CustomDomain.findById(req.params.id);
 
     if (!customDomain) {
@@ -205,6 +212,9 @@ const checkDomainStatus = async (req, res) => {
 // @access  Private (Super Admin)
 const deleteCustomDomain = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: "Custom domain not found (Invalid ID)" });
+    }
     const customDomain = await CustomDomain.findById(req.params.id);
 
     if (!customDomain) {

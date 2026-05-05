@@ -95,6 +95,7 @@ export function ProductCard({
             rating: 0,
             reviews: 0,
             sku: p.sku,
+            clientId: p.clientId || (p.client as any)?._id
           })) as (Product & { _id?: string })[];
           const retry = buildWishlistToggleBody(product, list);
           if ('productId' in retry) body = retry;

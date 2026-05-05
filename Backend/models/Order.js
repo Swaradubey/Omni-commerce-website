@@ -58,6 +58,7 @@ const orderSchema = new mongoose.Schema(
       {
         productId: {
           type: String, // String to handle both ObjectId and static IDs
+          ref: "Product",
           required: true,
         },
         name: { type: String, required: true },

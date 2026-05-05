@@ -109,6 +109,7 @@ const helpCenterRoutes = require("./routes/helpCenterRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const supportTicketRoutes = require("./routes/supportTicketRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
+const quoteRoutes = require("./routes/quoteRoutes");
 const shiprocketService = require("./services/shiprocketService");
 
 const customDomainRoutes = require("./routes/customDomainRoutes");
@@ -138,6 +139,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/support-tickets", supportTicketRoutes);
 app.use("/api/support/tickets", supportTicketRoutes); // Alias as per request
 app.use("/api/invoices", invoiceRoutes);
+app.use("/api/quotes", quoteRoutes);
 
 // Health route
 app.get("/api/health", (req, res) => {

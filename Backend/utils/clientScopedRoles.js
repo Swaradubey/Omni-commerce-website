@@ -21,6 +21,12 @@ function normalizeRole(role) {
     .trim()
     .replace(/\s+/g, " ");
   if (!canonicalWords) return "";
+  
+  // Explicitly map "superadmin" to "super_admin" for consistency
+  if (canonicalWords === "superadmin" || canonicalWords === "super admin") {
+    return "super_admin";
+  }
+
   return canonicalWords.replace(/\s+/g, "_");
 }
 

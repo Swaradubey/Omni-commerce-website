@@ -4,6 +4,7 @@ const Employee = require("../models/Employee");
 const User = require("../models/User");
 const Client = require("../models/Client");
 const { resolveStaffClientId, canAccessStaffRecord } = require("../utils/staffAccess");
+const { isValidObjectId } = require("../utils/tenantResolver");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -42,7 +43,10 @@ const createStoreManager = async (req, res) => {
     });
   }
 
-  const clientOid = new mongoose.Types.ObjectId(ctx.clientId);
+  if (!isValidObjectId(ctx.clientId)) {
+    return res.status(400).json({ success: false, message: "Invalid client ID scope" });
+  }
+  const clientOid = new mongoose.Types.ObjectId(String(ctx.clientId));
   const shopFromClient = await loadClientShopName(clientOid);
   const shopName = shopNameBody || shopFromClient;
 
@@ -129,6 +133,9 @@ const listStoreManagers = async (req, res) => {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
+    console.log("-----------------------------------------");
+    console.log("role:", req.user?.role, "clientId:", (req.query?.clientId || req.user?.clientId), "query:", JSON.stringify(q));
+    console.log("-----------------------------------------");
     const list = await Employee.find(q).sort({ createdAt: -1 }).lean();
     return res.json({ success: true, data: list });
   } catch (error) {

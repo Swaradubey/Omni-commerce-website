@@ -1,4 +1,17 @@
 const CustomDomain = require("../models/CustomDomain");
+const mongoose = require("mongoose");
+
+/**
+ * Validates if a string is a valid MongoDB ObjectId.
+ * @param {string} id 
+ * @returns {boolean}
+ */
+const isValidObjectId = (id) => {
+  if (id === null || id === undefined) return false;
+  const s = String(id).trim();
+  if (!s || s === "null" || s === "undefined" || s === "all" || s === "super_admin" || s === "admin") return false;
+  return mongoose.Types.ObjectId.isValid(s);
+};
 
 /**
  * Normalizes a domain name by removing protocol, www., and trailing slashes.
@@ -50,23 +63,33 @@ async function resolveClientId(req) {
 
   // Priority 1 & 2: User-specific client assignment
   const uClientId = user?.clientId || user?.assignedClient;
-  if (uClientId && uClientId !== "null" && uClientId !== "undefined") {
+  if (isValidObjectId(uClientId)) {
     return String(uClientId);
   }
 
   // Priority 3: Body or Query (Super Admin/Admin selection)
   const queryId = req.query?.clientId || req.body?.clientId;
-  if (queryId && queryId !== "null" && queryId !== "undefined") {
+  if (isValidObjectId(queryId)) {
     return String(queryId);
   }
 
   // Priority 4: Explicit header
   const headerId = req.headers["x-client-id"];
-  if (headerId && headerId !== "null" && headerId !== "undefined") {
+  if (isValidObjectId(headerId)) {
     return String(headerId);
   }
 
   // Priority 5: Domain-based lookup
+  // SKIP domain lookup for privileged roles if they haven't been assigned a specific client yet.
+  // This ensures Global Admins see the same data (everything) on custom domains as they do on Vercel/Localhost.
+  const role = user?.role;
+  const isPrivileged = role === "super_admin" || role === "admin" || role === "superadmin";
+
+  if (isPrivileged) {
+    console.log(`[TenantResolver] Skipping domain resolution for privileged role: ${role}`);
+    return null;
+  }
+
   const xClientOrigin = req.headers["x-client-origin"] || "";
   const xClientDomain = req.headers["x-client-domain"] || "";
   const originHeader  = req.headers.origin || req.headers.referer || "";
@@ -108,7 +131,7 @@ async function resolveClientId(req) {
         ],
       }).select("clientId");
 
-      if (domainDoc && domainDoc.clientId) {
+      if (domainDoc && domainDoc.clientId && isValidObjectId(domainDoc.clientId)) {
         return String(domainDoc.clientId);
       }
     } catch (err) {
@@ -155,13 +178,14 @@ async function buildProductVisibilityFilter(req) {
   }
 
   if (role === "client") {
-    const filter = { clientId: resolvedClientId || user.clientId || user._id };
+    const target = resolvedClientId || user.clientId || user._id;
+    const filter = isValidObjectId(target) ? { clientId: String(target) } : {};
     console.log("Product filter:", filter);
     return filter;
   }
 
   // For users/customers and public storefront
-  const filter = resolvedClientId ? { clientId: resolvedClientId } : {};
+  const filter = isValidObjectId(resolvedClientId) ? { clientId: String(resolvedClientId) } : {};
   console.log("Product filter:", filter);
   return filter;
 }
@@ -170,42 +194,50 @@ async function buildProductVisibilityFilter(req) {
  * Builds a scoping query for multi-tenant isolation. (Legacy/General usage)
  */
 function buildScopeQuery(user, resolvedClientId) {
-  const isValid = (val) => val && val !== "null" && val !== "undefined";
-
   // 1. Public visitor / Guest checkout: Scope to domain clientId if present
   if (!user) {
-    return isValid(resolvedClientId) ? { clientId: String(resolvedClientId) } : {};
+    return isValidObjectId(resolvedClientId) ? { clientId: String(resolvedClientId) } : {};
   }
   
-  // 2. Platform Admins: Global by default, but can be scoped if a specific clientId is resolved
-  const isSuperAdmin = user.role === "super_admin" || user.role === "superadmin" || user.role === "super-admin";
-  const isAdmin = user.role === "admin";
+  const role = String(user.role || "").toLowerCase();
+  const isSuperAdmin = role === "super_admin" || role === "superadmin";
+  const isAdmin = role === "admin";
+  const isStaff = isAdmin || require("./clientScopedRoles").isClientScopedRole(user.role);
 
-  if (isSuperAdmin || isAdmin) {
-    return isValid(resolvedClientId) ? { clientId: String(resolvedClientId) } : {};
+  // 2. Super Admin: Truly global unless we explicitly want to filter by a valid clientId
+  if (isSuperAdmin) {
+    return isValidObjectId(resolvedClientId) ? { clientId: String(resolvedClientId) } : {};
   }
 
-  // 3. Check if user is a staff/client-scoped role
-  const { isClientScopedRole } = require("./clientScopedRoles");
-  const isStaff = user.role === "admin" || isClientScopedRole(user.role);
+  // 3. Admin: User wants admin to see customer orders without requiring clientId.
+  // We'll treat them as global for now, but allow filtering if clientId is provided.
+  if (isAdmin) {
+    return isValidObjectId(resolvedClientId) ? { clientId: String(resolvedClientId) } : {};
+  }
 
   // 4. Handle Customer / User (Non-staff)
-  if (!isStaff) {
+  if (!isStaff || role === "user" || role === "customer") {
+    // REQUIRE user-specific scoping for customers
+    const uId = user._id || user.id;
+    if (isValidObjectId(uId)) {
+      return { user: new mongoose.Types.ObjectId(String(uId)) };
+    }
+    // Fallback if no user id (should not happen with protect)
     const targetClientId = resolvedClientId || user.clientId || user.linkedClientId;
-    if (isValid(targetClientId)) {
+    if (isValidObjectId(targetClientId)) {
       return { $or: [{ clientId: String(targetClientId) }, { clientId: null }, { clientId: { $exists: false } }] };
     }
-    return {};
+    return { _id: null }; // Return nothing if we can't identify the user
   }
 
-  // 5. Admin / Vendor / Client / Staff
+  // 5. Client / Staff / Vendor
   const orConditions = [];
   const uId = user._id || user.id;
-  const sId = uId ? String(uId) : null;
+  const sId = isValidObjectId(uId) ? String(uId) : null;
 
-  if (isValid(resolvedClientId)) orConditions.push({ clientId: String(resolvedClientId) });
-  if (isValid(user.clientId)) orConditions.push({ clientId: String(user.clientId) });
-  if (isValid(user.linkedClientId)) orConditions.push({ clientId: String(user.linkedClientId) });
+  if (isValidObjectId(resolvedClientId)) orConditions.push({ clientId: String(resolvedClientId) });
+  if (isValidObjectId(user.clientId)) orConditions.push({ clientId: String(user.clientId) });
+  if (isValidObjectId(user.linkedClientId)) orConditions.push({ clientId: String(user.linkedClientId) });
 
   if (sId) {
     orConditions.push({ clientId: sId });
@@ -239,4 +271,6 @@ module.exports = {
   buildScopeQuery,
   applyScope,
   buildProductVisibilityFilter,
+  isValidObjectId,
 };
+

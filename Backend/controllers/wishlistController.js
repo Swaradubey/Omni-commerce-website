@@ -2,7 +2,12 @@ const mongoose = require("mongoose");
 const Wishlist = require("../models/Wishlist");
 const Product = require("../models/Product");
 
-const isValidProductId = (id) => mongoose.Types.ObjectId.isValid(id);
+const isValidProductId = (id) => {
+  if (id === null || id === undefined) return false;
+  const s = String(id).trim();
+  if (!s || s === "null" || s === "undefined" || s === "all" || s === "super_admin" || s === "admin") return false;
+  return mongoose.Types.ObjectId.isValid(s);
+};
 
 function slugifyName(name) {
   if (!name || typeof name !== "string") return "";

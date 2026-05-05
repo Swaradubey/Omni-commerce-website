@@ -55,14 +55,14 @@ router.get(
   getOrderTrackingByIdentifier
 );
 
-// @route   GET /api/orders (dashboard — admin/staff only)
-router.get("/", protect, allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier", "client_admin"), tenantMiddleware, getOrders);
+// @route   GET /api/orders (dashboard — admin/staff only; customers see own orders)
+router.get("/", protect, allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier", "client_admin", "user", "customer"), tenantMiddleware, getOrders);
 
 // @route   GET /api/orders/dashboard/latest-transactions (must be before /:id)
 router.get(
   "/dashboard/latest-transactions",
   protect,
-  allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier", "client_admin"),
+  allowRoles("super_admin", "admin", "client", "staff", "inventory_manager", "cashier", "client_admin", "user", "customer"),
   tenantMiddleware,
   getLatestTransactions
 );

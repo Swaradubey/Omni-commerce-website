@@ -586,6 +586,16 @@ const getAdminAnalytics = async (req, res) => {
     const resolvedClientId = await resolveTenant(req);
     const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
 
+    console.log("[Analytics] Request context:", {
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+      xClientOrigin: req.headers["x-client-origin"],
+      userRole,
+      userId,
+      resolvedClientId,
+      scopeQuery
+    });
+
     const isSuperAdmin = userRole === "super_admin";
 
     // Get total orders for debug log
@@ -607,7 +617,9 @@ const getAdminAnalytics = async (req, res) => {
       totalOrdersFound
     });
 
-    console.log(`[adminAnalytics] getAdminAnalytics - Page: Analytics, Role: ${userRole}, Scope: ${JSON.stringify(scopeQuery)}`);
+    console.log("-----------------------------------------");
+    console.log("role:", userRole, "clientId:", resolvedClientId, "query:", JSON.stringify(scopeQuery));
+    console.log("-----------------------------------------");
 
     const now = new Date();
     const cur = monthWindowContaining(now);

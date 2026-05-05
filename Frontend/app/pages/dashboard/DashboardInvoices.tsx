@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Receipt,
   Search,
@@ -7,6 +7,15 @@ import {
   FileText,
   DollarSign,
   CheckCircle2,
+  Clock,
+  XCircle,
+  AlertCircle,
+  RefreshCcw,
+  Send,
+  Check,
+  X,
+  ArrowRight,
+  MessageSquare,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -19,68 +28,208 @@ import {
 } from '../../components/ui/dialog';
 import ApiService from '../../api/apiService';
 import { toast } from 'sonner';
+import { useAuth } from '../../context/AuthContext';
+
+type TabType = 'invoices' | 'quotes';
 
 export function DashboardInvoices() {
+  const { user } = useAuth();
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [quotes, setQuotes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<TabType>('invoices');
   const [viewInvoice, setViewInvoice] = useState<any | null>(null);
+  const [viewQuote, setViewQuote] = useState<any | null>(null);
 
-  const fetchInvoices = useCallback(async () => {
+  // Bargaining states
+  const [counterPrice, setCounterPrice] = useState<string>('');
+  const [adminMessage, setAdminMessage] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCounterInput, setShowCounterInput] = useState(false);
+
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
+    setError(null);
     try {
-      const response = await ApiService.get('/invoices', { pageName: 'Invoice' });
-      if (response.success && response.data && Array.isArray(response.data)) {
-        setInvoices(response.data);
+      const [invoiceRes, quoteRes] = await Promise.allSettled([
+        ApiService.get('/invoices', { pageName: 'Invoice' }),
+        ApiService.get('/quotes', { pageName: 'Quote' })
+      ]);
+
+      if (invoiceRes.status === 'fulfilled' && invoiceRes.value.success) {
+        setInvoices(invoiceRes.value.data || []);
       } else {
+        console.error('Invoice fetch failed');
         setInvoices([]);
       }
-    } catch (error) {
-      console.error('Failed to fetch invoices', error);
-      setInvoices([]);
-      toast.error('Could not load invoices.');
+
+      if (quoteRes.status === 'fulfilled' && quoteRes.value.success) {
+        setQuotes(quoteRes.value.data || []);
+      } else {
+        console.error('Quote fetch failed');
+        setQuotes([]);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch dashboard data', err);
+      setError(err.message || 'Could not load data.');
+      toast.error('Failed to load quotes and invoices.');
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void fetchInvoices();
-  }, [fetchInvoices]);
+    void fetchData();
+  }, [fetchData]);
 
-  const filteredInvoices = useMemo(() => {
+  const handleBargainAction = async (action: 'accept' | 'reject' | 'counter' | 'convert') => {
+    if (!viewQuote) return;
+    setIsSubmitting(true);
+    try {
+      let res;
+      if (action === 'accept') {
+        res = await ApiService.patch(`/quotes/${viewQuote._id}/accept`, {}, { pageName: 'Quote' });
+      } else if (action === 'reject') {
+        res = await ApiService.patch(`/quotes/${viewQuote._id}/reject`, {}, { pageName: 'Quote' });
+      } else if (action === 'counter') {
+        if (!counterPrice || isNaN(Number(counterPrice))) {
+          toast.error('Please enter a valid counter price');
+          setIsSubmitting(false);
+          return;
+        }
+        res = await ApiService.patch(`/quotes/${viewQuote._id}/counter`, { 
+          counterPrice: Number(counterPrice),
+          adminMessage 
+        }, { pageName: 'Quote' });
+      } else if (action === 'convert') {
+        res = await ApiService.post(`/quotes/${viewQuote._id}/convert-to-invoice`, {}, { pageName: 'Quote' });
+      }
+
+      if (res?.success) {
+        toast.success(`Quote ${action}ed successfully`);
+        setViewQuote(null);
+        setShowCounterInput(false);
+        setCounterPrice('');
+        setAdminMessage('');
+        void fetchData();
+      } else {
+        toast.error(res?.message || `Failed to ${action} quote`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || `An error occurred while ${action}ing quote`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const currentData = activeTab === 'invoices' ? invoices : quotes;
+
+  const filteredData = useMemo(() => {
     const t = searchTerm.trim().toLowerCase();
-    if (!t) return invoices;
-    return invoices.filter((o) => {
-      const id = String(o.invoiceNumber || '').toLowerCase();
-      const orderId = String(o.orderId || '').toLowerCase();
-      const name = String(o.customerName || '').toLowerCase();
-      const email = String(o.customerEmail || '').toLowerCase();
+    if (!t) return currentData;
+    return currentData.filter((item: any) => {
+      const id = String(item.invoiceNumber || item.quoteNumber || '').toLowerCase();
+      const orderId = String(item.orderId || '').toLowerCase();
+      const name = String(item.customerName || '').toLowerCase();
+      const email = String(item.customerEmail || '').toLowerCase();
       return id.includes(t) || orderId.includes(t) || name.includes(t) || email.includes(t);
     });
-  }, [invoices, searchTerm]);
+  }, [currentData, searchTerm]);
 
   const stats = useMemo(() => {
-    const total = invoices.length;
-    const completed = invoices.filter((o) => String(o.paymentStatus).toLowerCase() === 'paid' || String(o.paymentStatus).toLowerCase() === 'completed').length;
-    const pending = total - completed;
-    const revenue = invoices.reduce((acc, o) => acc + (Number(o.totalAmount) || 0), 0);
-    return [
-      { title: 'Total Invoices', value: total, icon: Receipt, color: 'blue' },
-      { title: 'Paid / Completed', value: completed, icon: CheckCircle2, color: 'emerald' },
-      { title: 'Pending', value: pending, icon: FileText, color: 'amber' },
-      { title: 'Total Amount', value: `₹${revenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'indigo' },
-    ];
-  }, [invoices]);
+    if (activeTab === 'invoices') {
+      const total = invoices.length;
+      const completed = invoices.filter((o) => 
+        ['paid', 'completed'].includes(String(o.paymentStatus).toLowerCase())
+      ).length;
+      const pending = total - completed;
+      const revenue = invoices.reduce((acc, o) => acc + (Number(o.totalAmount || o.subtotal) || 0), 0);
+      return [
+        { title: 'Total Invoices', value: total, icon: Receipt, color: 'blue' },
+        { title: 'Paid / Completed', value: completed, icon: CheckCircle2, color: 'emerald' },
+        { title: 'Pending Payment', value: pending, icon: Clock, color: 'amber' },
+        { title: 'Total Revenue', value: `₹${revenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'indigo' },
+      ];
+    } else {
+      const total = quotes.length;
+      const accepted = quotes.filter((o) => String(o.status).toLowerCase() === 'accepted').length;
+      const pending = quotes.filter((o) => String(o.status).toLowerCase() === 'pending').length;
+      const totalAmount = quotes.reduce((acc, o) => acc + (Number(o.finalPrice || o.requestedPrice) || 0), 0);
+      return [
+        { title: 'Total Quotes', value: total, icon: FileText, color: 'blue' },
+        { title: 'Accepted', value: accepted, icon: CheckCircle2, color: 'emerald' },
+        { title: 'Pending', value: pending, icon: Clock, color: 'amber' },
+        { title: 'Total Value', value: `₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'indigo' },
+      ];
+    }
+  }, [activeTab, invoices, quotes]);
+
+  const getStatusColor = (status: string) => {
+    const s = String(status).toLowerCase();
+    if (['paid', 'completed', 'accepted'].includes(s)) return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800';
+    if (['pending', 'countered'].includes(s)) return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800';
+    if (['rejected', 'expired', 'failed'].includes(s)) return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800';
+    return 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-800';
+  };
+
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'client';
 
   return (
     <div className="relative min-h-screen bg-[linear-gradient(180deg,#fffdf8_0%,#fff8e8_45%,#fffdf7_100%)] dark:from-[#1a1510] dark:via-[#14120d] dark:to-[#1a1610]">
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,rgba(212,175,55,0.08),transparent_60%)] pointer-events-none" />
       <div className="relative space-y-8 p-6 md:p-8">
+        
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-[#1F1F1F] dark:text-[#F9FAFB]">Quotes & Invoices</h1>
+            <p className="text-muted-foreground mt-1">Manage and track all customer quotations and financial invoices.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={fetchData} 
+              disabled={isLoading}
+              className="rounded-xl border-[#EADFBF] bg-white/50 dark:bg-[#1a1610]/50"
+            >
+              <RefreshCcw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex p-1 bg-[#F4E7C5]/30 dark:bg-[#2a2318] rounded-2xl w-fit border border-[#EADFBF]/50 dark:border-[#3d3522]">
+          <button
+            onClick={() => setActiveTab('invoices')}
+            className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              activeTab === 'invoices' 
+                ? 'bg-white text-[#D4AF37] shadow-md dark:bg-[#1a1610]' 
+                : 'text-[#6B7280] hover:text-[#1F1F1F] dark:text-[#9CA3AF] dark:hover:text-[#F9FAFB]'
+            }`}
+          >
+            Invoices
+          </button>
+          <button
+            onClick={() => setActiveTab('quotes')}
+            className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              activeTab === 'quotes' 
+                ? 'bg-white text-[#D4AF37] shadow-md dark:bg-[#1a1610]' 
+                : 'text-[#6B7280] hover:text-[#1F1F1F] dark:text-[#9CA3AF] dark:hover:text-[#F9FAFB]'
+            }`}
+          >
+            Quotes
+          </button>
+        </div>
+
+        {/* Stats Grid */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat, i) => (
             <motion.div
-              key={stat.title}
+              key={stat.title + activeTab}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
@@ -112,13 +261,31 @@ export function DashboardInvoices() {
           ))}
         </div>
 
+        {/* Error State */}
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }}
+            className="flex items-center gap-3 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 dark:bg-rose-950/20 dark:border-rose-900/30 dark:text-rose-400"
+          >
+            <AlertCircle className="h-5 w-5 shrink-0" />
+            <p className="text-sm font-medium">{error}</p>
+            <Button variant="ghost" size="sm" onClick={fetchData} className="ml-auto hover:bg-rose-100">Try Again</Button>
+          </motion.div>
+        )}
+
+        {/* Data Table */}
         <Card className="overflow-hidden rounded-3xl border border-[#EADFBF] bg-[#FFFDF8] shadow-[0_20px_40px_rgba(212,175,55,0.1)] dark:border-[#3d3522] dark:bg-[#1a1610]">
           <CardHeader className="border-b border-[#EADFBF]/50 pb-6 pt-6 md:pt-8 dark:border-[#3d3522]">
             <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
               <div>
-                <CardTitle className="text-2xl font-bold text-[#1F1F1F] dark:text-[#F9FAFB]">Invoices & Receipts</CardTitle>
+                <CardTitle className="text-2xl font-bold text-[#1F1F1F] dark:text-[#F9FAFB]">
+                  {activeTab === 'invoices' ? 'Invoice List' : 'Quotation List'}
+                </CardTitle>
                 <p className="mt-2 text-sm text-[#6B7280] dark:text-[#9CA3AF]">
-                  View and track invoice records associated with customer orders.
+                  {activeTab === 'invoices' 
+                    ? 'Track financial records and payment statuses for completed orders.' 
+                    : 'Manage price quotations sent to potential customers.'}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
@@ -126,7 +293,7 @@ export function DashboardInvoices() {
                   <Search className="absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
                   <input
                     type="text"
-                    placeholder="Invoice or Order ID..."
+                    placeholder={`Search ${activeTab}...`}
                     className="w-full rounded-xl border border-[#EADFBF] bg-[#FFFCF4] py-2.5 pr-4 pl-10 text-sm text-[#1F1F1F] placeholder:text-[#9CA3AF] transition-all focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 focus:outline-none dark:border-[#3d3522] dark:bg-[#252117] dark:text-[#F9FAFB] dark:placeholder:text-[#6B7280] md:w-64"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -140,11 +307,11 @@ export function DashboardInvoices() {
               <table className="w-full text-left">
                 <thead className="bg-[#F4E7C5]/30 text-[11px] font-semibold tracking-[0.1em] text-[#6B7280] uppercase dark:bg-[#2a2318] dark:text-[#9CA3AF]">
                   <tr>
-                    <th className="px-6 py-4">Invoice No</th>
-                    <th className="px-6 py-4">Order ID</th>
+                    <th className="px-6 py-4">{activeTab === 'invoices' ? 'Invoice No' : 'Quote No'}</th>
+                    {activeTab === 'invoices' && <th className="px-6 py-4">Order ID</th>}
                     <th className="px-6 py-4">Customer</th>
-                    <th className="px-6 py-4">Total</th>
-                    <th className="px-6 py-4">Payment</th>
+                    <th className="px-6 py-4">Amount</th>
+                    <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -152,19 +319,22 @@ export function DashboardInvoices() {
                   {isLoading ? (
                     <tr>
                       <td colSpan={6} className="px-6 py-12 text-center text-sm text-[#6B7280]">
-                        Loading invoices…
+                        <div className="flex items-center justify-center gap-2">
+                          <RefreshCcw className="h-4 w-4 animate-spin text-[#D4AF37]" />
+                          <span>Loading data…</span>
+                        </div>
                       </td>
                     </tr>
-                  ) : filteredInvoices.length === 0 ? (
+                  ) : filteredData.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-6 py-12 text-center text-sm text-[#6B7280]">
-                        No invoices match your search.
+                        No {activeTab} match your search.
                       </td>
                     </tr>
                   ) : (
-                    filteredInvoices.map((inv, idx) => (
+                    filteredData.map((item, idx) => (
                       <motion.tr
-                        key={inv._id || idx}
+                        key={item._id || idx}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: idx * 0.03 }}
@@ -172,39 +342,38 @@ export function DashboardInvoices() {
                       >
                         <td className="px-6 py-4">
                           <span className="font-mono text-sm font-semibold text-[#D4AF37] dark:text-[#D4AF37]">
-                            {inv.invoiceNumber}
+                            {item.invoiceNumber || item.quoteNumber}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <span className="font-mono text-xs text-[#6B7280]">
-                            {inv.orderId}
-                          </span>
-                        </td>
+                        {activeTab === 'invoices' && (
+                          <td className="px-6 py-4">
+                            <span className="font-mono text-xs text-[#6B7280]">
+                              {item.orderId}
+                            </span>
+                          </td>
+                        )}
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
                             <span className="text-sm font-semibold text-[#1F1F1F] dark:text-[#F9FAFB]">
-                              {inv.customerName || 'Unknown'}
+                              {item.customerName || 'Unknown'}
                             </span>
                             <span className="text-[10px] text-[#9CA3AF]">
-                              {inv.createdAt
-                                ? new Date(inv.createdAt).toISOString().split('T')[0]
+                              {item.createdAt
+                                ? new Date(item.createdAt).toISOString().split('T')[0]
                                 : '—'}
                             </span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
                           <span className="text-sm font-bold text-[#1F1F1F] dark:text-[#F9FAFB]">
-                            ₹{(inv.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            ₹{(item.totalAmount || item.finalPrice || item.requestedPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </span>
                         </td>
                         <td className="px-6 py-4">
                           <span
-                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold tracking-wide ${String(inv.paymentStatus).toLowerCase() === 'paid' || String(inv.paymentStatus).toLowerCase() === 'completed'
-                              ? 'bg-[#ECFDF5] text-[#059669] dark:bg-[#064e3b] dark:text-[#34D399]'
-                              : 'bg-[#FFFBEB] text-[#D97706] dark:bg-[#451a03] dark:text-[#FBBF24]'
-                              }`}
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold tracking-wide ${getStatusColor(item.paymentStatus || item.status)}`}
                           >
-                            {inv.paymentStatus || 'Pending'}
+                            {item.paymentStatus || item.status || 'Pending'}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -214,7 +383,10 @@ export function DashboardInvoices() {
                               variant="outline"
                               size="sm"
                               className="rounded-full border-[#EADFBF] bg-transparent text-[#1F1F1F] hover:border-[#D4AF37] hover:bg-[#FFFDF8] hover:shadow-md hover:shadow-[#D4AF37]/10 dark:border-[#3d3522] dark:text-[#F9FAFB] dark:hover:border-[#D4AF37] dark:hover:bg-[#252117]"
-                              onClick={() => setViewInvoice(inv)}
+                              onClick={() => {
+                                if (activeTab === 'invoices') setViewInvoice(item);
+                                else setViewQuote(item);
+                              }}
                             >
                               <Eye className="mr-1.5 h-3.5 w-3.5" />
                               View
@@ -230,96 +402,337 @@ export function DashboardInvoices() {
           </CardContent>
         </Card>
 
-        <Dialog open={!!viewInvoice} onOpenChange={(open) => !open && setViewInvoice(null)}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl border-stone-200 sm:max-w-2xl bg-white dark:bg-zinc-950">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-2xl font-black">
-                <Receipt className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                Invoice
-              </DialogTitle>
-            </DialogHeader>
+         {/* Invoice Detail Dialog */}
+         <Dialog open={!!viewInvoice} onOpenChange={(open) => !open && setViewInvoice(null)}>
+           <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-stone-200 sm:max-w-2xl bg-white dark:bg-zinc-950 p-0 pb-4">
+             <div className="p-8">
+               <DialogHeader className="mb-6">
+                 <DialogTitle className="flex items-center gap-3 text-3xl font-black text-[#1F1F1F] dark:text-[#F9FAFB]">
+                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl">
+                     <Receipt className="h-7 w-7 text-blue-600 dark:text-blue-400" />
+                   </div>
+                   Invoice Details
+                 </DialogTitle>
+               </DialogHeader>
 
-            {viewInvoice && (
-              <div className="space-y-6 pt-4 text-sm">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <p className="text-muted-foreground font-semibold">Billed To</p>
-                    <p className="font-bold text-base">{viewInvoice.customerName}</p>
-                    <p className="text-muted-foreground">{viewInvoice.customerEmail}</p>
+              {viewInvoice && (
+                <div className="space-y-8 text-sm">
+                  <div className="grid grid-cols-2 gap-8 p-6 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-gray-100 dark:border-white/5">
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">Billed To</p>
+                      <p className="font-bold text-lg text-[#1F1F1F] dark:text-[#F9FAFB]">{viewInvoice.customerName}</p>
+                      <p className="text-muted-foreground">{viewInvoice.customerEmail}</p>
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">Reference</p>
+                      <p className="font-bold text-lg text-blue-600 dark:text-blue-400">{viewInvoice.invoiceNumber}</p>
+                      <p className="text-muted-foreground">Order: {viewInvoice.orderId}</p>
+                      <p className="text-muted-foreground">{new Date(viewInvoice.createdAt).toLocaleString()}</p>
+                    </div>
                   </div>
-                  <div className="space-y-1 text-right">
-                    <p className="font-bold text-base text-blue-600 dark:text-blue-400">{viewInvoice.invoiceNumber}</p>
-                    <p className="text-muted-foreground">Order ID: {viewInvoice.orderId}</p>
-                    <p className="text-muted-foreground">Date: {new Date(viewInvoice.createdAt).toLocaleString()}</p>
-                  </div>
-                </div>
 
-                <div className="border rounded-xl overflow-hidden mt-6">
-                  <table className="w-full text-left">
-                    <thead className="bg-gray-50 dark:bg-white/5 text-xs uppercase tracking-wider text-muted-foreground">
-                      <tr>
-                        <th className="px-4 py-3">Item</th>
-                        <th className="px-4 py-3 text-center">Qty</th>
-                        <th className="px-4 py-3 text-right">Price</th>
-                        <th className="px-4 py-3 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                      {viewInvoice.items?.map((item: any, i: number) => (
-                        <tr key={i}>
-                          <td className="px-4 py-3 font-medium">{item.name}</td>
-                          <td className="px-4 py-3 text-center">{item.quantity}</td>
-                          <td className="px-4 py-3 text-right">₹${Number(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="px-4 py-3 text-right">₹${Number(item.subtotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <div className="border border-gray-100 dark:border-white/5 rounded-3xl overflow-hidden shadow-sm">
+                    <table className="w-full text-left">
+                      <thead className="bg-gray-50 dark:bg-white/5 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+                        <tr>
+                          <th className="px-6 py-4">Item</th>
+                          <th className="px-6 py-4 text-center">Qty</th>
+                          <th className="px-6 py-4 text-right">Price</th>
+                          <th className="px-6 py-4 text-right">Amount</th>
                         </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-gray-50 dark:bg-white/5 font-bold">
-                      <tr>
-                        <td colSpan={3} className="px-4 py-3 text-right">Subtotal</td>
-                        <td className="px-4 py-3 text-right">₹${Number(viewInvoice.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      </tr>
-                      <tr>
-                        <td colSpan={3} className="px-4 py-3 text-right">Tax</td>
-                        <td className="px-4 py-3 text-right">₹${Number(viewInvoice.tax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      </tr>
-                      <tr className="text-base text-blue-600 dark:text-blue-400 border-t">
-                        <td colSpan={3} className="px-4 py-4 text-right">Total Amount</td>
-                        <td className="px-4 py-4 text-right">₹${Number(viewInvoice.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mt-6">
-                  <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Payment Method</p>
-                    <p className="font-medium capitalize">{viewInvoice.paymentMethod || 'N/A'}</p>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50 dark:divide-white/5">
+                        {viewInvoice.items?.map((item: any, i: number) => (
+                          <tr key={i}>
+                            <td className="px-6 py-4 font-semibold text-[#1F1F1F] dark:text-[#F9FAFB]">{item.name}</td>
+                            <td className="px-6 py-4 text-center text-[#6B7280]">{item.quantity}</td>
+                            <td className="px-6 py-4 text-right text-[#6B7280]">₹{Number(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="px-6 py-4 text-right font-bold text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(item.subtotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50/30 dark:bg-white/2 font-bold border-t border-gray-100 dark:border-white/5">
+                        <tr>
+                          <td colSpan={3} className="px-6 py-3 text-right text-muted-foreground">Subtotal</td>
+                          <td className="px-6 py-3 text-right text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(viewInvoice.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={3} className="px-6 py-3 text-right text-muted-foreground">Tax</td>
+                          <td className="px-6 py-3 text-right text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(viewInvoice.tax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                        <tr className="text-lg bg-blue-50/50 dark:bg-blue-900/10">
+                          <td colSpan={3} className="px-6 py-5 text-right font-black text-blue-700 dark:text-blue-400">Total Amount</td>
+                          <td className="px-6 py-5 text-right font-black text-blue-700 dark:text-blue-400">₹{Number(viewInvoice.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
-                  <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1">Payment Status</p>
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold uppercase ${String(viewInvoice.paymentStatus).toLowerCase() === 'paid' || String(viewInvoice.paymentStatus).toLowerCase() === 'completed'
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-amber-600 dark:text-amber-400'
-                      }`}>
-                      {viewInvoice.paymentStatus || 'Pending'}
-                    </span>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground mb-1">Payment Method</p>
+                      <p className="font-bold text-[#1F1F1F] dark:text-[#F9FAFB] capitalize">{viewInvoice.paymentMethod || 'N/A'}</p>
+                    </div>
+                    <div className="p-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground mb-1">Payment Status</p>
+                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-black uppercase ${getStatusColor(viewInvoice.paymentStatus)}`}>
+                        {viewInvoice.paymentStatus || 'Pending'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <DialogFooter className="mt-4">
-              <Button type="button" variant="outline" onClick={() => setViewInvoice(null)}>
-                Close
-              </Button>
-              <Button type="button" className="gap-2" onClick={() => window.print()}>
-                <FileText className="w-4 h-4" /> Print Receipt
-              </Button>
-            </DialogFooter>
+              <DialogFooter className="mt-10 gap-3 border-t border-gray-100 dark:border-white/5 pt-6">
+                <Button type="button" variant="ghost" onClick={() => setViewInvoice(null)} className="rounded-xl px-6">
+                  Close
+                </Button>
+                <Button type="button" className="gap-2 bg-[#1F1F1F] hover:bg-[#333] text-white dark:bg-blue-600 dark:hover:bg-blue-700 rounded-xl px-6" onClick={() => window.print()}>
+                  <FileText className="w-4 h-4" /> Print Receipt
+                </Button>
+              </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
+
+        {/* Quote Detail Dialog */}
+        <Dialog open={!!viewQuote} onOpenChange={(open) => {
+          if (!open) {
+            setViewQuote(null);
+            setShowCounterInput(false);
+            setCounterPrice('');
+            setAdminMessage('');
+          }
+        }}>
+           <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-stone-200 sm:max-w-3xl bg-white dark:bg-zinc-950 p-0 pb-4">
+            <div className="p-8">
+              <DialogHeader className="mb-6">
+                <div className="flex items-center justify-between">
+                  <DialogTitle className="flex items-center gap-3 text-3xl font-black text-[#1F1F1F] dark:text-[#F9FAFB]">
+                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-2xl">
+                      <FileText className="h-7 w-7 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    Quotation Details
+                  </DialogTitle>
+                  <span className={`inline-flex items-center rounded-full px-4 py-1.5 text-xs font-black uppercase border ${getStatusColor(viewQuote?.status)}`}>
+                    {viewQuote?.status || 'Pending'}
+                  </span>
+                </div>
+              </DialogHeader>
+
+              {viewQuote && (
+                <div className="space-y-6 text-sm">
+                  {/* Info Grid */}
+                  <div className="grid grid-cols-2 gap-6 p-6 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-gray-100 dark:border-white/5">
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">Prepared For</p>
+                      <p className="font-bold text-lg text-[#1F1F1F] dark:text-[#F9FAFB]">{viewQuote.customerName}</p>
+                      <p className="text-muted-foreground">{viewQuote.customerEmail}</p>
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">Reference</p>
+                      <p className="font-bold text-lg text-amber-600 dark:text-amber-400">{viewQuote.quoteNumber}</p>
+                      <p className="text-muted-foreground">Valid Until: {viewQuote.validUntil ? new Date(viewQuote.validUntil).toLocaleDateString() : 'N/A'}</p>
+                      <p className="text-muted-foreground">{new Date(viewQuote.createdAt).toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {/* Messages */}
+                  {(viewQuote.message || viewQuote.adminMessage) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {viewQuote.message && (
+                        <div className="p-4 bg-blue-50/30 dark:bg-blue-900/10 rounded-2xl border border-blue-100/50 dark:border-blue-900/20">
+                          <div className="flex items-center gap-2 mb-2">
+                            <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Customer Message</span>
+                          </div>
+                          <p className="italic text-[#4B5563] dark:text-gray-300">"{viewQuote.message}"</p>
+                        </div>
+                      )}
+                      {viewQuote.adminMessage && (
+                        <div className="p-4 bg-amber-50/30 dark:bg-amber-900/10 rounded-2xl border border-amber-100/50 dark:border-amber-900/20">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Admin Response</span>
+                          </div>
+                          <p className="italic text-[#4B5563] dark:text-gray-300">"{viewQuote.adminMessage}"</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Products Table */}
+                  <div className="border border-gray-100 dark:border-white/5 rounded-3xl overflow-hidden shadow-sm">
+                    <table className="w-full text-left">
+                      <thead className="bg-gray-50 dark:bg-white/5 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+                        <tr>
+                          <th className="px-6 py-4">Product</th>
+                          <th className="px-6 py-4 text-center">Qty</th>
+                          <th className="px-6 py-4 text-right">Original Price</th>
+                          <th className="px-6 py-4 text-right">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50 dark:divide-white/5">
+                        {viewQuote.products?.map((item: any, i: number) => (
+                          <tr key={i}>
+                            <td className="px-6 py-4 font-semibold text-[#1F1F1F] dark:text-[#F9FAFB]">{item.name}</td>
+                            <td className="px-6 py-4 text-center text-[#6B7280]">{item.quantity}</td>
+                            <td className="px-6 py-4 text-right text-[#6B7280]">₹{Number(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="px-6 py-4 text-right font-bold text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(item.price * item.quantity).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50/30 dark:bg-white/2 font-bold border-t border-gray-100 dark:border-white/5">
+                        <tr className="bg-gray-50/50 dark:bg-white/5">
+                          <td colSpan={3} className="px-6 py-4 text-right text-muted-foreground uppercase tracking-wider text-[10px]">Requested Price</td>
+                          <td className="px-6 py-4 text-right text-blue-600 dark:text-blue-400 font-black text-lg">₹{Number(viewQuote.requestedPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                        {viewQuote.counterPrice && (
+                          <tr className="bg-amber-50/50 dark:bg-amber-900/10">
+                            <td colSpan={3} className="px-6 py-4 text-right text-amber-700 dark:text-amber-400 uppercase tracking-wider text-[10px]">Counter Offer</td>
+                            <td className="px-6 py-4 text-right text-amber-700 dark:text-amber-400 font-black text-lg">₹{Number(viewQuote.counterPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        )}
+                        {viewQuote.finalPrice && (
+                          <tr className="bg-emerald-50/50 dark:bg-emerald-900/10">
+                            <td colSpan={3} className="px-6 py-5 text-right text-emerald-700 dark:text-emerald-400 uppercase tracking-wider text-[10px]">Final Accepted Price</td>
+                            <td className="px-6 py-5 text-right text-emerald-700 dark:text-emerald-400 font-black text-2xl">₹{Number(viewQuote.finalPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        )}
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Bargaining Input (Admin only) */}
+                  <AnimatePresence>
+                    {showCounterInput && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="space-y-4 p-6 bg-amber-50/50 dark:bg-amber-900/10 rounded-3xl border border-amber-200 dark:border-amber-900/30"
+                      >
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">Counter Price (₹)</label>
+                            <input
+                              type="number"
+                              value={counterPrice}
+                              onChange={(e) => setCounterPrice(e.target.value)}
+                              placeholder="Enter your offer..."
+                              className="w-full px-4 py-2.5 rounded-xl border border-amber-200 bg-white dark:bg-zinc-900 dark:border-amber-900/50 focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">Admin Message</label>
+                            <input
+                              type="text"
+                              value={adminMessage}
+                              onChange={(e) => setAdminMessage(e.target.value)}
+                              placeholder="Reason for counter..."
+                              className="w-full px-4 py-2.5 rounded-xl border border-amber-200 bg-white dark:bg-zinc-900 dark:border-amber-900/50 focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" onClick={() => setShowCounterInput(false)} className="rounded-xl">Cancel</Button>
+                          <Button 
+                            className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-6"
+                            onClick={() => handleBargainAction('counter')}
+                            disabled={isSubmitting}
+                          >
+                            {isSubmitting ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                            Send Counter Offer
+                          </Button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+
+              <DialogFooter className="mt-8 flex flex-wrap items-center gap-3 border-t border-gray-100 dark:border-white/5 pt-6">
+                <div className="flex gap-2 mr-auto">
+                  <Button type="button" variant="ghost" onClick={() => setViewQuote(null)} className="rounded-xl px-4">
+                    Close
+                  </Button>
+                  <Button type="button" variant="outline" className="gap-2 rounded-xl border-stone-200 dark:border-white/10" onClick={() => window.print()}>
+                    <FileText className="w-4 h-4" /> Print
+                  </Button>
+                </div>
+
+                {viewQuote && !showCounterInput && (
+                  <div className="flex flex-wrap gap-2">
+                    {/* User Actions */}
+                    {!isAdmin && viewQuote.status === 'countered' && (
+                      <>
+                        <Button 
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-6 gap-2"
+                          onClick={() => handleBargainAction('accept')}
+                          disabled={isSubmitting}
+                        >
+                          <Check className="w-4 h-4" /> Accept Counter
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          className="border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl px-6 gap-2"
+                          onClick={() => handleBargainAction('reject')}
+                          disabled={isSubmitting}
+                        >
+                          <X className="w-4 h-4" /> Reject Counter
+                        </Button>
+                      </>
+                    )}
+
+                    {/* Admin Actions */}
+                    {isAdmin && (
+                      <>
+                        {viewQuote.status === 'pending' && (
+                          <>
+                            <Button 
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-6 gap-2"
+                              onClick={() => handleBargainAction('accept')}
+                              disabled={isSubmitting}
+                            >
+                              <Check className="w-4 h-4" /> Accept Price
+                            </Button>
+                            <Button 
+                              className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-6 gap-2"
+                              onClick={() => setShowCounterInput(true)}
+                              disabled={isSubmitting}
+                            >
+                              <ArrowRight className="w-4 h-4" /> Send Counter
+                            </Button>
+                            <Button 
+                              variant="outline"
+                              className="border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl px-6 gap-2"
+                              onClick={() => handleBargainAction('reject')}
+                              disabled={isSubmitting}
+                            >
+                              <X className="w-4 h-4" /> Reject Quote
+                            </Button>
+                          </>
+                        )}
+                        {viewQuote.status === 'accepted' && (
+                          <Button 
+                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-6 gap-2"
+                            onClick={() => handleBargainAction('convert')}
+                            disabled={isSubmitting}
+                          >
+                            <Receipt className="w-4 h-4" /> Convert to Invoice
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
+
       </div>
     </div>
   );
 }
+

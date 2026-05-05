@@ -1,11 +1,11 @@
 const mongoose = require("mongoose");
 const Order = require("../models/Order");
 
+const { isValidObjectId } = require("../utils/tenantResolver");
+
 const toObjectId = (id) => {
-  if (!id) return null;
-  return mongoose.Types.ObjectId.isValid(id)
-    ? new mongoose.Types.ObjectId(id)
-    : id;
+  if (!isValidObjectId(id)) return null;
+  return new mongoose.Types.ObjectId(String(id));
 };
 
 // @desc    Get customers for logged-in client based on orders
@@ -37,6 +37,9 @@ const getMyCustomers = async (req, res) => {
       ]
     };
 
+    console.log("-----------------------------------------");
+    console.log("role:", req.user?.role, "clientId:", rawClientId, "query:", JSON.stringify(clientMatch));
+    console.log("-----------------------------------------");
     const customers = await Order.aggregate([
       { $match: clientMatch },
       {

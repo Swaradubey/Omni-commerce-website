@@ -1,6 +1,7 @@
 const { validationResult } = require("express-validator");
 const Client = require("../models/Client");
 const User = require("../models/User");
+const { isValidObjectId } = require("../utils/tenantResolver");
 
 function normalizeGst(value) {
   return String(value || "")
@@ -166,6 +167,9 @@ const listClients = async (req, res) => {
 // @access  Private / super_admin
 const deleteClient = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: "Client not found (Invalid ID)" });
+    }
     const client = await Client.findById(req.params.id);
     if (!client) {
       return res.status(404).json({ success: false, message: "Client not found" });

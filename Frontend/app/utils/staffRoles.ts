@@ -27,6 +27,11 @@ export function normalizeRole(role: string | undefined): string {
     .trim()
     .replace(/\s+/g, ' ');
   if (!canonicalWords) return '';
+  
+  if (canonicalWords === 'superadmin' || canonicalWords === 'super admin') {
+    return 'super_admin';
+  }
+  
   return canonicalWords.replace(/\s+/g, '_');
 }
 

@@ -71,23 +71,39 @@ class ApiService {
     
     // Priority for x-client-id:
     // 1. User's own clientId or linkedClientId or assignedClient (works for admins, managers, and assigned customers)
-    // 2. localStorage retail_verse_client_id if guest or unassigned
-    let clientId = 
-      userClientId || 
-      (localStorage.getItem("eco_shop_user") ? JSON.parse(localStorage.getItem("eco_shop_user")!).assignedClient : null) ||
-      (localStorage.getItem("eco_shop_user") ? JSON.parse(localStorage.getItem("eco_shop_user")!).tenantId : null) ||
-      (localStorage.getItem("eco_shop_user") ? JSON.parse(localStorage.getItem("eco_shop_user")!).storeId : null) ||
-      localStorage.getItem("retail_verse_client_id");
+    // 2. localStorage retail_verse_client_id if guest or unassigned (STRICTLY for non-privileged users)
+    let clientId = userClientId;
+
+    if (!clientId) {
+      const storedUser = localStorage.getItem("eco_shop_user");
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        clientId = parsed.assignedClient || parsed.tenantId || parsed.storeId || null;
+      }
+    }
+
+    // Only fallback to storefront-wide client ID for customers/guests, never for admins
+    if (!clientId && !isPrivileged) {
+      clientId = localStorage.getItem("retail_verse_client_id");
+    }
 
     // Clean up clientId to avoid sending "null" or "undefined" as strings
     if (clientId === "null" || clientId === "undefined" || !clientId) {
       clientId = null;
     }
 
+    // Requirement: Do not send x-client-id header for super_admin
+    const normalizedRole = String(userRole || "").toLowerCase().trim().replace(/[_-]/g, " ");
+    const isAdmin = normalizedRole === "admin";
+    const isSuperAdmin = normalizedRole === "super admin" || normalizedRole === "superadmin";
+    
+    const shouldSendClientId = clientId && !isSuperAdmin && !isAdmin && clientId !== "null" && clientId !== "undefined" && clientId !== "all";
+
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(clientId ? { "x-client-id": String(clientId) } : {}),
+      ...(shouldSendClientId ? { "x-client-id": String(clientId) } : {}),
       "x-client-domain": window.location.hostname,
       "x-client-origin": window.location.origin,
       ...(options.headers as Record<string, string> || {}),

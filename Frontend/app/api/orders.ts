@@ -176,7 +176,10 @@ export async function fetchLatestTransactions(params?: {
 }): Promise<{ success: boolean; count?: number; data?: LatestTransactionRow[]; message?: string }> {
   const limit = params?.limit != null && params.limit > 0 ? Math.min(50, params.limit) : undefined;
   const q = limit != null ? `?limit=${limit}` : '';
-  return ApiService.get<LatestTransactionRow[]>(`/orders/dashboard/latest-transactions${q}`);
+
+  return ApiService.get<LatestTransactionRow[]>(
+    `/orders/dashboard/latest-transactions${q}`
+  );
 }
 
 /** Logged-in storefront user: overview KPIs for `/dashboard` (active pipeline + website delivery rate). */

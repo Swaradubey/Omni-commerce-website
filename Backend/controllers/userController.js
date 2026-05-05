@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const { SUPER_ADMIN_EMAIL } = require("../utils/authConstants");
 const { ensureRoleProfilesForUser } = require("../utils/ensureRoleProfiles");
+const { isValidObjectId } = require("../utils/tenantResolver");
 
 /** Roles Super Admin may assign (never `super_admin` via API — use seeded account only). */
 const ASSIGNABLE_ROLES = [
@@ -109,9 +110,9 @@ const listPlatformUsers = async (req, res) => {
       q.role = roleFilter;
     }
 
-    // Requirement 16: Log DB query details
-    console.log(`[UserController] DB Query - Collection: users, Filter: ${JSON.stringify(q)}`);
-
+    console.log("-----------------------------------------");
+    console.log("role:", req.user?.role, "clientId:", clientId, "query:", JSON.stringify(q));
+    console.log("-----------------------------------------");
     const skip = (page - 1) * limit;
     const [users, total] = await Promise.all([
       User.find(q).select("-password").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
@@ -141,7 +142,7 @@ const updateUserRole = async (req, res) => {
     const { id } = req.params;
     const { role } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return res.status(400).json({ success: false, message: "Invalid user id" });
     }
     if (!role || typeof role !== "string") {

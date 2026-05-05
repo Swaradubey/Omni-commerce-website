@@ -5,6 +5,7 @@ const Order = require("../models/Order");
 const Invoice = require("../models/Invoice");
 const ImpersonationAuditLog = require("../models/ImpersonationAuditLog");
 const generateToken = require("../utils/generateToken");
+const { isValidObjectId } = require("../utils/tenantResolver");
 
 function resolveRequestMeta(req) {
   const xf = req.headers["x-forwarded-for"];
@@ -34,7 +35,7 @@ const IMPERSONATABLE_ROLES = new Set([
 const impersonateAdmin = async (req, res) => {
   try {
     const { adminId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(adminId)) {
+    if (!isValidObjectId(adminId)) {
       return res.status(400).json({ success: false, message: "Invalid admin id" });
     }
 
@@ -185,7 +186,7 @@ const getClientSales = async (req, res) => {
       { createdBy: clientId },
     ];
 
-    if (mongoose.Types.ObjectId.isValid(clientId)) {
+    if (isValidObjectId(clientId)) {
       const oid = new mongoose.Types.ObjectId(clientId);
       scopeConditions.push(
         { clientId: oid },
@@ -228,7 +229,7 @@ const getClientInvoices = async (req, res) => {
       { createdBy: clientId },
     ];
 
-    if (mongoose.Types.ObjectId.isValid(clientId)) {
+    if (isValidObjectId(clientId)) {
       const oid = new mongoose.Types.ObjectId(clientId);
       orderScopeConditions.push(
         { clientId: oid },
@@ -280,7 +281,7 @@ const getClientCustomers = async (req, res) => {
       { createdBy: clientId },
     ];
 
-    if (mongoose.Types.ObjectId.isValid(clientId)) {
+    if (isValidObjectId(clientId)) {
       const oid = new mongoose.Types.ObjectId(clientId);
       orderScopeConditions.push(
         { clientId: oid },
@@ -557,7 +558,7 @@ const getInvoiceByOrderId = async (req, res) => {
       ]
     };
 
-    if (mongoose.Types.ObjectId.isValid(orderId)) {
+    if (isValidObjectId(orderId)) {
       orderQuery.$or.push({ _id: orderId });
     }
 

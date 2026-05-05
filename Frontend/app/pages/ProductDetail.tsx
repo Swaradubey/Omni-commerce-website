@@ -2,13 +2,14 @@ import { useParams, Link, useNavigate } from 'react-router';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { products as staticProducts } from '../data/products';
-import { ShoppingCart, Star, Heart, Share2, Truck, Shield, RotateCcw, ChevronLeft } from 'lucide-react';
+import { ShoppingCart, Star, Heart, Share2, Truck, Shield, RotateCcw, ChevronLeft, MessageSquare } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { ProductCard } from '../components/ProductCard';
 import { productApi, Product as DynamicProduct } from '../api/products';
 import { wishlistApi } from '../api/wishlist';
 import { Product as ShopProduct } from '../types/product';
+import { QuoteRequestDialog } from '../components/QuoteRequestDialog';
 import {
   slugifyProductName,
   buildWishlistCheckParams,
@@ -33,8 +34,9 @@ function normalizeShopProductFromApi(p: DynamicProduct): ShopProduct & { _id?: s
     rating: 0,
     reviews: 0,
     featured: false,
-    sku: p.sku
-  } as ShopProduct & { _id?: string };
+    sku: p.sku,
+    clientId: p.clientId || (p.client as any)?._id
+  } as ShopProduct & { _id?: string; clientId?: string };
 }
 
 export function ProductDetail() {
@@ -49,6 +51,7 @@ export function ProductDetail() {
   const [inWishlist, setInWishlist] = useState(false);
   const [wishlistToggling, setWishlistToggling] = useState(false);
   const [wishlistKeySet, setWishlistKeySet] = useState<Set<string>>(() => new Set());
+  const [isQuoteDialogOpen, setIsQuoteDialogOpen] = useState(false);
 
   const wishlistPool = useMemo(
     () => [...staticProducts, ...dynamicProducts] as (ShopProduct & { _id?: string })[],
@@ -361,7 +364,7 @@ export function ProductDetail() {
               </div>
 
               {/* Quantity and Add to Cart */}
-              <div className="flex items-center gap-4 mb-6">
+              <div className="flex items-center gap-4 mb-4">
                 <div className="flex items-center border border-gray-300 rounded-lg">
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -384,6 +387,23 @@ export function ProductDetail() {
                 >
                   <ShoppingCart className="w-5 h-5" />
                   Add to Cart
+                </button>
+              </div>
+
+              {/* Request Quote Button */}
+              <div className="mb-6">
+                <button
+                  onClick={() => {
+                    if (!user) {
+                      toast.error('Please sign in to request a quote');
+                      return;
+                    }
+                    setIsQuoteDialogOpen(true);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 text-white rounded-lg font-semibold hover:bg-amber-600 transition-colors mb-3"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Request Custom Quote
                 </button>
               </div>
 
@@ -463,6 +483,19 @@ export function ProductDetail() {
           </div>
         )}
       </div>
+
+      <QuoteRequestDialog 
+        isOpen={isQuoteDialogOpen} 
+        onClose={() => setIsQuoteDialogOpen(false)}
+        products={[{
+          productId: product._id || product.id,
+          name: product.name,
+          quantity: quantity,
+          price: displayPrice,
+          clientId: (product as any).clientId
+        }]}
+      />
     </div>
   );
 }
+

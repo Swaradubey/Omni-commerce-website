@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { formatDistanceToNow, format } from 'date-fns';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
@@ -335,7 +336,9 @@ export function DashboardRecentActivity({ indianRupee = false }: DashboardRecent
     try {
       const res = await fetchLatestTransactions({ limit: 12 });
       if (res.success && Array.isArray(res.data)) {
-        setRows(res.data);
+        // Robust filtering: skip nulls or items without any identifier
+        const validData = res.data.filter((t: any) => t && (t.orderId || t.id || t._id));
+        setRows(validData);
       } else {
         setRows([]);
         if (!res.success && res.message) {
@@ -355,6 +358,7 @@ export function DashboardRecentActivity({ indianRupee = false }: DashboardRecent
   }, [load]);
 
   const openDetail = useCallback(async (mongoId: string) => {
+    if (!mongoId) return;
     setDetailOpen(true);
     setDetailLoading(true);
     setDetailError(null);
@@ -364,7 +368,15 @@ export function DashboardRecentActivity({ indianRupee = false }: DashboardRecent
       if (res.success && res.data) {
         setDetailOrder(res.data as OrderDetail);
       } else {
-        setDetailError(res.message || 'Could not load order details');
+        const msg = res.message || 'Could not load order details';
+        if (msg === 'Order not found') {
+          // Auto-remove from list if it's truly gone
+          setDetailOpen(false);
+          setRows((prev) => prev.filter((r) => r.id !== mongoId));
+          toast.error('This order no longer exists or is inaccessible.');
+        } else {
+          setDetailError(msg);
+        }
       }
     } catch (e) {
       setDetailError(e instanceof Error ? e.message : 'Failed to load order details');
@@ -427,6 +439,7 @@ export function DashboardRecentActivity({ indianRupee = false }: DashboardRecent
           ) : (
             <div className="space-y-2 sm:space-y-3">
               {rows.map((activity, index) => {
+                if (!activity || !activity.id || !activity.orderId) return null;
                 const emailDisplay = activity.customerEmail?.trim() || '—';
                 const statusLabel = formatStatusLabel(activity.orderStatus);
                 const isPos = (activity.orderSource || '').toLowerCase() === 'pos';

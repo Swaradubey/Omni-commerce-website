@@ -9,7 +9,13 @@ const {
 } = require("../utils/productFieldPermissions");
 const { formatProductWithClient } = require("../utils/formatInventoryProduct");
 const { isClientScopedRole } = require("../utils/clientScopedRoles");
-const { resolveClientId, buildScopeQuery, applyScope, buildProductVisibilityFilter } = require("../utils/tenantResolver");
+const { 
+  resolveClientId, 
+  buildScopeQuery, 
+  applyScope, 
+  buildProductVisibilityFilter,
+  isValidObjectId 
+} = require("../utils/tenantResolver");
 
 function userOwnsClientProduct(user, product) {
   if (!user || !isClientScopedRole(user.role)) return true;
@@ -96,6 +102,9 @@ const getProducts = async (req, res) => {
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : 0; 
     const skip = limit ? (page - 1) * limit : 0;
 
+    console.log("-----------------------------------------");
+    console.log("role:", req.user?.role, "clientId:", (req.query?.clientId || req.headers["x-client-id"]), "query:", JSON.stringify(query));
+    console.log("-----------------------------------------");
     const totalProducts = await Product.countDocuments(query);
 
     let dbQuery = Product.find(query)
@@ -163,6 +172,12 @@ const getProductById = async (req, res) => {
   try {
     const resolvedClientId = await resolveClientId(req);
     const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found (Invalid ID)",
+      });
+    }
     let query = { _id: req.params.id };
     applyScope(query, scopeQuery);
 
@@ -239,7 +254,7 @@ const createProduct = async (req, res) => {
     productData.clientId = targetClientId || null;
 
     // Fetch clientName if possible to persist it for the UI
-    if (targetClientId) {
+    if (isValidObjectId(targetClientId)) {
       const Client = require("../models/Client");
       const client = await Client.findById(targetClientId).select("companyName shopName storeName");
       if (client) {
@@ -293,6 +308,12 @@ const updateProduct = async (req, res) => {
     
     const resolvedClientId = await resolveClientId(req);
     const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found (Invalid ID)",
+      });
+    }
     let query = { _id: req.params.id };
     applyScope(query, scopeQuery);
 
@@ -438,10 +459,10 @@ const updateProduct = async (req, res) => {
         const raw = normalizedPayload.clientId;
         if (raw === null || raw === "") {
           normalizedPayload.clientId = null;
-        } else if (!mongoose.Types.ObjectId.isValid(raw)) {
+        } else if (!isValidObjectId(raw)) {
           return res.status(400).json({ success: false, message: "Invalid client assignment" });
         } else {
-          const c = await Client.findById(raw);
+          const c = await Client.findById(String(raw));
           if (!c) {
             return res.status(400).json({ success: false, message: "Client not found for assignment" });
           }
@@ -492,6 +513,20 @@ const updateProductStock = async (req, res) => {
 
     const resolvedClientId = await resolveClientId(req);
     const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found (Invalid ID)",
+      });
+    }
+
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found (Invalid ID)",
+      });
+    }
     let query = { _id: req.params.id };
     applyScope(query, scopeQuery);
 
@@ -533,6 +568,12 @@ const deleteProduct = async (req, res) => {
   try {
     const resolvedClientId = await resolveClientId(req);
     const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found (Invalid ID)",
+      });
+    }
     let query = { _id: req.params.id };
     applyScope(query, scopeQuery);
 
