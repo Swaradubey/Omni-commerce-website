@@ -6,17 +6,59 @@ const { isValidObjectId, resolveClientId } = require("../utils/tenantResolver");
 // @access  Private (SuperAdmin)
 const getInvoices = async (req, res) => {
   try {
-    const isSuperAdmin = req.user && req.user.role === "super_admin";
+    const role = req.user?.role || req.user?.userRole || req.user?.accountType;
+    const isSuperAdmin = ["superadmin", "super_admin"].includes(String(role).toLowerCase());
     const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
 
     // Requirement 10 & 16: Log data retrieval details
-    console.log(`[invoiceController] getInvoices - Page: Invoices, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+    console.log(`[invoiceController] getInvoices - Page: Invoices, Role: ${role}, ClientId: ${clientId || "global"}`);
 
-    const query = isSuperAdmin ? {} : { clientId };
+    const query = {};
+    if (isSuperAdmin) {
+      query.$or = [
+        { clientId: { $exists: true, $ne: null } },
+        { storeId: { $exists: true, $ne: null } },
+        { tenantId: { $exists: true, $ne: null } }
+      ];
+    } else {
+      query.clientId = clientId;
+    }
+
     console.log("-----------------------------------------");
-    console.log("role:", req.user?.role, "clientId:", clientId, "query:", JSON.stringify(query));
+    console.log("role:", role, "clientId:", clientId, "query:", JSON.stringify(query));
     console.log("-----------------------------------------");
-    const invoices = await Invoice.find(query).sort({ createdAt: -1 });
+    let invoices = await Invoice.find(query).sort({ createdAt: -1 }).lean();
+    const Order = require("../models/Order");
+    const orders = await Order.find(query).sort({ createdAt: -1 }).lean();
+
+    if (!invoices || invoices.length < orders.length) {
+      console.log(`[invoiceController] Found ${invoices?.length || 0} invoices but ${orders.length} orders. Deriving missing invoices...`);
+      
+      const existingOrderIds = new Set((invoices || []).map(inv => inv.orderId));
+      
+      const derivedInvoices = orders
+        .filter(order => !existingOrderIds.has(order.orderId))
+        .map(order => {
+          return {
+            _id: order._id,
+            invoiceNumber: `INV-${order.orderId || order._id.toString().substring(0, 8).toUpperCase()}`,
+            orderId: order.orderId,
+            customerName: order.customerName || (order.shippingAddress && order.shippingAddress.fullName) || "Unknown",
+            customerEmail: order.customerEmail || (order.shippingAddress && order.shippingAddress.email) || "",
+            items: order.items || [],
+            subtotal: order.totalPrice || 0,
+            tax: 0,
+            totalAmount: order.totalPrice || 0,
+            paymentMethod: order.paymentMethod || "N/A",
+            paymentStatus: order.paymentStatus || "pending",
+            orderStatus: order.orderStatus || "placed",
+            createdAt: order.createdAt,
+            clientId: order.clientId,
+          };
+        });
+
+      invoices = [...(invoices || []), ...derivedInvoices].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
 
     res.json({ success: true, count: invoices.length, data: invoices });
   } catch (error) {
@@ -30,16 +72,26 @@ const getInvoices = async (req, res) => {
 // @access  Private (SuperAdmin)
 const getInvoiceById = async (req, res) => {
   try {
-    const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const clientId = req.user?.clientId || req.clientId;
+    const role = req.user?.role || req.user?.userRole || req.user?.accountType;
+    const isSuperAdmin = ["superadmin", "super_admin"].includes(String(role).toLowerCase());
+    const clientId = req.user?.clientId || req.clientId || (await resolveClientId(req));
 
-    console.log(`[invoiceController] getInvoiceById - ID: ${req.params.id}, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+    console.log(`[invoiceController] getInvoiceById - ID: ${req.params.id}, Role: ${role}, ClientId: ${clientId || "global"}`);
 
     if (!isValidObjectId(req.params.id)) {
       return res.status(404).json({ success: false, message: "Invoice not found or access denied (Invalid ID)" });
     }
 
-    const query = isSuperAdmin ? { _id: req.params.id } : { _id: req.params.id, clientId };
+    const query = { _id: req.params.id };
+    if (isSuperAdmin) {
+      query.$or = [
+        { clientId: { $exists: true, $ne: null } },
+        { storeId: { $exists: true, $ne: null } },
+        { tenantId: { $exists: true, $ne: null } }
+      ];
+    } else {
+      query.clientId = clientId;
+    }
     const invoice = await Invoice.findOne(query);
 
     if (!invoice) {

@@ -1355,25 +1355,29 @@ export function Pos() {
       </div>
 
       <Dialog open={paymentModalOpen} onOpenChange={handlePaymentDialogOpenChange}>
-        <DialogContent className="max-w-md rounded-2xl border-black/10 bg-white p-6 sm:max-w-md [&_[data-slot=dialog-close]]:text-gray-500 [&_[data-slot=dialog-close]]:hover:text-[#111111]">
-          <DialogHeader className="text-left">
-            <DialogTitle className="text-xl font-bold text-[#111111]">
-              {modalStep === 'cod-shipping' || modalStep === 'card-shipping'
-                ? 'Shipping address'
-                : modalStep === 'card-payment'
-                  ? 'Card payment'
-                  : 'Payment method'}
-            </DialogTitle>
-            <DialogDescription className="text-sm text-gray-600">
-              {modalStep === 'cod-shipping'
-                ? 'Cash on Delivery — enter the delivery address. Required fields must be completed before placing the order.'
-                : modalStep === 'card-shipping'
-                  ? 'Card payment — enter the delivery address, then continue to card details.'
+        <DialogContent className="max-w-md flex flex-col gap-0 overflow-hidden max-h-[90vh] sm:max-h-[95vh] rounded-2xl border-black/10 bg-white p-0 sm:max-w-md [&_[data-slot=dialog-close]]:text-gray-500 [&_[data-slot=dialog-close]]:hover:text-[#111111] [&_[data-slot=dialog-close]]:top-5 [&_[data-slot=dialog-close]]:right-5">
+          <div className="shrink-0 px-6 pt-6 pb-4 border-b border-black/5 bg-white z-10">
+            <DialogHeader className="text-left pr-6">
+              <DialogTitle className="text-xl font-bold text-[#111111]">
+                {modalStep === 'cod-shipping' || modalStep === 'card-shipping'
+                  ? 'Shipping address'
                   : modalStep === 'card-payment'
-                    ? 'Enter valid card details, then place the order. Only the last four digits and name are stored with the order.'
-                    : 'Choose how the customer will pay, then place the order.'}
-            </DialogDescription>
-          </DialogHeader>
+                    ? 'Card payment'
+                    : 'Payment method'}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-gray-600">
+                {modalStep === 'cod-shipping'
+                  ? 'Cash on Delivery — enter the delivery address. Required fields must be completed before placing the order.'
+                  : modalStep === 'card-shipping'
+                    ? 'Card payment — enter the delivery address, then continue to card details.'
+                    : modalStep === 'card-payment'
+                      ? 'Enter valid card details, then place the order. Only the last four digits and name are stored with the order.'
+                      : 'Choose how the customer will pay, then place the order.'}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 pt-4 pb-8 space-y-4">
 
           <div className="rounded-xl border border-black/10 bg-[#f7f6f2]/80 px-4 py-3">
             <div className="flex items-center justify-between text-sm text-gray-600">
@@ -1403,7 +1407,7 @@ export function Pos() {
           </div>
 
           {modalStep === 'cod-shipping' || modalStep === 'card-shipping' ? (
-            <div className="space-y-3 rounded-xl border border-black/10 bg-white p-4 shadow-sm max-h-[min(60vh,440px)] overflow-y-auto">
+            <div className="space-y-3 rounded-xl border border-black/10 bg-white p-4 shadow-sm">
               <p className="text-xs text-gray-500 leading-relaxed">
                 Payment method:{' '}
                 <span className="font-semibold text-[#111111]">
@@ -1579,7 +1583,7 @@ export function Pos() {
               </div>
             </div>
           ) : modalStep === 'card-payment' ? (
-            <div className="space-y-3 rounded-xl border border-black/10 bg-white p-4 shadow-sm max-h-[min(60vh,440px)] overflow-y-auto">
+            <div className="space-y-3 rounded-xl border border-black/10 bg-white p-4 shadow-sm">
               <p className="text-xs text-gray-500 leading-relaxed">
                 Card details are validated here only. Only the last four digits and name are stored with the order.
               </p>
@@ -1798,8 +1802,10 @@ export function Pos() {
               {paymentValidationMessage}
             </p>
           ) : null}
+          </div>
 
-          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end sm:gap-2">
+          <div className="shrink-0 border-t border-black/5 bg-white px-6 py-4 z-10">
+            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end sm:gap-2">
             <Button
               type="button"
               variant="outline"
@@ -1831,7 +1837,8 @@ export function Pos() {
                     ? 'Confirm Payment'
                     : 'Place Order'}
             </Button>
-          </DialogFooter>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

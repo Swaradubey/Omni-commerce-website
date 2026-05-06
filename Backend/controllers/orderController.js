@@ -945,7 +945,8 @@ const createOrder = async (req, res) => {
           totalAmount: Number(totalPrice),
           paymentMethod: createdOrder.paymentMethod,
           paymentStatus: createdOrder.paymentStatus,
-          orderStatus: createdOrder.orderStatus
+          orderStatus: createdOrder.orderStatus,
+          clientId: createdOrder.clientId
         });
         await invoiceData.save();
         console.log("[BACKEND] Invoice Created Automatically for:", createdOrder.orderId);

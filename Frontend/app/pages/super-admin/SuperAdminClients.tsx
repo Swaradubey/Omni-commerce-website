@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Eye } from 'lucide-react';
+import { Building2, Eye, Calendar, RefreshCw, AlertCircle, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -31,6 +31,27 @@ export function SuperAdminClients() {
   useEffect(() => {
     void loadClients();
   }, [loadClients]);
+
+  const handleUpdateTrial = async (clientId: string, action: 'extend' | 'reset' | 'expire') => {
+    try {
+      const res = await superAdminClientsApi.updateTrial(clientId, action);
+      if (!res.success) {
+        throw new Error(res.message || `Failed to ${action} trial`);
+      }
+      toast.success(`Trial ${action}ed successfully`);
+      void loadClients();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : `Failed to ${action} trial`);
+    }
+  };
+
+  const getDaysLeft = (endDate?: string) => {
+    if (!endDate) return 0;
+    const now = new Date();
+    const end = new Date(endDate);
+    const diff = end.getTime() - now.getTime();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  };
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -80,6 +101,7 @@ export function SuperAdminClients() {
                     <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider">Phone</th>
                     <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider">Email</th>
                     <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider">Created</th>
+                    <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-right">Trial Info</th>
                     <th className="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-right">Actions</th>
                   </tr>
                 </thead>
@@ -117,11 +139,59 @@ export function SuperAdminClients() {
                             : '—'}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <Button asChild variant="outline" size="sm" className="gap-2">
-                            <Link to={`/super-admin/clients/${c._id}`}>
-                              <Eye className="w-4 h-4" /> View Details
-                            </Link>
-                          </Button>
+                          <div className="flex flex-col items-end gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              {c.isTrialExpired ? (
+                                <Badge variant="destructive" className="text-[10px] uppercase font-bold px-1.5 py-0">Expired</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px] uppercase font-bold px-1.5 py-0">Active</Badge>
+                              )}
+                              <span className="text-xs font-bold text-gray-700">
+                                {getDaysLeft(c.trialEndDate)} Days Left
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground font-medium">
+                              Ends: {c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString() : 'N/A'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="flex gap-1">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 w-8 p-0 border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                                onClick={() => handleUpdateTrial(c._id, 'extend')}
+                                title="Extend 7 Days"
+                              >
+                                <Calendar className="w-4 h-4" />
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 w-8 p-0 border-amber-200 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                                onClick={() => handleUpdateTrial(c._id, 'reset')}
+                                title="Reset to 14 Days"
+                              >
+                                <RefreshCw className="w-4 h-4" />
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 w-8 p-0 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                onClick={() => handleUpdateTrial(c._id, 'expire')}
+                                title="Mark as Expired"
+                              >
+                                <AlertCircle className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <Button asChild variant="secondary" size="sm" className="h-8 gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200">
+                              <Link to={`/super-admin/clients/${c._id}`}>
+                                <Eye className="w-4 h-4" />
+                              </Link>
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))

@@ -156,15 +156,115 @@ const stopImpersonation = async (req, res) => {
   }
 };
 
-// @desc    Get all clients
+// @desc    Get all clients (with auto-expiration check)
 // @route   GET /api/superadmin/clients
 // @access  Super Admin only
 const getClients = async (req, res) => {
   try {
+    const now = new Date();
     const clients = await Client.find({}).sort({ createdAt: -1 });
-    res.json({ success: true, count: clients.length, data: clients });
+
+    // Auto-update expiration status
+    const updatedClients = await Promise.all(
+      clients.map(async (client) => {
+        if (!client.isTrialExpired && client.trialEndDate && client.trialEndDate < now) {
+          client.isTrialExpired = true;
+          client.trialStatus = "expired";
+          await client.save();
+        }
+        return client;
+      })
+    );
+
+    res.json({ success: true, count: updatedClients.length, data: updatedClients });
   } catch (error) {
     console.error("[Superadmin] getClients error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get trials summary
+// @route   GET /api/superadmin/trials/summary
+// @access  Super Admin only
+const getTrialSummary = async (req, res) => {
+  try {
+    const now = new Date();
+    const threeDaysFromNow = new Date();
+    threeDaysFromNow.setDate(now.getDate() + 3);
+
+    const clients = await Client.find({});
+
+    const summary = {
+      totalTrialClients: clients.length,
+      activeTrials: 0,
+      expiredTrials: 0,
+      expiringSoon: 0,
+    };
+
+    clients.forEach((client) => {
+      const isExpired = client.isTrialExpired || (client.trialEndDate && client.trialEndDate < now);
+      
+      if (isExpired) {
+        summary.expiredTrials++;
+      } else {
+        summary.activeTrials++;
+        if (client.trialEndDate && client.trialEndDate <= threeDaysFromNow) {
+          summary.expiringSoon++;
+        }
+      }
+    });
+
+    res.json({ success: true, data: summary });
+  } catch (error) {
+    console.error("[Superadmin] getTrialSummary error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update client trial (extend, reset, expire)
+// @route   PATCH /api/superadmin/clients/:id/trial
+// @access  Super Admin only
+const updateClientTrial = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, days } = req.body; // action: 'extend', 'reset', 'expire'
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "Invalid client id" });
+    }
+
+    const client = await Client.findById(id);
+    if (!client) {
+      return res.status(404).json({ success: false, message: "Client not found" });
+    }
+
+    const now = new Date();
+
+    if (action === "extend") {
+      const extendDays = days || 7;
+      const currentEnd = client.trialEndDate && client.trialEndDate > now ? client.trialEndDate : now;
+      client.trialEndDate = new Date(currentEnd.getTime() + extendDays * 24 * 60 * 60 * 1000);
+      client.isTrialExpired = false;
+      client.trialStatus = "active";
+    } else if (action === "reset") {
+      const resetDays = days || 14;
+      client.trialStartDate = now;
+      client.trialEndDate = new Date(now.getTime() + resetDays * 24 * 60 * 60 * 1000);
+      client.isTrialExpired = false;
+      client.trialStatus = "active";
+    } else if (action === "expire") {
+      client.isTrialExpired = true;
+      client.trialStatus = "expired";
+      client.trialEndDate = now;
+    } else {
+      return res.status(400).json({ success: false, message: "Invalid action" });
+    }
+
+    await client.save();
+
+    res.json({ success: true, message: `Trial ${action}ed successfully`, data: client });
+  } catch (error) {
+    console.error("[Superadmin] updateClientTrial error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -513,6 +613,30 @@ const getOverview = async (req, res) => {
       orderCount: c.orderCount
     }));
 
+    // Trial Stats
+    const threeDaysFromNow = new Date();
+    threeDaysFromNow.setDate(now.getDate() + 3);
+
+    const trialClients = await Client.find({});
+    const trialStats = {
+      totalTrialClients: trialClients.length,
+      activeTrials: 0,
+      expiredTrials: 0,
+      expiringSoon: 0,
+    };
+
+    trialClients.forEach((client) => {
+      const isExpired = client.isTrialExpired || (client.trialEndDate && client.trialEndDate < now);
+      if (isExpired) {
+        trialStats.expiredTrials++;
+      } else {
+        trialStats.activeTrials++;
+        if (client.trialEndDate && client.trialEndDate <= threeDaysFromNow) {
+          trialStats.expiringSoon++;
+        }
+      }
+    });
+
     // Debugging logs
     console.log("[SuperAdmin Overview] Total clients count:", await Client.countDocuments());
     console.log("[SuperAdmin Overview] Total orders count:", await Order.countDocuments());
@@ -533,7 +657,8 @@ const getOverview = async (req, res) => {
         totalOrdersThisMonth,
         liveCustomers,
         salesAnalytics,
-        categoryDistribution
+        categoryDistribution,
+        trialStats
       }
     });
   } catch (error) {
@@ -620,4 +745,6 @@ module.exports = {
   getClientCustomers,
   getOverview,
   getInvoiceByOrderId,
+  getTrialSummary,
+  updateClientTrial,
 };

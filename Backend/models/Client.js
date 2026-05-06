@@ -20,6 +20,11 @@ const clientSchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     /** Login user linked to this client (set when Super Admin provisions access). */
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    /** Trial System Fields */
+    trialStartDate: { type: Date, default: null },
+    trialEndDate: { type: Date, default: null },
+    trialStatus: { type: String, enum: ["active", "expired"], default: "active" },
+    isTrialExpired: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

@@ -36,6 +36,8 @@ export interface User {
   /** Present when `role` is `client` — MongoDB Client document id for inventory scope. */
   clientId?: string;
   managerId?: string | null;
+  trialStatus?: string;
+  isTrialExpired?: boolean;
   /** Super Admin impersonation session (JWT includes `impersonatedBy`). */
   impersonation?: ImpersonationInfo;
 }
@@ -90,6 +92,8 @@ function mergeProfileIntoUser(
         : undefined,
     isAdmin: fresh.role === 'admin' || fresh.role === 'super_admin',
     isSuperAdmin: fresh.role === 'super_admin',
+    trialStatus: fresh.trialStatus,
+    isTrialExpired: fresh.isTrialExpired,
     impersonation: fresh.impersonation,
   };
 }

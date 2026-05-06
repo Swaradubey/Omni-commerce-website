@@ -264,6 +264,9 @@ export function ProductDetail() {
     }
   };
 
+  const role = (user as any)?.role || (user as any)?.userRole || (user as any)?.accountType;
+  const canRequestQuote = Boolean(user && ["admin", "client", "superadmin", "super_admin"].includes(String(role).toLowerCase()));
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -391,21 +394,23 @@ export function ProductDetail() {
               </div>
 
               {/* Request Quote Button */}
-              <div className="mb-6">
-                <button
-                  onClick={() => {
-                    if (!user) {
-                      toast.error('Please sign in to request a quote');
-                      return;
-                    }
-                    setIsQuoteDialogOpen(true);
-                  }}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 text-white rounded-lg font-semibold hover:bg-amber-600 transition-colors mb-3"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  Request Custom Quote
-                </button>
-              </div>
+              {canRequestQuote && (
+                <div className="mb-6">
+                  <button
+                    onClick={() => {
+                      if (!user) {
+                        toast.error('Please sign in to request a quote');
+                        return;
+                      }
+                      setIsQuoteDialogOpen(true);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 text-white rounded-lg font-semibold hover:bg-amber-600 transition-colors mb-3"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    Request Custom Quote
+                  </button>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex gap-3 mb-6">

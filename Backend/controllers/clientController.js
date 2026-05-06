@@ -85,6 +85,10 @@ const createClient = async (req, res) => {
       });
     }
 
+    const trialStartDate = new Date();
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialStartDate.getDate() + 14);
+
     const client = await Client.create({
       companyName,
       gst: gstNorm,
@@ -94,6 +98,10 @@ const createClient = async (req, res) => {
       permanentAddress,
       shopName,
       createdBy: req.user._id,
+      trialStartDate,
+      trialEndDate,
+      trialStatus: "active",
+      isTrialExpired: false,
     });
     createdClientId = client._id;
 

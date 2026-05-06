@@ -164,7 +164,7 @@ export function InventoryFilters({
                 Price Range
               </span>
               <div className="flex flex-1 items-center gap-2">
-                <div className="relative flex-1">
+                <div className="relative w-[110px]">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400">₹</span>
                   <input
                     type="number"
@@ -176,7 +176,7 @@ export function InventoryFilters({
                   />
                 </div>
                 <span className="text-slate-400 dark:text-slate-500">—</span>
-                <div className="relative flex-1">
+                <div className="relative w-[110px]">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400">₹</span>
                   <input
                     type="number"

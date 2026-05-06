@@ -350,23 +350,35 @@ const loginUser = async (req, res) => {
       }
 
       console.log(`[Auth] Login OK: ${normalizedEmail} role=${synced.role}`);
+      const loginData = {
+        _id: synced._id,
+        name: synced.name,
+        email: synced.email,
+        role: synced.role,
+        phone: synced.phone || "",
+        address: synced.address || "",
+        clientId: resolvedClientId || null,
+        managerId: synced.managerId || null,
+        lastLoginAt: synced.lastLoginAt,
+        isAdmin: synced.role === "admin" || synced.role === "super_admin",
+        isSuperAdmin: synced.role === "super_admin",
+        token: generateToken(synced._id, synced.email, synced.role),
+      };
+
+      // Add trial info for Admin/Client
+      if (synced.role === "admin" || synced.role === "client") {
+        const Client = require("../models/Client");
+        const client = await Client.findById(resolvedClientId);
+        if (client) {
+          loginData.trialStatus = client.trialStatus;
+          loginData.isTrialExpired = client.isTrialExpired || (client.trialEndDate && client.trialEndDate < new Date());
+        }
+      }
+
       return res.json({
         success: true,
         message: "Login successful",
-        data: {
-          _id: synced._id,
-          name: synced.name,
-          email: synced.email,
-          role: synced.role,
-          phone: synced.phone || "",
-          address: synced.address || "",
-          clientId: resolvedClientId || null,
-          managerId: synced.managerId || null,
-          lastLoginAt: synced.lastLoginAt,
-          isAdmin: synced.role === "admin" || synced.role === "super_admin",
-          isSuperAdmin: synced.role === "super_admin",
-          token: generateToken(synced._id, synced.email, synced.role),
-        },
+        data: loginData,
       });
     }
 

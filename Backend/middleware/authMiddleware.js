@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Employee = require("../models/Employee");
+const Client = require("../models/Client");
 const { touchLastActiveThrottled } = require("../utils/touchLastActive");
 const { ensureRoleProfilesForUser } = require("../utils/ensureRoleProfiles");
 const { isClientScopedRole, normalizeRole } = require("../utils/clientScopedRoles");
@@ -57,6 +58,32 @@ const protect = async (req, res, next) => {
             req.user = await User.findById(decoded.id).select("-password");
           } catch (ensureErr) {
             console.error("[Backend Auth] ensureRoleProfilesForUser:", ensureErr.message);
+          }
+        }
+
+        // Trial System Check for Admin/Client
+        if (req.user.role === "admin" || req.user.role === "client") {
+          if (req.user.clientId) {
+            const client = await Client.findById(req.user.clientId);
+            if (client) {
+              const now = new Date();
+              const isExpired = client.isTrialExpired || (client.trialEndDate && client.trialEndDate < now);
+              
+              if (isExpired) {
+                // Auto-update if not already marked
+                if (!client.isTrialExpired) {
+                  client.isTrialExpired = true;
+                  client.trialStatus = "expired";
+                  await client.save();
+                }
+                
+                return res.status(403).json({
+                  success: false,
+                  message: "Your 14 days trial has expired. Please contact Super Admin.",
+                  trialExpired: true
+                });
+              }
+            }
           }
         }
       }

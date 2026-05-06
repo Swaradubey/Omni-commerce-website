@@ -13,6 +13,10 @@ export type ClientRow = {
   updatedAt?: string;
   createdBy?: { _id: string; name?: string; email?: string } | null;
   userId?: { _id: string; name?: string; email?: string; role?: string } | null;
+  trialStartDate?: string;
+  trialEndDate?: string;
+  trialStatus?: "active" | "expired";
+  isTrialExpired?: boolean;
 };
 
 export type CreateClientBody = {

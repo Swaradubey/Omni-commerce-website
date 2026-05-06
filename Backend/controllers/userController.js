@@ -39,6 +39,18 @@ const getMe = async (req, res) => {
         superAdminEmail: sa?.email || "",
       };
     }
+
+    // Include trial info for Admin/Client
+    if (user.role === "admin" || user.role === "client") {
+      if (user.clientId) {
+        const client = await Client.findById(user.clientId);
+        if (client) {
+          data.trialStatus = client.trialStatus;
+          data.isTrialExpired = client.isTrialExpired || (client.trialEndDate && client.trialEndDate < new Date());
+          data.trialEndDate = client.trialEndDate;
+        }
+      }
+    }
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

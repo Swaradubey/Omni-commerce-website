@@ -65,6 +65,12 @@ export interface AdminAnalyticsData {
   revenueFlow: RevenueFlowPoint[];
   topCategories: TopCategoryPoint[];
   topProducts: TopProductRow[];
+  trialStats?: {
+    totalTrialClients: number;
+    activeTrials: number;
+    expiredTrials: number;
+    expiringSoon: number;
+  };
 }
 
 export interface UserAnalyticsSummary {
@@ -158,7 +164,8 @@ export async function fetchSuperAdminOverview(options?: any): Promise<AdminAnaly
       percent: c.totalSales > 0 ? (c.totalSales / d.salesThisMonth) * 100 : 0,
       color: ['#3b82f6', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#f43f5e'][idx % 7] || '#3b82f6'
     })),
-    topProducts: []
+    topProducts: [],
+    trialStats: d.trialStats,
   };
 
   // Fix percent if salesThisMonth is 0

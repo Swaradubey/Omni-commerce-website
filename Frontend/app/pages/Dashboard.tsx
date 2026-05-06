@@ -24,6 +24,9 @@ import {
   CreditCard,
   Receipt,
   Globe,
+  AlertCircle,
+  RefreshCw,
+  Clock,
 } from 'lucide-react';
 import { useNavigate, useLocation, Outlet, Link, Navigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -369,6 +372,54 @@ export function Dashboard() {
     location.pathname.startsWith('/pos/');
   if (isCashierRole(user?.role) && !cashierAllowedRoute) {
     return <Navigate to="/dashboard/products" replace />;
+  }
+
+  // Trial Expiration Guard
+  if (user?.isTrialExpired && !isSuperAdminRole(user?.role)) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/90 backdrop-blur-md p-6">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden border border-rose-100 dark:border-rose-900/30"
+        >
+          <div className="bg-rose-50 dark:bg-rose-900/20 p-8 flex flex-col items-center text-center">
+            <div className="w-20 h-20 rounded-2xl bg-rose-600 flex items-center justify-center text-white shadow-xl shadow-rose-200 dark:shadow-none mb-6 animate-pulse">
+              <AlertCircle className="w-10 h-10" />
+            </div>
+            <h2 className="text-2xl font-black text-rose-900 dark:text-rose-100 tracking-tight mb-2">Trial Expired</h2>
+            <p className="text-rose-700 dark:text-rose-300 font-medium leading-relaxed">
+              Your 14-day trial has expired. Access to your dashboard and POS has been restricted.
+            </p>
+          </div>
+          <div className="p-8 space-y-6">
+            <div className="bg-gray-50 dark:bg-zinc-800/50 rounded-2xl p-4 border border-gray-100 dark:border-zinc-700">
+              <p className="text-sm text-gray-600 dark:text-gray-400 text-center font-medium">
+                To continue using <span className="text-indigo-600 font-bold">Retail Verse</span>, please contact the Super Admin to extend your trial or upgrade your plan.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <Button 
+                onClick={() => window.location.reload()}
+                className="w-full h-12 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-white rounded-xl font-bold flex items-center justify-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" /> Check Status Again
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={handleLogout}
+                className="w-full h-12 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-xl font-bold"
+              >
+                Sign Out
+              </Button>
+            </div>
+          </div>
+          <div className="bg-gray-50 dark:bg-zinc-800/80 px-8 py-4 text-center border-t border-gray-100 dark:border-zinc-700">
+            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Powered by Retail Verse Platform</p>
+          </div>
+        </motion.div>
+      </div>
+    );
   }
 
   return (
