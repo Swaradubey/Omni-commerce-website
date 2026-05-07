@@ -603,7 +603,78 @@ const deleteProduct = async (req, res) => {
   }
 };
 
+// @desc    Create new review
+// @route   POST /api/products/:id/rating
+// @access  Private
+const createProductReview = async (req, res) => {
+  try {
+    const { rating } = req.body;
 
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a rating between 1 and 5",
+      });
+    }
+
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found (Invalid ID)",
+      });
+    }
+
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    // Initialize fields if missing
+    if (!product.reviews) product.reviews = [];
+    if (product.numReviews === undefined) product.numReviews = 0;
+    if (product.rating === undefined) product.rating = 0;
+
+    const alreadyReviewed = product.reviews.find(
+      (r) => r.userId.toString() === req.user._id.toString()
+    );
+
+    if (alreadyReviewed) {
+      alreadyReviewed.rating = Number(rating);
+      alreadyReviewed.updatedAt = Date.now();
+    } else {
+      const review = {
+        userId: req.user._id,
+        rating: Number(rating),
+      };
+      product.reviews.push(review);
+      product.numReviews = product.reviews.length;
+    }
+
+    // Recalculate average rating
+    product.rating =
+      product.reviews.reduce((acc, item) => item.rating + acc, 0) /
+      product.reviews.length;
+
+    await product.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Rating added successfully",
+      rating: product.rating,
+      numReviews: product.numReviews,
+    });
+  } catch (error) {
+    console.error("CREATE REVIEW ERROR", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error: " + error.message,
+    });
+  }
+};
 
 module.exports = {
   getProducts,
@@ -613,4 +684,5 @@ module.exports = {
   updateProduct,
   updateProductStock,
   deleteProduct,
+  createProductReview,
 };

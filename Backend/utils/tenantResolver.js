@@ -200,13 +200,13 @@ function buildScopeQuery(user, resolvedClientId) {
   }
   
   const role = String(user.role || "").toLowerCase();
-  const isSuperAdmin = role === "super_admin" || role === "superadmin";
+  const isSuperAdmin = role === "super_admin" || role === "superadmin" || role === "super admin";
   const isAdmin = role === "admin";
   const isStaff = isAdmin || require("./clientScopedRoles").isClientScopedRole(user.role);
 
-  // 2. Super Admin: Truly global unless we explicitly want to filter by a valid clientId
+  // 2. Super Admin: Truly global. Analytics requirement: see everything.
   if (isSuperAdmin) {
-    return isValidObjectId(resolvedClientId) ? { clientId: String(resolvedClientId) } : {};
+    return {};
   }
 
   // 3. Admin: User wants admin to see customer orders without requiring clientId.

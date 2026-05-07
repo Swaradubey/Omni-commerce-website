@@ -9,6 +9,7 @@ const {
   updateProduct,
   updateProductStock,
   deleteProduct,
+  createProductReview,
 } = require("../controllers/productController");
 const { protect, allowRoles, optionalProtect } = require("../middleware/authMiddleware");
 const tenantMiddleware = require("../middleware/tenantMiddleware");
@@ -93,5 +94,12 @@ router.delete(
   tenantMiddleware,
   deleteProduct
 );
+
+/**
+ * @route   POST /api/products/:id/rating
+ * @desc    Rate product
+ * @access  Private
+ */
+router.post("/:id/rating", protect, tenantMiddleware, createProductReview);
 
 module.exports = router;

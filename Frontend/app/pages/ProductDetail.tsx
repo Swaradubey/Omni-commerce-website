@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate } from 'react-router';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { products as staticProducts } from '../data/products';
-import { ShoppingCart, Star, Heart, Share2, Truck, Shield, RotateCcw, ChevronLeft, MessageSquare } from 'lucide-react';
+import { ShoppingCart, Star, Heart, Share2, Truck, Shield, RotateCcw, ChevronLeft, MessageSquare, Loader2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { ProductCard } from '../components/ProductCard';
@@ -31,8 +31,8 @@ function normalizeShopProductFromApi(p: DynamicProduct): ShopProduct & { _id?: s
     image: p.image || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=1000&auto=format&fit=crop',
     images: p.image ? [p.image] : [],
     stock: p.stock,
-    rating: 0,
-    reviews: 0,
+    rating: p.rating || 0,
+    reviews: p.numReviews || 0,
     featured: false,
     sku: p.sku,
     clientId: p.clientId || (p.client as any)?._id
@@ -52,6 +52,9 @@ export function ProductDetail() {
   const [wishlistToggling, setWishlistToggling] = useState(false);
   const [wishlistKeySet, setWishlistKeySet] = useState<Set<string>>(() => new Set());
   const [isQuoteDialogOpen, setIsQuoteDialogOpen] = useState(false);
+  const [currentRating, setCurrentRating] = useState<number>(0);
+  const [currentReviews, setCurrentReviews] = useState<number>(0);
+  const [hoverRating, setHoverRating] = useState<number>(0);
 
   const wishlistPool = useMemo(
     () => [...staticProducts, ...dynamicProducts] as (ShopProduct & { _id?: string })[],
@@ -150,6 +153,24 @@ export function ProductDetail() {
     });
   }
 
+  useEffect(() => {
+    if (product) {
+      setCurrentRating(product.rating || 0);
+      setCurrentReviews(product.reviews || 0);
+    }
+  }, [product]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 font-medium">Loading product details...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!product) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -162,6 +183,33 @@ export function ProductDetail() {
       </div>
     );
   }
+
+  const handleRate = async (newRating: number) => {
+    if (!user) {
+      toast.error('Please login to rate this product');
+      return;
+    }
+    
+    // Safety check for ID
+    const productId = product?._id || product?.id;
+    const isMongoId = product?._id || (typeof product?.id === 'string' && product.id.length === 24);
+    
+    if (!isMongoId) {
+       toast.error('Rating is only available for online products');
+       return;
+    }
+
+    try {
+      const res = await productApi.rate(productId!, newRating);
+      if (res.success) {
+        setCurrentRating(res.rating);
+        setCurrentReviews(res.numReviews);
+        toast.success(res.message || 'Rating updated');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to submit rating');
+    }
+  };
 
   const displayPrice = product.salePrice || product.price;
   const hasDiscount = !!product.salePrice;
@@ -318,19 +366,26 @@ export function ProductDetail() {
                 {/* Rating */}
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex items-center gap-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-5 h-5 ${
-                          i < Math.floor(product.rating)
-                            ? 'fill-yellow-400 text-yellow-400'
-                            : 'text-gray-300'
-                        }`}
-                      />
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        onClick={() => handleRate(star)}
+                        onMouseEnter={() => setHoverRating(star)}
+                        onMouseLeave={() => setHoverRating(0)}
+                        className="focus:outline-none transition-transform hover:scale-110"
+                      >
+                        <Star
+                          className={`w-5 h-5 ${
+                            star <= (hoverRating || Math.round(currentRating))
+                              ? 'fill-yellow-400 text-yellow-400'
+                              : 'text-gray-300'
+                          }`}
+                        />
+                      </button>
                     ))}
                   </div>
                   <span className="text-sm text-gray-600">
-                    {product.rating} ({product.reviews} reviews)
+                    {currentRating.toFixed(1)} ({currentReviews} reviews)
                   </span>
                 </div>
               </div>

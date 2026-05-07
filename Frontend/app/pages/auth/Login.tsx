@@ -10,6 +10,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -21,6 +22,12 @@ export function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!acceptTerms) {
+      setError('Please accept Terms of Service and Privacy Policy.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -219,17 +226,26 @@ export function Login() {
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-200" />
             </div>
-            <div className="relative flex justify-center text-xs text-gray-400 bg-gray-50 px-3">
+            <div className="relative flex justify-center text-sm text-gray-400 bg-gray-50 px-3">
               Secured with JWT Authentication
             </div>
           </div>
 
-          <p className="text-center text-xs text-gray-400">
-            By signing in you agree to our{' '}
-            <Link to="/terms-of-service" className="underline cursor-pointer hover:text-gray-600 transition-colors">Terms of Service</Link>
-            {' '}and{' '}
-            <Link to="/privacy-policy" className="underline cursor-pointer hover:text-gray-600 transition-colors">Privacy Policy</Link>.
-          </p>
+          <div className="flex items-start justify-center gap-2 px-2 sm:px-0">
+            <input
+              type="checkbox"
+              id="accept-terms"
+              checked={acceptTerms}
+              onChange={(e) => setAcceptTerms(e.target.checked)}
+              className="mt-0.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500 h-4 w-4 cursor-pointer flex-shrink-0"
+            />
+            <label htmlFor="accept-terms" className="text-sm text-gray-400 cursor-pointer text-left sm:text-center">
+              By signing in you agree to our{' '}
+              <Link to="/terms-of-service" className="underline hover:text-gray-600 transition-colors" onClick={(e) => e.stopPropagation()}>Terms of Service</Link>
+              {' '}and{' '}
+              <Link to="/privacy-policy" className="underline hover:text-gray-600 transition-colors" onClick={(e) => e.stopPropagation()}>Privacy Policy</Link>.
+            </label>
+          </div>
         </div>
       </div>
     </div>

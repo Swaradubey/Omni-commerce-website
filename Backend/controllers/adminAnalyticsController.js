@@ -84,14 +84,16 @@ async function conversionRateForWindow(start, end, scopeQuery) {
 }
 
 async function orderTotalsForWindow(start, end, scopeQuery) {
-  // Only include paid or POS orders for revenue as per requirement "only paid/completed"
+  // Requirement: Use real orders (paid/placed/POS)
   const match = {
     createdAt: { $gte: start, $lt: end },
     $or: [
       { isPaid: true },
       { orderSource: "pos" },
       { paymentStatus: { $in: ["paid", "completed", "success"] } },
-      { orderStatus: { $in: ["delivered", "completed", "shipped"] } }
+      { "payment.status": { $in: ["paid", "completed", "success"] } },
+      { orderStatus: { $in: ["delivered", "completed", "shipped", "confirmed", "packed", "out_for_delivery"] } },
+      { status: { $in: ["delivered", "completed", "shipped", "confirmed", "packed", "out_for_delivery"] } }
     ]
   };
   applyScope(match, scopeQuery);
@@ -225,14 +227,25 @@ async function activeOrderingCustomersCountForWindow(start, end, scopeQuery) {
  * total revenue from valid orders / count of distinct paying identities (user id or normalized guest email on orders).
  */
 async function customerLifetimeValueAllTime(scopeQuery) {
-  const match = {};
+  // Requirement: CLV based on customer order totals for valid orders
+  const match = {
+    $or: [
+      { isPaid: true },
+      { orderSource: "pos" },
+      { paymentStatus: { $in: ["paid", "completed", "success"] } },
+      { "payment.status": { $in: ["paid", "completed", "success"] } },
+      { orderStatus: { $in: ["delivered", "completed", "shipped"] } },
+      { status: { $in: ["delivered", "completed", "shipped"] } }
+    ]
+  };
   applyScope(match, scopeQuery);
+  
   const [revAgg] = await Order.aggregate([
     { $match: match },
     {
       $group: {
         _id: null,
-        revenue: { $sum: { $ifNull: ["$totalPrice", 0] } },
+        revenue: { $sum: { $ifNull: ["$totalPrice", { $ifNull: ["$totalAmount", { $ifNull: ["$grandTotal", { $ifNull: ["$amount", 0] }] }] }] } },
       },
     },
   ]);
@@ -367,7 +380,7 @@ async function revenueFlowLast7Days(scopeQuery) {
       {
         $group: {
           _id: null,
-          sales: { $sum: { $ifNull: ["$totalPrice", 0] } },
+          sales: { $sum: { $ifNull: ["$totalPrice", { $ifNull: ["$totalAmount", { $ifNull: ["$grandTotal", { $ifNull: ["$amount", 0] }] }] }] } },
           orders: { $sum: 1 },
         },
       },
@@ -391,7 +404,17 @@ const PIE_COLORS = ["#3b82f6", "#ec4899", "#10b981", "#f59e0b", "#8b5cf6", "#06b
  * Orders without resolvable category bucket as "Uncategorized".
  */
 async function topCategoriesForWindow(start, end, scopeQuery, limit = 8) {
-  const match = { createdAt: { $gte: start, $lt: end } };
+  const match = { 
+    createdAt: { $gte: start, $lt: end },
+    $or: [
+      { isPaid: true },
+      { orderSource: "pos" },
+      { paymentStatus: { $in: ["paid", "completed", "success"] } },
+      { "payment.status": { $in: ["paid", "completed", "success"] } },
+      { orderStatus: { $in: ["delivered", "completed", "shipped"] } },
+      { status: { $in: ["delivered", "completed", "shipped"] } }
+    ]
+  };
   applyScope(match, scopeQuery);
   const rows = await Order.aggregate([
     { $match: match },
@@ -489,7 +512,17 @@ async function topProductsForWindow(start, end, scopeQuery, limit = 3) {
   const prevEnd = start;
 
   const productLineStages = (windowStart, windowEnd) => {
-    const match = { createdAt: { $gte: windowStart, $lt: windowEnd } };
+    const match = { 
+      createdAt: { $gte: windowStart, $lt: windowEnd },
+      $or: [
+        { isPaid: true },
+        { orderSource: "pos" },
+        { paymentStatus: { $in: ["paid", "completed", "success"] } },
+        { "payment.status": { $in: ["paid", "completed", "success"] } },
+        { orderStatus: { $in: ["delivered", "completed", "shipped"] } },
+        { status: { $in: ["delivered", "completed", "shipped"] } }
+      ]
+    };
     applyScope(match, scopeQuery);
     return [
       { $match: match },
@@ -582,21 +615,20 @@ async function topProductsForWindow(start, end, scopeQuery, limit = 3) {
 const getAdminAnalytics = async (req, res) => {
   try {
     const userId = req.user?._id;
-    const userRole = req.user?.role;
+    const userRole = String(req.user?.role || "");
+    const isSuperAdmin = userRole.toLowerCase() === "super_admin" || userRole.toLowerCase() === "superadmin" || userRole.toLowerCase() === "super admin";
+    
     const resolvedClientId = await resolveTenant(req);
-    const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+    // If Super Admin, bypass scopeQuery to aggregate all clients
+    const scopeQuery = isSuperAdmin ? {} : buildScopeQuery(req.user, resolvedClientId);
 
     console.log("[Analytics] Request context:", {
       origin: req.headers.origin,
-      referer: req.headers.referer,
-      xClientOrigin: req.headers["x-client-origin"],
       userRole,
-      userId,
+      isSuperAdmin,
       resolvedClientId,
       scopeQuery
     });
-
-    const isSuperAdmin = userRole === "super_admin";
 
     // Get total orders for debug log
     const debugQuery = Object.keys(scopeQuery).length > 0 ? scopeQuery : {};

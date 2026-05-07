@@ -282,7 +282,7 @@ export function Dashboard() {
       );
     }
     if (normalizeRole(user?.role) === 'admin') {
-      if (item.title === 'Orders' || item.title === 'Track Order') {
+      if (item.title === 'Orders' || item.title === 'Track Order' || item.title === 'Customers') {
         return false;
       }
     }

@@ -23,6 +23,7 @@ export interface Product {
   isOnSale?: boolean;
   salePercentage?: number;
   rating?: number;
+  numReviews?: number;
   status?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -64,6 +65,10 @@ export const productApi = {
   
   delete: (id: string) => {
     return ApiService.delete(`/api/products/${id}`);
+  },
+  
+  rate: (id: string, rating: number) => {
+    return ApiService.post(`/api/products/${id}/rating`, { rating });
   },
 };
 
