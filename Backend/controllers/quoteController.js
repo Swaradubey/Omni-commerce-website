@@ -87,7 +87,7 @@ const getQuoteById = async (req, res) => {
 // @access  Private
 const createQuote = async (req, res) => {
   try {
-    const { products, originalTotal, requestedPrice, message } = req.body;
+    const { products, originalTotal, requestedPrice, message, userId, customerName, customerEmail } = req.body;
     
     // Improved clientId resolution: Body -> Headers -> User Context -> Tenant Resolver -> TenantId
     let clientId = req.body.clientId || req.headers["x-client-id"] || req.user?.clientId || req.clientId || req.tenantId;
@@ -113,12 +113,14 @@ const createQuote = async (req, res) => {
       return res.status(400).json({ success: false, message: "Client ID is required for quote request" });
     }
 
+    const isAdmin = req.user && (req.user.role === "admin" || req.user.role === "super_admin" || req.user.role === "client");
+
     const quote = await Quote.create({
       quoteNumber: generateQuoteNumber(),
-      userId: req.user._id,
+      userId: (isAdmin && userId) ? userId : req.user._id,
       clientId,
-      customerName: req.user.name || req.user.email,
-      customerEmail: req.user.email,
+      customerName: (isAdmin && customerName) ? customerName : (req.user.name || req.user.email),
+      customerEmail: (isAdmin && customerEmail) ? customerEmail : req.user.email,
       products,
       originalTotal,
       requestedPrice,

@@ -1,5 +1,6 @@
 const CustomDomain = require("../models/CustomDomain");
 const mongoose = require("mongoose");
+const { normalizeRole, isClientScopedRole } = require("./clientScopedRoles");
 
 /**
  * Validates if a string is a valid MongoDB ObjectId.
@@ -67,6 +68,19 @@ async function resolveClientId(req) {
     return String(uClientId);
   }
 
+  // Fallback for Store Managers/Employees: check Employee model
+  if (user?.id || user?._id) {
+    try {
+      const Employee = require("../models/Employee");
+      const emp = await Employee.findOne({ userId: user.id || user._id }).select("clientId");
+      if (emp && isValidObjectId(emp.clientId)) {
+        return String(emp.clientId);
+      }
+    } catch (err) {
+      console.error(`[TenantResolver] Employee lookup error: ${err.message}`);
+    }
+  }
+
   // Priority 3: Body or Query (Super Admin/Admin selection)
   const queryId = req.query?.clientId || req.body?.clientId;
   if (isValidObjectId(queryId)) {
@@ -82,11 +96,11 @@ async function resolveClientId(req) {
   // Priority 5: Domain-based lookup
   // SKIP domain lookup for privileged roles if they haven't been assigned a specific client yet.
   // This ensures Global Admins see the same data (everything) on custom domains as they do on Vercel/Localhost.
-  const role = user?.role;
-  const isPrivileged = role === "super_admin" || role === "admin" || role === "superadmin";
+  const userRole = normalizeRole(user?.role);
+  const isPrivileged = userRole === "super_admin" || userRole === "admin";
 
   if (isPrivileged) {
-    console.log(`[TenantResolver] Skipping domain resolution for privileged role: ${role}`);
+    console.log(`[TenantResolver] Skipping domain resolution for privileged role: ${userRole}`);
     return null;
   }
 
@@ -158,35 +172,63 @@ async function resolveClientId(req) {
 async function buildProductVisibilityFilter(req) {
   const user = req.user;
   const resolvedClientId = await resolveClientId(req);
-  const role = user?.role;
+  const userRole = normalizeRole(user?.role || req?.user?.role);
 
   // Debug logs
-  console.log("Product API:", req.originalUrl);
-  console.log("Role:", role);
+  console.log("-----------------------------------------");
+  console.log("Product API Scope Check:", req.originalUrl);
+  console.log("User Role (Normalized):", userRole);
   console.log("Resolved clientId:", resolvedClientId);
 
-  if (role === "super_admin" || role === "super-admin" || role === "superadmin") {
-    const filter = {};
-    console.log("Product filter (Super Admin):", filter);
+  // 1. Super Admin: Truly global by default
+  if (userRole === "super_admin") {
+    // Only scope if Admin explicitly selected a client via query param
+    const explicitClientId = req.query?.clientId || req.body?.clientId;
+    const filter = isValidObjectId(explicitClientId)
+      ? { clientId: new mongoose.Types.ObjectId(String(explicitClientId)) }
+      : {};
+    console.log("Product filter (Super Admin):", JSON.stringify(filter));
     return filter;
   }
 
-  if (role === "admin") {
-    const filter = {};
-    console.log("Product filter (Admin):", filter);
+  // 2. Admin: Global privileged role — sees ALL products exactly like Super Admin.
+  // Admin must NOT be scoped by their user.clientId or any resolved tenant clientId.
+  // Only an explicit ?clientId= query param (admin intentionally filtering) scopes results.
+  if (userRole === "admin") {
+    const explicitClientId = req.query?.clientId || req.body?.clientId;
+    const filter = isValidObjectId(explicitClientId)
+      ? { clientId: new mongoose.Types.ObjectId(String(explicitClientId)) }
+      : {};
+    console.log("Product filter (Admin — global, same as Super Admin):", JSON.stringify(filter));
     return filter;
   }
 
-  if (role === "client") {
-    const target = resolvedClientId || user.clientId || user._id;
-    const filter = isValidObjectId(target) ? { clientId: String(target) } : {};
-    console.log("Product filter:", filter);
+  // 3. Client-scoped roles (SEO Manager, Store Manager, Employee, etc.)
+  if (isClientScopedRole(userRole)) {
+    const target = resolvedClientId || user?.clientId;
+    const orConditions = [];
+
+    if (isValidObjectId(target)) {
+      orConditions.push({ clientId: new mongoose.Types.ObjectId(String(target)) });
+    }
+
+    // Client-scoped roles also see global products in this system
+    orConditions.push({ clientId: null });
+    orConditions.push({ clientId: { $exists: false } });
+
+    // Include products created by them
+    if (user?._id) {
+      orConditions.push({ createdBy: new mongoose.Types.ObjectId(String(user._id)) });
+    }
+
+    const filter = orConditions.length > 0 ? { $or: orConditions } : { _id: null };
+    console.log(`Product filter (${userRole}):`, JSON.stringify(filter));
     return filter;
   }
 
-  // For users/customers and public storefront
-  const filter = isValidObjectId(resolvedClientId) ? { clientId: String(resolvedClientId) } : {};
-  console.log("Product filter:", filter);
+  // 4. For public storefront or users/customers
+  const filter = isValidObjectId(resolvedClientId) ? { clientId: new mongoose.Types.ObjectId(String(resolvedClientId)) } : {};
+  console.log("Product filter (Public/Customer):", JSON.stringify(filter));
   return filter;
 }
 
@@ -196,23 +238,29 @@ async function buildProductVisibilityFilter(req) {
 function buildScopeQuery(user, resolvedClientId) {
   // 1. Public visitor / Guest checkout: Scope to domain clientId if present
   if (!user) {
-    return isValidObjectId(resolvedClientId) ? { clientId: String(resolvedClientId) } : {};
+    if (isValidObjectId(resolvedClientId)) {
+      return { clientId: new mongoose.Types.ObjectId(String(resolvedClientId)) };
+    }
+    return {};
   }
   
-  const role = String(user.role || "").toLowerCase();
-  const isSuperAdmin = role === "super_admin" || role === "superadmin" || role === "super admin";
+  const role = normalizeRole(user.role);
+  const isSuperAdmin = role === "super_admin";
   const isAdmin = role === "admin";
-  const isStaff = isAdmin || require("./clientScopedRoles").isClientScopedRole(user.role);
+  const isStaff = isAdmin || isClientScopedRole(role);
 
   // 2. Super Admin: Truly global. Analytics requirement: see everything.
   if (isSuperAdmin) {
     return {};
   }
 
-  // 3. Admin: User wants admin to see customer orders without requiring clientId.
-  // We'll treat them as global for now, but allow filtering if clientId is provided.
+  // 3. Admin: Global privileged role — same as Super Admin, sees everything.
+  // Only scope if clientId is explicitly provided (admin choosing to filter).
   if (isAdmin) {
-    return isValidObjectId(resolvedClientId) ? { clientId: String(resolvedClientId) } : {};
+    if (isValidObjectId(resolvedClientId)) {
+      return { clientId: new mongoose.Types.ObjectId(String(resolvedClientId)) };
+    }
+    return {};
   }
 
   // 4. Handle Customer / User (Non-staff)
@@ -225,7 +273,8 @@ function buildScopeQuery(user, resolvedClientId) {
     // Fallback if no user id (should not happen with protect)
     const targetClientId = resolvedClientId || user.clientId || user.linkedClientId;
     if (isValidObjectId(targetClientId)) {
-      return { $or: [{ clientId: String(targetClientId) }, { clientId: null }, { clientId: { $exists: false } }] };
+      const cId = new mongoose.Types.ObjectId(String(targetClientId));
+      return { $or: [{ clientId: cId }, { clientId: null }, { clientId: { $exists: false } }] };
     }
     return { _id: null }; // Return nothing if we can't identify the user
   }
@@ -233,13 +282,20 @@ function buildScopeQuery(user, resolvedClientId) {
   // 5. Client / Staff / Vendor
   const orConditions = [];
   const uId = user._id || user.id;
-  const sId = isValidObjectId(uId) ? String(uId) : null;
+  const sIdStr = isValidObjectId(uId) ? String(uId) : null;
 
-  if (isValidObjectId(resolvedClientId)) orConditions.push({ clientId: String(resolvedClientId) });
-  if (isValidObjectId(user.clientId)) orConditions.push({ clientId: String(user.clientId) });
-  if (isValidObjectId(user.linkedClientId)) orConditions.push({ clientId: String(user.linkedClientId) });
+  if (isValidObjectId(resolvedClientId)) {
+    orConditions.push({ clientId: new mongoose.Types.ObjectId(String(resolvedClientId)) });
+  }
+  if (isValidObjectId(user.clientId)) {
+    orConditions.push({ clientId: new mongoose.Types.ObjectId(String(user.clientId)) });
+  }
+  if (isValidObjectId(user.linkedClientId)) {
+    orConditions.push({ clientId: new mongoose.Types.ObjectId(String(user.linkedClientId)) });
+  }
 
-  if (sId) {
+  if (sIdStr) {
+    const sId = new mongoose.Types.ObjectId(sIdStr);
     orConditions.push({ clientId: sId });
     orConditions.push({ createdBy: sId });
   }
@@ -248,7 +304,18 @@ function buildScopeQuery(user, resolvedClientId) {
   orConditions.push({ clientId: { $exists: false } });
 
   const uniqueOr = Array.from(new Set(orConditions.map(c => JSON.stringify(c)))).map(s => JSON.parse(s));
-  return uniqueOr.length > 0 ? { $or: uniqueOr } : {};
+  // Convert back to ObjectIds after JSON parsing (JSON.stringify loses ObjectId type)
+  const finalOr = uniqueOr.map(cond => {
+    if (cond.clientId && typeof cond.clientId === 'string' && isValidObjectId(cond.clientId)) {
+      cond.clientId = new mongoose.Types.ObjectId(cond.clientId);
+    }
+    if (cond.createdBy && typeof cond.createdBy === 'string' && isValidObjectId(cond.createdBy)) {
+      cond.createdBy = new mongoose.Types.ObjectId(cond.createdBy);
+    }
+    return cond;
+  });
+
+  return finalOr.length > 0 ? { $or: finalOr } : {};
 }
 
 /**

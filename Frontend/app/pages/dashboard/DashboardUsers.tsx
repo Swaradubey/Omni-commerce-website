@@ -9,6 +9,7 @@ import { userApi, type PlatformUserRow } from '../../api/user';
 import { superadminApi } from '../../api/superadmin';
 import { useAuth, IMPERSONATION_SUPER_TOKEN_BACKUP_KEY } from '../../context/AuthContext';
 import { getRoleOpenPanelConfig, roleDisplayName } from '../../utils/roleOpenPanelConfig';
+import { isSuperAdminRole } from '../../utils/staffRoles';
 import { toast } from 'sonner';
 
 const ASSIGNABLE_ROLES = [
@@ -22,11 +23,12 @@ const ASSIGNABLE_ROLES = [
   'client',
   'store_manager',
   'employee',
+  'counter_manager',
 ] as const;
 
 export function DashboardUsers() {
   const navigate = useNavigate();
-  const { refreshSession } = useAuth();
+  const { user, refreshSession } = useAuth();
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -224,10 +226,30 @@ export function DashboardUsers() {
                   users.map((u) => {
                     const id = u._id;
                     const current = pendingRole[id] ?? u.role;
-                    const roleOptions =
-                      u.role === 'super_admin'
-                        ? (['super_admin'] as const)
-                        : [...new Set([u.role, ...ASSIGNABLE_ROLES])];
+                    const isSA = isSuperAdminRole(user?.role);
+                    const ADMIN_ALLOWED_ROLES = ['seo_manager', 'counter_manager', 'store_manager', 'inventory_manager', 'user'];
+                    
+                    let roleOptions: string[] = [];
+                    if (u.role === 'super_admin') {
+                      roleOptions = ['super_admin'];
+                    } else if (!isSA) {
+                      // Tenant Admins (Admin, Client, etc.)
+                      if (u.role === 'admin' || u.role === 'super_admin') {
+                        roleOptions = [u.role];
+                      } else {
+                        // Admin can only see and assign specific roles
+                        roleOptions = ADMIN_ALLOWED_ROLES;
+                        if (!ADMIN_ALLOWED_ROLES.includes(u.role)) {
+                          roleOptions = [u.role, ...ADMIN_ALLOWED_ROLES];
+                        }
+                      }
+                      // Filter out admin and super_admin from options if the current user is not Super Admin
+                      roleOptions = roleOptions.filter(r => r === u.role || (r !== 'admin' && r !== 'super_admin'));
+                    } else {
+                      // Super Admin can assign all roles
+                      roleOptions = [...new Set([u.role, ...ASSIGNABLE_ROLES])];
+                    }
+
                     const panelCfg = getRoleOpenPanelConfig(u.role);
                     return (
                       <tr
@@ -240,18 +262,18 @@ export function DashboardUsers() {
                           <select
                             className="rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm"
                             value={current}
-                            disabled={u.role === 'super_admin'}
+                            disabled={u.role === 'super_admin' || (!isSA && u.role === 'admin')}
                             onChange={(e) => setPendingRole((prev) => ({ ...prev, [id]: e.target.value }))}
                           >
                             {roleOptions.map((r) => (
                               <option key={r} value={r}>
-                                {r}
+                                {roleDisplayName(r)}
                               </option>
                             ))}
                           </select>
                         </td>
                         <td className="px-4 py-3">
-                          {panelCfg ? (
+                          {isSuperAdminRole(user?.role) && panelCfg ? (
                             <Button
                               type="button"
                               size="sm"

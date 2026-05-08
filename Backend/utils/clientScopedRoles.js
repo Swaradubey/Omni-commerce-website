@@ -2,6 +2,8 @@
 const CLIENT_SCOPED_ROLES = new Set([
   "client",
   "client_admin",
+  // NOTE: "admin" is intentionally NOT here — Admin is a global privileged role
+  // (same as super_admin) and must NOT be scoped to a single client/tenant.
   "store_manager",
   "employee",
   "staff",

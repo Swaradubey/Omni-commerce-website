@@ -7,8 +7,10 @@ const { resolveStaffClientId, canAccessStaffRecord } = require("../utils/staffAc
 const { isValidObjectId } = require("../utils/tenantResolver");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const EMPLOYEE_MANAGED_ROLES = new Set(["employee", "staff", "seo_manager", "store_manager", "inventory_manager", "counter_manager"]);
-const EMPLOYEE_MANAGED_ROLES_ARRAY = ["employee", "staff", "seo_manager", "store_manager", "inventory_manager", "counter_manager"];
+const EMPLOYEE_MANAGED_ROLES = new Set(["employee", "staff", "seo_manager", "store_manager", "inventory_manager", "counter_manager", "user"]);
+const EMPLOYEE_MANAGED_ROLES_ARRAY = ["employee", "staff", "seo_manager", "store_manager", "inventory_manager", "counter_manager", "user"];
+// Roles that Admin (not Super Admin) is allowed to assign
+const ADMIN_CREATABLE_ROLES = new Set(["seo_manager", "store_manager", "counter_manager", "inventory_manager", "user"]);
 
 function normalizeEmployeeRole(rawRole) {
   const normalized = String(rawRole || "employee")
@@ -138,7 +140,7 @@ const createEmployee = async (req, res) => {
   if (!targetRole) {
     return res.status(400).json({
       success: false,
-      message: "Role must be one of: employee, staff, seo_manager, store_manager, inventory_manager, counter_manager",
+      message: "Role must be one of: employee, staff, seo_manager, store_manager, inventory_manager, counter_manager, user",
     });
   }
 
@@ -160,10 +162,11 @@ const createEmployee = async (req, res) => {
       });
     }
   } else if (req.user.role === "admin") {
-    if (!CLIENT_CREATABLE.has(targetRole)) {
+    // Admin can only assign these 5 roles — cannot create admin or super_admin
+    if (!ADMIN_CREATABLE_ROLES.has(targetRole)) {
       return res.status(403).json({
         success: false,
-        message: "Admin accounts can only create: employee, staff, seo_manager, store_manager, inventory_manager, counter_manager",
+        message: "Admin accounts can only create: SEO Manager, Store Manager, Counter Manager, Inventory Manager, or User roles.",
       });
     }
   } else if (req.user.role !== "super_admin") {
@@ -183,13 +186,23 @@ const createEmployee = async (req, res) => {
     });
   }
 
-  if (!isValidObjectId(ctx.clientId)) {
-    return res.status(400).json({ success: false, message: "Invalid client ID scope" });
+  // For "user" role created by admin, clientId is still required for tenant scoping.
+  // However, if admin has no clientId linked, provide a clear 400 error instead of 500.
+  if (!ctx.clientId || !isValidObjectId(ctx.clientId)) {
+    console.error("[Employees] createEmployee - invalid or missing clientId:", {
+      ctxClientId: ctx.clientId,
+      userRole: req.user?.role,
+      userClientId: req.user?.clientId,
+    });
+    return res.status(400).json({
+      success: false,
+      message: "Cannot create employee: your admin account is not linked to a client organization. Please contact Super Admin.",
+    });
   }
   const clientOid = new mongoose.Types.ObjectId(String(ctx.clientId));
   const clientExists = await Client.exists({ _id: clientOid });
   if (!clientExists) {
-    return res.status(404).json({ success: false, message: "Client not found" });
+    return res.status(404).json({ success: false, message: "Client organization not found. Please contact Super Admin." });
   }
   const shopFromClient = await loadClientShopName(clientOid);
   const shopName = shopNameBody || shopFromClient;
@@ -224,6 +237,8 @@ const createEmployee = async (req, res) => {
       role: targetRole,
       clientId: clientOid,
     };
+    if (phone) userPayload.phone = phone;
+    if (address) userPayload.address = address;
     if (mgr.managerUserId) {
       userPayload.managerId = mgr.managerUserId;
     }
@@ -231,11 +246,21 @@ const createEmployee = async (req, res) => {
     createdUserId = user._id;
     const userId = user._id;
 
+    // For "user" role — only create a User record (no Employee doc needed).
+    // For all other staff roles — also create an Employee record for staff management.
+    if (targetRole === "user") {
+      return res.status(201).json({
+        success: true,
+        message: "User created successfully",
+        data: { ...user.toObject(), password: undefined },
+      });
+    }
+
     const doc = await Employee.create({
       name,
       email,
-      phone,
-      address,
+      phone: phone || "",
+      address: address || "",
       role: targetRole,
       clientId: clientOid,
       managerId: mgr.managerId || undefined,

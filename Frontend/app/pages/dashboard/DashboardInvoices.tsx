@@ -16,7 +16,9 @@ import {
   X,
   ArrowRight,
   MessageSquare,
+  CreditCard,
 } from 'lucide-react';
+import { createRazorpayOrder, verifyRazorpayPayment } from '../../api/orders';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import {
@@ -29,11 +31,17 @@ import {
 import ApiService from '../../api/apiService';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
+import { useCart } from '../../context/CartContext';
+import { QuoteRequestDialog } from '../../components/QuoteRequestDialog';
+import { CreateQuoteModal } from '../../components/CreateQuoteModal';
+import { useNavigate } from 'react-router';
 
 type TabType = 'invoices' | 'quotes';
 
 export function DashboardInvoices() {
   const { user } = useAuth();
+  const { cart } = useCart();
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [quotes, setQuotes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,12 +50,97 @@ export function DashboardInvoices() {
   const [activeTab, setActiveTab] = useState<TabType>('invoices');
   const [viewInvoice, setViewInvoice] = useState<any | null>(null);
   const [viewQuote, setViewQuote] = useState<any | null>(null);
+  const [isQuoteRequestOpen, setIsQuoteRequestOpen] = useState(false);
+  const [isCreateQuoteOpen, setIsCreateQuoteOpen] = useState(false);
 
   // Bargaining states
   const [counterPrice, setCounterPrice] = useState<string>('');
   const [adminMessage, setAdminMessage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCounterInput, setShowCounterInput] = useState(false);
+  const [isRazorpayLoading, setIsRazorpayLoading] = useState(false);
+
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if ((window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const handlePayment = async () => {
+    if (!viewQuote) return;
+    setIsRazorpayLoading(true);
+    try {
+      const amount = viewQuote.finalPrice || viewQuote.requestedPrice;
+      
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        toast.error('Razorpay SDK failed to load. Are you online?');
+        return;
+      }
+
+      const rzpOrder = await createRazorpayOrder(amount);
+      if (!rzpOrder.success) {
+        toast.error(rzpOrder.message || 'Failed to create Razorpay order');
+        return;
+      }
+
+      const options = {
+        key: rzpOrder.key_id,
+        amount: rzpOrder.amount,
+        currency: rzpOrder.currency,
+        name: 'E-commerce Store',
+        description: `Payment for Quote ${viewQuote.quoteNumber}`,
+        order_id: rzpOrder.order_id,
+        handler: async (response: any) => {
+          try {
+            const verifyRes = await verifyRazorpayPayment({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              internal_quote_id: viewQuote._id
+            });
+
+            if (verifyRes.success) {
+              toast.success('Payment successful!');
+              setViewQuote(null);
+              void fetchData();
+            } else {
+              toast.error(verifyRes.message || 'Payment verification failed');
+            }
+          } catch (err: any) {
+            toast.error(err.message || 'Payment verification failed');
+          }
+        },
+        prefill: {
+          name: viewQuote.customerName,
+          email: viewQuote.customerEmail,
+        },
+        theme: {
+          color: '#D4AF37',
+        },
+        modal: {
+          ondismiss: function() {
+            setIsRazorpayLoading(false);
+          }
+        }
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (err: any) {
+      toast.error(err.message || 'Payment failed to initialize');
+    } finally {
+      setIsRazorpayLoading(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -198,6 +291,35 @@ export function DashboardInvoices() {
               <RefreshCcw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
+            <AnimatePresence>
+              {activeTab === 'quotes' && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, width: 0 }}
+                  animate={{ opacity: 1, scale: 1, width: 'auto' }}
+                  exit={{ opacity: 0, scale: 0.95, width: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Button 
+                    size="sm" 
+                    onClick={() => {
+                      if (isAdmin) {
+                        setIsCreateQuoteOpen(true);
+                      } else {
+                        if (cart.length === 0) {
+                          toast.error('Your cart is empty. Please add items to your cart to request a quote.');
+                          navigate('/shop');
+                          return;
+                        }
+                        setIsQuoteRequestOpen(true);
+                      }
+                    }}
+                    className="rounded-xl bg-[#1F1F1F] text-white hover:bg-[#333] dark:bg-[#D4AF37] dark:text-[#1a1610] dark:hover:bg-[#EADFBF] shadow-sm font-semibold whitespace-nowrap"
+                  >
+                    + Quote
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -514,9 +636,16 @@ export function DashboardInvoices() {
                     </div>
                     Quotation Details
                   </DialogTitle>
-                  <span className={`inline-flex items-center rounded-full px-4 py-1.5 text-xs font-black uppercase border ${getStatusColor(viewQuote?.status)}`}>
-                    {viewQuote?.status || 'Pending'}
-                  </span>
+                  <div className="flex gap-2">
+                    <span className={`inline-flex items-center rounded-full px-4 py-1.5 text-xs font-black uppercase border ${getStatusColor(viewQuote?.status)}`}>
+                      {viewQuote?.status || 'Pending'}
+                    </span>
+                    {viewQuote?.paymentStatus && viewQuote.paymentStatus !== 'pending' && (
+                      <span className={`inline-flex items-center rounded-full px-4 py-1.5 text-xs font-black uppercase border ${getStatusColor(viewQuote.paymentStatus)}`}>
+                        {viewQuote.paymentStatus}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </DialogHeader>
 
@@ -558,6 +687,17 @@ export function DashboardInvoices() {
                           <p className="italic text-[#4B5563] dark:text-gray-300">"{viewQuote.adminMessage}"</p>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Payment Status Info */}
+                  {viewQuote.paymentStatus === 'paid' && (
+                    <div className="p-5 bg-emerald-50/30 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100/50 dark:border-emerald-900/20 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-700 dark:text-emerald-400 mb-1">Payment Status</p>
+                        <p className="font-bold text-emerald-800 dark:text-emerald-300">Successfully Paid via Razorpay</p>
+                      </div>
+                      <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                     </div>
                   )}
 
@@ -684,6 +824,22 @@ export function DashboardInvoices() {
                       </>
                     )}
 
+                    {/* Pay Now Button */}
+                    {viewQuote.status === 'accepted' && viewQuote.paymentStatus !== 'paid' && (
+                      <Button 
+                        className="bg-[#D4AF37] hover:bg-[#B8962E] text-white rounded-xl px-6 gap-2 shadow-lg shadow-[#D4AF37]/20"
+                        onClick={handlePayment}
+                        disabled={isRazorpayLoading || isSubmitting}
+                      >
+                        {isRazorpayLoading ? (
+                          <RefreshCcw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <CreditCard className="w-4 h-4" />
+                        )}
+                        Pay Now
+                      </Button>
+                    )}
+
                     {/* Admin Actions */}
                     {isAdmin && (
                       <>
@@ -732,6 +888,30 @@ export function DashboardInvoices() {
         </Dialog>
 
       </div>
+      {/* Quote Request Dialog */}
+      <QuoteRequestDialog
+        isOpen={isQuoteRequestOpen}
+        onClose={() => setIsQuoteRequestOpen(false)}
+        products={cart.map(item => ({
+          productId: item._id || item.id,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.salePrice || item.price,
+          clientId: item.clientId
+        }))}
+        onSuccess={() => {
+          void fetchData(); // Refresh quotes list
+        }}
+      />
+
+      {/* Admin Create Quote Modal */}
+      <CreateQuoteModal
+        isOpen={isCreateQuoteOpen}
+        onClose={() => setIsCreateQuoteOpen(false)}
+        onSuccess={() => {
+          void fetchData(); // Refresh quotes list
+        }}
+      />
     </div>
   );
 }

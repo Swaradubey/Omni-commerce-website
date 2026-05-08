@@ -29,7 +29,7 @@ const createValidators = [
   check("name", "Name is required").trim().notEmpty(),
   check("email", "Email is required").trim().notEmpty().isEmail().withMessage("Please enter a valid email"),
   phoneValidator,
-  check("address", "Address is required").trim().notEmpty(),
+  check("address").optional().trim(),
   check("password")
     .trim()
     .notEmpty()
@@ -47,8 +47,8 @@ const createValidators = [
     .optional()
     .trim()
     .customSanitizer((value) => String(value || "").toLowerCase().replace(/\s+/g, "_"))
-    .isIn(["employee", "staff", "seo_manager", "store_manager", "inventory_manager", "counter_manager"])
-    .withMessage("Role must be one of: employee, staff, seo_manager, store_manager, inventory_manager, counter_manager"),
+    .isIn(["employee", "staff", "seo_manager", "store_manager", "inventory_manager", "counter_manager", "user"])
+    .withMessage("Role must be one of: employee, staff, seo_manager, store_manager, inventory_manager, counter_manager, user"),
 ];
 
 const updatePhoneOptional = check("phone")

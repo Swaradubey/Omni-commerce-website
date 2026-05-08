@@ -1,6 +1,7 @@
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
 const Order = require("../models/Order");
+const Quote = require("../models/Quote");
 
 // @desc    Create Razorpay order
 // @route   POST /api/payments/razorpay/create-order
@@ -104,6 +105,18 @@ const verifyRazorpayPayment = async (req, res) => {
         }
       }
 
+      // Update quote in database if internal_quote_id is provided
+      if (req.body.internal_quote_id) {
+        const quote = await Quote.findById(req.body.internal_quote_id);
+        if (quote) {
+          quote.razorpayOrderId = razorpay_order_id;
+          quote.razorpayPaymentId = razorpay_payment_id;
+          quote.razorpaySignature = razorpay_signature;
+          quote.paymentStatus = "paid";
+          await quote.save();
+        }
+      }
+
       return res.status(200).json({
         success: true,
         message: "Payment verified successfully",
@@ -117,6 +130,15 @@ const verifyRazorpayPayment = async (req, res) => {
           await order.save();
         }
       }
+
+      if (req.body.internal_quote_id) {
+        const quote = await Quote.findById(req.body.internal_quote_id);
+        if (quote) {
+          quote.paymentStatus = "failed";
+          await quote.save();
+        }
+      }
+
       return res.status(400).json({
         success: false,
         message: "Invalid signature, payment verification failed",

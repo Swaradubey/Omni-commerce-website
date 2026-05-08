@@ -66,6 +66,10 @@ export function isCashierRole(role: string | undefined): boolean {
   return normalizeRole(role) === 'cashier';
 }
 
+export function isStoreManagerRole(role: string | undefined): boolean {
+  return normalizeRole(role) === 'store_manager';
+}
+
 export function isRestrictedInventoryDashboardRole(role: string | undefined): boolean {
   const normalized = normalizeRole(role);
   return (

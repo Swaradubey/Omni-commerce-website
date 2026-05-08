@@ -27,6 +27,7 @@ import {
   AlertCircle,
   RefreshCw,
   Clock,
+  ChevronRight,
 } from 'lucide-react';
 import { useNavigate, useLocation, Outlet, Link, Navigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -44,8 +45,16 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarInset,
-  SidebarRail
+  SidebarRail,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton
 } from '../components/ui/sidebar';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../components/ui/collapsible';
 import { DashboardStats } from '../components/DashboardStats';
 import { DashboardCharts } from '../components/DashboardCharts';
 import { DashboardRecentActivity } from '../components/DashboardRecentActivity';
@@ -64,6 +73,7 @@ import {
   isInventoryManagerRole,
   isRestrictedInventoryDashboardRole,
   isStaffRole,
+  isStoreManagerRole,
   isSuperAdminRole,
   normalizeRole,
 } from '../utils/staffRoles';
@@ -75,7 +85,7 @@ import { toast } from 'sonner';
 const sidebarItems = [
   { title: "Overview", icon: LayoutDashboard, href: "/dashboard" },
   { title: "Products", icon: Package, href: "/dashboard/products", hideForSuperAdmin: true },
-  { title: "Inventory", icon: Warehouse, href: "/dashboard/inventory", staffOnly: true },
+  { title: "Inventory", icon: Warehouse, href: "/dashboard/inventory", staffOnly: true, hideForSuperAdmin: true },
   { title: "POS", icon: ShoppingCart, href: "/pos", hideForSuperAdmin: true, hideForUser: true },
   { title: "Wishlist", icon: Heart, href: "/dashboard/wishlist", hideForSuperAdmin: true },
   { title: "Track Order", icon: Truck, href: "/track-order", hideForInventoryManager: true, hideForSuperAdmin: true },
@@ -84,9 +94,8 @@ const sidebarItems = [
   { title: "Orders", icon: ShoppingCart, href: "/dashboard/orders", hideForUser: false, hideForSuperAdmin: true },
   { title: "Invoice", icon: Receipt, href: "/dashboard/invoices", superAdminOnly: true },
   { title: "Customers", icon: Users, href: "/dashboard/customers", adminOnly: true },
-  { title: "Users & roles", icon: UserCog, href: "/dashboard/users", superAdminOnly: true },
+  { title: "Users & roles", icon: UserCog, href: "/dashboard/users", adminOnly: true },
   { title: "Clients", icon: Building2, href: "/super-admin/clients", superAdminOnly: true },
-  { title: "Add Client", icon: Building2, href: "/dashboard/clients", superAdminOnly: true },
   { title: "Add Custom Domain", icon: Globe, href: "/super-admin/custom-domain", superAdminOnly: true },
   { title: "Add Employee", icon: UserPlus, href: "/dashboard/add-employee", staffOnly: true, hideForSuperAdmin: true },
   { title: "Analytics", icon: PieChartIcon, href: "/dashboard/analytics", superAdminOnly: true },
@@ -264,7 +273,11 @@ export function Dashboard() {
       return false;
     }
     if (restrictedInventoryDashboardRole) {
-      return item.href === '/dashboard/products' || item.href === '/dashboard/inventory';
+      return (
+        item.href === '/dashboard/products' ||
+        item.href === '/dashboard/inventory' ||
+        (isStoreManagerRole(user?.role) && item.href === '/pos')
+      );
     }
     if (isClientRole(user?.role)) {
       return (
@@ -282,7 +295,13 @@ export function Dashboard() {
       );
     }
     if (normalizeRole(user?.role) === 'admin') {
-      if (item.title === 'Orders' || item.title === 'Track Order' || item.title === 'Customers') {
+      if (
+        item.title === 'Orders' ||
+        item.title === 'Track Order' ||
+        item.title === 'Customers' ||
+        item.title === 'Wishlist' ||
+        item.title === 'Wishlist Activity'
+      ) {
         return false;
       }
     }
@@ -357,7 +376,9 @@ export function Dashboard() {
     location.pathname === '/dashboard/products' ||
     location.pathname.startsWith('/dashboard/products/') ||
     location.pathname === '/dashboard/inventory' ||
-    location.pathname.startsWith('/dashboard/inventory/');
+    location.pathname.startsWith('/dashboard/inventory/') ||
+    (isStoreManagerRole(user?.role) && (location.pathname === '/pos' || location.pathname.startsWith('/pos/')));
+
   const shouldRedirectRestrictedRole =
     (restrictedInventoryDashboardRole || isCounterManagerRole(user?.role)) && !canAccessCurrentDashboardRoute;
 
@@ -472,6 +493,49 @@ export function Dashboard() {
                     {mainSidebarItems.map((item) => {
                       const href = item.href;
                       const isActive = href === '/dashboard' ? location.pathname === '/dashboard' : (href ? location.pathname.startsWith(href) : item.title === 'Overview' && location.pathname === '/dashboard');
+                      
+                      if ('subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0) {
+                        const isSubActive = item.subItems.some(sub => location.pathname.startsWith(sub.href));
+                        return (
+                          <Collapsible key={item.title} defaultOpen={isActive || isSubActive} className="group/collapsible">
+                            <SidebarMenuItem>
+                              <CollapsibleTrigger asChild>
+                                <SidebarMenuButton
+                                  tooltip={item.title}
+                                  onClick={(e) => {
+                                    navigate(href || '#');
+                                  }}
+                                  className={dashboardSidebarNavButtonClass(isActive || isSubActive, false)}
+                                >
+                                  <item.icon className={`w-5 h-5 shrink-0 ${isActive || isSubActive ? 'text-[#b8860b] dark:text-amber-300' : ''}`} />
+                                  <span className="group-data-[collapsible=icon]:hidden flex-1 min-w-0 text-left text-[16px] font-semibold tracking-wide leading-snug">
+                                    {item.title}
+                                  </span>
+                                  <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden w-5 h-5 shrink-0" />
+                                </SidebarMenuButton>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent>
+                                <SidebarMenuSub>
+                                  {item.subItems.map(subItem => {
+                                    const subIsActive = location.pathname.startsWith(subItem.href);
+                                    return (
+                                      <SidebarMenuSubItem key={subItem.title}>
+                                        <SidebarMenuSubButton asChild isActive={subIsActive} className="h-10 text-[15px] font-medium">
+                                          <Link to={subItem.href}>
+                                            <subItem.icon className={`w-4 h-4 mr-2 ${subIsActive ? 'text-[#b8860b] dark:text-amber-300' : ''}`} />
+                                            <span>{subItem.title}</span>
+                                          </Link>
+                                        </SidebarMenuSubButton>
+                                      </SidebarMenuSubItem>
+                                    );
+                                  })}
+                                </SidebarMenuSub>
+                              </CollapsibleContent>
+                            </SidebarMenuItem>
+                          </Collapsible>
+                        );
+                      }
+
                       return (
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton

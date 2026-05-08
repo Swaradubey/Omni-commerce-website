@@ -179,6 +179,29 @@ export function ProductModal({
     setIsSubmitting(true);
     setError(null);
 
+    // Explicit Validation
+    const missingFields: string[] = [];
+    if (!formData.productName.trim()) missingFields.push("Product Name");
+    if (!formData.sku.trim()) missingFields.push("SKU Code");
+    if (!formData.category) missingFields.push("Category");
+    if (formData.unitPrice < 0) {
+      setError("Unit Price cannot be negative");
+      setIsSubmitting(false);
+      return;
+    }
+    if (formData.stockLevel < 0) {
+      setError("Stock Level cannot be negative");
+      setIsSubmitting(false);
+      return;
+    }
+    if (!formData.imageUrl.trim()) missingFields.push("Image URL");
+
+    if (missingFields.length > 0) {
+      setError(`Please fill in all required fields: ${missingFields.join(", ")}`);
+      setIsSubmitting(false);
+      return;
+    }
+
     let mappedPayload: Product | Partial<Product>;
     if (isLimitedCopyEdit) {
       // inventory_manager: persist only changed title/description fields.
@@ -243,7 +266,16 @@ export function ProductModal({
       onClose();
     } catch (err: any) {
       console.error("[Frontend Debug] Error in handleSaveProduct:", err.message);
-      setError(err.message || 'Something went wrong. Please try again.');
+      
+      // Extract error message from API response if possible
+      let friendlyError = "Something went wrong. Please try again.";
+      if (err.response?.data?.message) {
+        friendlyError = err.response.data.message;
+      } else if (err.message) {
+        friendlyError = err.message;
+      }
+      
+      setError(friendlyError);
     } finally {
       setIsSubmitting(false);
     }

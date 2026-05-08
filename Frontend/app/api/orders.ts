@@ -77,7 +77,8 @@ export interface RazorpayVerifyPayload {
   razorpay_order_id: string;
   razorpay_payment_id: string;
   razorpay_signature: string;
-  internal_order_id: string;
+  internal_order_id?: string;
+  internal_quote_id?: string;
 }
 
 interface OrderCreateResponse {

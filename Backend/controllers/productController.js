@@ -8,7 +8,7 @@ const {
   isTitleDescriptionOnlyUpdate,
 } = require("../utils/productFieldPermissions");
 const { formatProductWithClient } = require("../utils/formatInventoryProduct");
-const { isClientScopedRole } = require("../utils/clientScopedRoles");
+const { isClientScopedRole, normalizeRole } = require("../utils/clientScopedRoles");
 const { 
   resolveClientId, 
   buildScopeQuery, 
@@ -18,9 +18,18 @@ const {
 } = require("../utils/tenantResolver");
 
 function userOwnsClientProduct(user, product) {
-  if (!user || !isClientScopedRole(user.role)) return true;
-  const userClientId = user.clientId || user.assignedClient || user._id;
-  if (!userClientId || !product.clientId) return false;
+  const role = normalizeRole(user?.role);
+  // Super Admin and Admin have full ownership
+  if (role === "super_admin" || role === "admin") return true;
+
+  if (!user || !isClientScopedRole(role)) return true;
+  
+  // If product is global, allow scoped staff to manage it if it's in their visibility
+  if (!product.clientId) return true;
+
+  const userClientId = user.clientId || user.assignedClient;
+  if (!userClientId) return false;
+
   return String(product.clientId) === String(userClientId);
 }
 
@@ -90,7 +99,8 @@ const getProducts = async (req, res) => {
     }
 
     // Non-staff (customers/guests) should only see active products
-    const isStaff = req.user && (req.user.role === "admin" || req.user.role === "super_admin" || isClientScopedRole(req.user.role));
+    const role = normalizeRole(req.user?.role);
+    const isStaff = req.user && (role === "admin" || role === "super_admin" || isClientScopedRole(req.user.role));
     if (!isStaff) {
       query.isActive = true;
     } else if (isActive !== undefined) {
@@ -215,19 +225,19 @@ const createProduct = async (req, res) => {
   try {
     const { sku } = req.body;
     const resolvedClientId = await resolveClientId(req);
-    const role = req.user?.role;
+    const role = normalizeRole(req.user?.role);
     
     // Explicitly check for global roles (Super Admin / Admin)
-    const isGlobal = role === "super_admin" || role === "super-admin" || role === "superadmin" || role === "admin";
+    const isGlobal = role === "super_admin" || role === "admin";
     
     // Determine the target clientId
     let targetClientId = req.body.clientId || resolvedClientId;
     
-    // Safety check for non-privileged roles
+    // Safety check for non-privileged roles: Store Manager MUST be scoped to a client
     if (!isGlobal && !targetClientId) {
        return res.status(400).json({
          success: false,
-         message: "Could not resolve client assignment. Please ensure you are logged in correctly."
+         message: "Store/Client assignment is missing. Please ensure your account is properly linked to a client."
        });
     }
 
@@ -243,7 +253,7 @@ const createProduct = async (req, res) => {
     if (existingProduct) {
       return res.status(400).json({
         success: false,
-        message: "Product with this SKU already exists in this scope",
+        message: `A product with SKU "${sku}" already exists in your inventory.`,
       });
     }
 
@@ -272,9 +282,19 @@ const createProduct = async (req, res) => {
     });
   } catch (error) {
     console.error("CREATE PRODUCT ERROR", error);
+
+    // Better validation error handling
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(", ")
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: "Server Error: " + error.message,
+      message: "An internal server error occurred while creating the product: " + error.message,
     });
   }
 };
@@ -284,7 +304,7 @@ const createProduct = async (req, res) => {
 // @access  Private (admin only; route enforces via allowRoles)
 const updateProduct = async (req, res) => {
   try {
-    let role = req.user.role;
+    let role = normalizeRole(req.user?.role);
     
     // Check if the request body only contains title/description
     if (req.body && typeof req.body === 'object') {
@@ -334,9 +354,21 @@ const updateProduct = async (req, res) => {
 
     // inventory_manager: persist only title (stored as `name` in schema) and `description` via direct assignment + save.
     // Avoid Object.assign here — some Mongoose setups do not mark top-level fields modified reliably from assign.
-    if (role === "inventory_manager") {
-      const { title, name, description } = req.body || {};
-      console.log("[Backend Debug] inventory_manager — product before update:", {
+    if (role === "inventory_manager" || role === "seo_manager") {
+      const { title, name, description, ...extra } = req.body || {};
+
+      // Strict check for seo_manager: reject any other fields
+      if (role === "seo_manager") {
+        const extraKeys = Object.keys(extra).filter(k => k !== "_id" && k !== "__v" && k !== "createdAt" && k !== "updatedAt");
+        if (extraKeys.length > 0) {
+          return res.status(403).json({
+            success: false,
+            message: "Permission denied: SEO Manager can only update Product Name and Description",
+          });
+        }
+      }
+
+      console.log(`[Backend Debug] ${role} — product before update:`, {
         _id: product._id,
         name: product.name,
         description: product.description,
@@ -363,7 +395,7 @@ const updateProduct = async (req, res) => {
       }
 
       const updated = await product.save();
-      console.log("[Backend Debug] inventory_manager — product after save:", {
+      console.log(`[Backend Debug] ${role} — product after save:`, {
         _id: updated._id,
         name: updated.name,
         description: updated.description,
@@ -410,11 +442,13 @@ const updateProduct = async (req, res) => {
       const formatted = await loadProductFormatted(updated._id);
       const responsePayload = {
         success: true,
-        message: INVENTORY_MANAGER_TITLE_DESC_SUCCESS,
+        message: role === "seo_manager"
+          ? "SEO Manager successfully updated product SEO details"
+          : INVENTORY_MANAGER_TITLE_DESC_SUCCESS,
         product: formatted,
         data: formatted,
       };
-      console.log("[Backend Debug] PUT /api/products/:id — final response (inventory_manager):", responsePayload);
+      console.log(`[Backend Debug] PUT /api/products/:id — final response (${role}):`, responsePayload);
       return res.status(200).json(responsePayload);
     }
 

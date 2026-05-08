@@ -11,13 +11,23 @@ const {
   formatProductsWithClient,
   formatProductWithClient,
 } = require("../utils/formatInventoryProduct");
-const { isClientScopedRole } = require("../utils/clientScopedRoles");
+const { isClientScopedRole, normalizeRole } = require("../utils/clientScopedRoles");
 const { resolveClientId, buildScopeQuery, applyScope, buildProductVisibilityFilter, isValidObjectId } = require("../utils/tenantResolver");
 
 function userOwnsClientProduct(user, product) {
-  if (!user || !isClientScopedRole(user.role)) return true;
-  if (!user.clientId || !product.clientId) return false;
-  return String(product.clientId) === String(user.clientId);
+  const role = normalizeRole(user?.role);
+  // Super Admin and Admin have full ownership
+  if (role === "super_admin" || role === "admin") return true;
+  
+  if (!user || !isClientScopedRole(role)) return true;
+  
+  // If product is global, allow scoped staff to manage it if it's in their visibility
+  if (!product.clientId) return true;
+  
+  const userClientId = user.clientId || user.assignedClient;
+  if (!userClientId) return false;
+  
+  return String(product.clientId) === String(userClientId);
 }
 
 const INVENTORY_MANAGER_TITLE_DESC_SUCCESS =
@@ -89,19 +99,19 @@ const createInventoryItem = async (req, res) => {
   try {
     const { sku } = req.body;
     const resolvedClientId = await resolveClientId(req);
-    const role = req.user?.role;
+    const role = normalizeRole(req.user?.role);
     
     // Explicitly check for global roles (Super Admin / Admin)
-    const isGlobal = role === "super_admin" || role === "super-admin" || role === "superadmin" || role === "admin";
+    const isGlobal = role === "super_admin" || role === "admin";
     
     // Determine the target clientId
     let targetClientId = req.body.clientId || resolvedClientId;
     
-    // Safety check for non-privileged roles
+    // Safety check for non-privileged roles: Store Manager MUST be scoped to a client
     if (!isGlobal && !targetClientId) {
        return res.status(400).json({
          success: false,
-         message: "Could not resolve client assignment. Please ensure you are logged in correctly."
+         message: "Store/Client assignment is missing. Please ensure your Store Manager account is properly linked to a client."
        });
     }
 
@@ -117,7 +127,7 @@ const createInventoryItem = async (req, res) => {
     if (existingProduct) {
       return res.status(400).json({
         success: false,
-        message: "Product with this SKU already exists in this scope",
+        message: `A product with SKU "${sku}" already exists in your inventory.`,
       });
     }
 
@@ -143,13 +153,24 @@ const createInventoryItem = async (req, res) => {
 
     res.status(201).json({
       success: true,
+      message: "Product added to inventory successfully",
       data: formatProductWithClient(populated),
     });
   } catch (error) {
     console.error("[Inventory] createInventoryItem Error:", error.message);
+    
+    // Better validation error handling
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(", ")
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: "Server Error: " + error.message,
+      message: "An internal server error occurred while creating the product: " + error.message,
     });
   }
 };
@@ -161,33 +182,16 @@ const getInventory = async (req, res) => {
   try {
     const { category, search, minPrice, maxPrice, inStock } = req.query;
     const resolvedClientId = await resolveClientId(req);
-    const isGlobalRole =
-      req.user?.role === "superadmin" ||
-      req.user?.role === "super-admin" ||
-      req.user?.role === "admin" ||
-      req.user?.role === "super_admin";
+    const role = normalizeRole(req.user?.role);
+    const isGlobalRole = role === "super_admin" || role === "admin";
 
     // Debug logs temporarily
     console.log("Get products role:", req.user?.role);
     console.log("Is global role:", isGlobalRole);
     console.log("resolved clientId:", resolvedClientId);
 
-    let query = {};
-    
-    const isSuperAdmin = req.user?.role === "super_admin" || req.user?.role === "super-admin" || req.user?.role === "superadmin";
-    const isAdmin = req.user?.role === "admin";
-
-    // Only apply clientId filter if NOT a global role AND clientOnly is requested
-    // ADMIN and SUPER_ADMIN are global roles and see all products by default.
-    if (!isSuperAdmin && !isAdmin && (req.query.clientOnly === "true" || resolvedClientId)) {
-      const targetClientId = resolvedClientId || req.user?.clientId;
-      if (targetClientId) {
-        query.clientId = targetClientId;
-      }
-    } else if (resolvedClientId && (isSuperAdmin || isAdmin)) {
-      // If a global admin explicitly wants to see a specific client's products
-      query.clientId = resolvedClientId;
-    }
+    // Use shared visibility filter
+    let query = await buildProductVisibilityFilter(req);
 
     if (category) query.category = category;
     if (search) {
@@ -260,7 +264,7 @@ const updateInventoryItem = async (req, res) => {
     if (!isValidObjectId(req.params.id)) {
       return res.status(404).json({ success: false, message: "Inventory item not found (Invalid ID)" });
     }
-    const role = req.user.role;
+    const role = normalizeRole(req.user?.role);
     const resolvedClientId = await resolveClientId(req);
     const scopeQuery = buildScopeQuery(req.user, resolvedClientId);
     let query = { _id: req.params.id };
@@ -278,9 +282,21 @@ const updateInventoryItem = async (req, res) => {
       });
     }
 
-    if (role === "inventory_manager") {
-      const { title, name, description } = req.body || {};
-      console.log("[Backend Debug] inventory_manager — inventory item before update:", {
+    if (role === "inventory_manager" || role === "seo_manager") {
+      const { title, name, description, ...extra } = req.body || {};
+      
+      // Strict check for seo_manager: reject any other fields
+      if (role === "seo_manager") {
+        const extraKeys = Object.keys(extra).filter(k => k !== "_id" && k !== "__v" && k !== "createdAt" && k !== "updatedAt");
+        if (extraKeys.length > 0) {
+          return res.status(403).json({
+            success: false,
+            message: "Permission denied: SEO Manager can only update Product Name and Description",
+          });
+        }
+      }
+
+      console.log(`[Backend Debug] ${role} — inventory item before update:`, {
         _id: item._id,
         name: item.name,
         description: item.description,
@@ -307,7 +323,7 @@ const updateInventoryItem = async (req, res) => {
       }
 
       const updatedItem = await item.save();
-      console.log("[Backend Debug] inventory_manager — inventory item after save:", {
+      console.log(`[Backend Debug] ${role} — inventory item after save:`, {
         _id: updatedItem._id,
         name: updatedItem.name,
         description: updatedItem.description,
@@ -353,11 +369,13 @@ const updateInventoryItem = async (req, res) => {
 
       const responsePayload = {
         success: true,
-        message: INVENTORY_MANAGER_TITLE_DESC_SUCCESS,
+        message: role === "seo_manager" 
+          ? "SEO Manager successfully updated product SEO details"
+          : INVENTORY_MANAGER_TITLE_DESC_SUCCESS,
         product: updatedItem,
         data: updatedItem,
       };
-      console.log("[Backend Debug] PUT /api/inventory/:id — final response (inventory_manager):", responsePayload);
+      console.log(`[Backend Debug] PUT /api/inventory/:id — final response (${role}):`, responsePayload);
       return res.json(responsePayload);
     }
 

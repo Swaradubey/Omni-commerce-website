@@ -89,9 +89,10 @@ async function orderTotalsForWindow(start, end, scopeQuery) {
     createdAt: { $gte: start, $lt: end },
     $or: [
       { isPaid: true },
-      { orderSource: "pos" },
-      { paymentStatus: { $in: ["paid", "completed", "success"] } },
+      { paymentStatus: { $in: ["paid", "Paid", "PAID", "completed", "success", "Success", "SUCCESS"] } },
       { "payment.status": { $in: ["paid", "completed", "success"] } },
+      { orderSource: { $in: ["pos", "POS", "manual", "Manual"] } },
+      { paymentMethod: { $in: ["cash", "Cash", "CASH", "cod", "COD", "Cod", "card", "Card", "CARD", "razorpay", "Razorpay"] } },
       { orderStatus: { $in: ["delivered", "completed", "shipped", "confirmed", "packed", "out_for_delivery"] } },
       { status: { $in: ["delivered", "completed", "shipped", "confirmed", "packed", "out_for_delivery"] } }
     ]
@@ -231,11 +232,12 @@ async function customerLifetimeValueAllTime(scopeQuery) {
   const match = {
     $or: [
       { isPaid: true },
-      { orderSource: "pos" },
-      { paymentStatus: { $in: ["paid", "completed", "success"] } },
+      { paymentStatus: { $in: ["paid", "Paid", "PAID", "completed", "success", "Success", "SUCCESS"] } },
       { "payment.status": { $in: ["paid", "completed", "success"] } },
-      { orderStatus: { $in: ["delivered", "completed", "shipped"] } },
-      { status: { $in: ["delivered", "completed", "shipped"] } }
+      { orderSource: { $in: ["pos", "POS", "manual", "Manual"] } },
+      { paymentMethod: { $in: ["cash", "Cash", "CASH", "cod", "COD", "Cod", "card", "Card", "CARD", "razorpay", "Razorpay"] } },
+      { orderStatus: { $in: ["delivered", "completed", "shipped", "confirmed", "packed", "out_for_delivery"] } },
+      { status: { $in: ["delivered", "completed", "shipped", "confirmed", "packed", "out_for_delivery"] } }
     ]
   };
   applyScope(match, scopeQuery);
@@ -408,11 +410,12 @@ async function topCategoriesForWindow(start, end, scopeQuery, limit = 8) {
     createdAt: { $gte: start, $lt: end },
     $or: [
       { isPaid: true },
-      { orderSource: "pos" },
-      { paymentStatus: { $in: ["paid", "completed", "success"] } },
+      { paymentStatus: { $in: ["paid", "Paid", "PAID", "completed", "success", "Success", "SUCCESS"] } },
       { "payment.status": { $in: ["paid", "completed", "success"] } },
-      { orderStatus: { $in: ["delivered", "completed", "shipped"] } },
-      { status: { $in: ["delivered", "completed", "shipped"] } }
+      { orderSource: { $in: ["pos", "POS", "manual", "Manual"] } },
+      { paymentMethod: { $in: ["cash", "Cash", "CASH", "cod", "COD", "Cod", "card", "Card", "CARD", "razorpay", "Razorpay"] } },
+      { orderStatus: { $in: ["delivered", "completed", "shipped", "confirmed", "packed", "out_for_delivery"] } },
+      { status: { $in: ["delivered", "completed", "shipped", "confirmed", "packed", "out_for_delivery"] } }
     ]
   };
   applyScope(match, scopeQuery);
@@ -516,11 +519,12 @@ async function topProductsForWindow(start, end, scopeQuery, limit = 3) {
       createdAt: { $gte: windowStart, $lt: windowEnd },
       $or: [
         { isPaid: true },
-        { orderSource: "pos" },
-        { paymentStatus: { $in: ["paid", "completed", "success"] } },
+        { paymentStatus: { $in: ["paid", "Paid", "PAID", "completed", "success", "Success", "SUCCESS"] } },
         { "payment.status": { $in: ["paid", "completed", "success"] } },
-        { orderStatus: { $in: ["delivered", "completed", "shipped"] } },
-        { status: { $in: ["delivered", "completed", "shipped"] } }
+        { orderSource: { $in: ["pos", "POS", "manual", "Manual"] } },
+        { paymentMethod: { $in: ["cash", "Cash", "CASH", "cod", "COD", "Cod", "card", "Card", "CARD", "razorpay", "Razorpay"] } },
+        { orderStatus: { $in: ["delivered", "completed", "shipped", "confirmed", "packed", "out_for_delivery"] } },
+        { status: { $in: ["delivered", "completed", "shipped", "confirmed", "packed", "out_for_delivery"] } }
       ]
     };
     applyScope(match, scopeQuery);
@@ -619,8 +623,16 @@ const getAdminAnalytics = async (req, res) => {
     const isSuperAdmin = userRole.toLowerCase() === "super_admin" || userRole.toLowerCase() === "superadmin" || userRole.toLowerCase() === "super admin";
     
     const resolvedClientId = await resolveTenant(req);
-    // If Super Admin, bypass scopeQuery to aggregate all clients
     const scopeQuery = isSuperAdmin ? {} : buildScopeQuery(req.user, resolvedClientId);
+
+    console.log("ADMIN OVERVIEW DEBUG", {
+      userRole,
+      isSuperAdmin,
+      resolvedClientId,
+      scopeQuery: JSON.stringify(scopeQuery),
+      userId: req.user?._id,
+      assignedClientId: req.user?.clientId
+    });
 
     console.log("[Analytics] Request context:", {
       origin: req.headers.origin,

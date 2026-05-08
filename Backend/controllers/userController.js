@@ -16,6 +16,7 @@ const ASSIGNABLE_ROLES = [
   "client",
   "store_manager",
   "employee",
+  "counter_manager",
 ];
 
 const getMe = async (req, res) => {
@@ -110,8 +111,16 @@ const listPlatformUsers = async (req, res) => {
     const roleFilter = req.query.role ? String(req.query.role).trim() : "";
 
     const q = {};
-    if (!isSuperAdmin && clientId) {
-      q.clientId = clientId;
+    if (!isSuperAdmin) {
+      if (clientId) {
+        q.clientId = clientId;
+      } else {
+        // If not super_admin and no clientId resolved, they should see nothing (strict isolation)
+        return res.json({
+          success: true,
+          data: { users: [], total: 0, page, limit, pages: 1 }
+        });
+      }
     }
 
     if (search) {
@@ -174,13 +183,42 @@ const updateUserRole = async (req, res) => {
     }
 
     const isSuperAdmin = req.user && req.user.role === "super_admin";
+    const isAdmin = req.user && req.user.role === "admin";
     const clientId = req.user?.clientId || req.clientId;
 
-    if (!isSuperAdmin && clientId && String(target.clientId) !== String(clientId)) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. You can only manage your own staff.",
-      });
+    if (!isSuperAdmin) {
+      if (!clientId) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Organization scope not identified.",
+        });
+      }
+      if (String(target.clientId) !== String(clientId)) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only manage users within your own organization.",
+        });
+      }
+
+      // Admin/Client specific restrictions
+      const isTenantAdmin = isAdmin || req.user.role === "client";
+      if (isTenantAdmin) {
+        // Cannot modify Admin or Super Admin roles
+        if (target.role === "admin" || target.role === "super_admin") {
+          return res.status(403).json({
+            success: false,
+            message: "Access denied. You cannot modify Admin or Super Admin roles.",
+          });
+        }
+
+        const ADMIN_ALLOWED_ROLES = ["seo_manager", "store_manager", "counter_manager", "inventory_manager", "user"];
+        if (!ADMIN_ALLOWED_ROLES.includes(nextRole)) {
+          return res.status(403).json({
+            success: false,
+            message: "Access denied. You can only assign SEO Manager, Store Manager, Counter Manager, Inventory Manager, or User roles.",
+          });
+        }
+      }
     }
 
     if (target.role === "super_admin") {

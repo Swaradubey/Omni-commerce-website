@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Eye, Calendar, RefreshCw, AlertCircle, Clock } from 'lucide-react';
+import { Building2, Eye, Calendar, RefreshCw, AlertCircle, Clock, Plus, Package } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -58,19 +58,35 @@ export function SuperAdminClients() {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="space-y-4"
+        className="flex flex-col md:flex-row md:items-start justify-between gap-6"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 pb-2">
-          <Badge variant="outline" className="gap-1.5 px-3 py-1 border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 w-fit">
-            <Building2 className="w-3.5 h-3.5" />
-            <span className="text-xs font-semibold uppercase tracking-wide">Super Admin</span>
-          </Badge>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 pb-2">
+            <Badge variant="outline" className="gap-1.5 px-3 py-1 border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 w-fit">
+              <Building2 className="w-3.5 h-3.5" />
+              <span className="text-xs font-semibold uppercase tracking-wide">Super Admin</span>
+            </Badge>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-4xl font-bold tracking-tight text-foreground">Clients Overview</h2>
+            <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
+              View all registered clients. Select a client to view their sales, invoices, and customer data.
+            </p>
+          </div>
         </div>
-        <div className="space-y-2">
-          <h2 className="text-4xl font-bold tracking-tight text-foreground">Clients Overview</h2>
-          <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
-            View all registered clients. Select a client to view their sales, invoices, and customer data.
-          </p>
+        <div className="shrink-0 flex items-center gap-3 md:pt-4">
+          <Button asChild variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 shadow-sm rounded-xl px-5 h-11 font-semibold">
+            <Link to="/dashboard/inventory">
+              <Package className="w-5 h-5" />
+              Inventory
+            </Link>
+          </Button>
+          <Button asChild className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-md rounded-xl px-5 h-11 font-semibold">
+            <Link to="/dashboard/clients">
+              <Plus className="w-5 h-5" />
+              Add Client
+            </Link>
+          </Button>
         </div>
       </motion.div>
 

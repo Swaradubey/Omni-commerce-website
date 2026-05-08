@@ -13,6 +13,7 @@ import {
   BadgeCheck,
   BadgeX,
   Clock,
+  Download,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -141,8 +142,8 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 type TabKey = 'sales' | 'invoices' | 'customers';
 
 const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
-  { key: 'sales',     label: 'Sales',     icon: ShoppingCart },
-  { key: 'invoices',  label: 'Invoices',  icon: Receipt },
+  { key: 'sales', label: 'Sales', icon: ShoppingCart },
+  { key: 'invoices', label: 'Invoices', icon: Receipt },
   { key: 'customers', label: 'Customers', icon: Users },
 ];
 
@@ -315,19 +316,17 @@ export function SuperAdminClientDetail() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                  isActive
-                    ? 'bg-white dark:bg-slate-800 text-foreground shadow-sm border border-border/60'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800/50'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${isActive
+                  ? 'bg-white dark:bg-slate-800 text-foreground shadow-sm border border-border/60'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800/50'
+                  }`}
               >
                 <Icon className="w-4 h-4" />
                 {tab.label}
-                <span className={`ml-0.5 text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                  isActive
-                    ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
-                    : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
-                }`}>
+                <span className={`ml-0.5 text-xs px-1.5 py-0.5 rounded-full font-bold ${isActive
+                  ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
+                  : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+                  }`}>
                   {count}
                 </span>
               </button>
@@ -416,11 +415,12 @@ export function SuperAdminClientDetail() {
                         <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider">Total</th>
                         <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider">Status</th>
                         <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider">Date</th>
+                        <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
                       {invoicesLoading ? (
-                        <LoadingRows cols={6} />
+                        <LoadingRows cols={7} />
                       ) : invoicesError ? (
                         <ErrorState message={invoicesError} onRetry={loadInvoices} />
                       ) : invoices.length === 0 ? (
@@ -440,6 +440,14 @@ export function SuperAdminClientDetail() {
                               <td className="px-4 py-3 text-foreground">{fmt(total)}</td>
                               <td className="px-4 py-3"><PaymentBadge status={inv.paymentStatus || inv.status} /></td>
                               <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{fmtDate(inv.createdAt)}</td>
+                              <td className="px-4 py-3 text-right">
+                                <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 rounded-lg border-emerald-200 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-900/40">
+                                  <Link to={`/super-admin/invoice/${inv.orderId || inv._id}`}>
+                                    <Download className="w-3.5 h-3.5" />
+                                    Download
+                                  </Link>
+                                </Button>
+                              </td>
                             </tr>
                           );
                         })

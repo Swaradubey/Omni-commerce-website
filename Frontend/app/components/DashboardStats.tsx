@@ -294,54 +294,54 @@ export function DashboardStats({
     const topProduct = analytics?.topProducts?.[0];
     const useInr = !!superAdminOverview;
 
-    if (analytics?.analyticsScope === 'operational') {
-      return [
-        {
-          title: 'Total Revenue',
-          value: formatCurrency(revenue, useInr),
-          change: formatSignedPct(revChange),
-          isPositive: revChange >= 0,
-          icon: DollarSign,
-          iconTint: 'from-[#d4af37] to-amber-700',
-          ringAccent: 'from-amber-300/70 via-amber-100/40 to-amber-400/50',
-          description: 'vs last month',
-          path: '/dashboard/analytics',
-        },
-        {
-          title: 'Orders this month',
-          value: orders.toLocaleString(),
-          change: formatSignedPct(ordChange),
-          isPositive: ordChange >= 0,
-          icon: ShoppingCart,
-          iconTint: 'from-teal-600 to-emerald-700',
-          ringAccent: 'from-teal-300/50 via-emerald-100/30 to-teal-400/40',
-          description: 'operational scope',
-          path: '/dashboard/orders',
-        },
-        {
-          title: 'Avg order value',
-          value: formatCurrency(avgOrder, useInr),
-          change: formatSignedPct(avgChange),
-          isPositive: avgChange >= 0,
-          icon: TrendingUp,
-          iconTint: 'from-violet-600 to-indigo-700',
-          ringAccent: 'from-violet-300/45 via-indigo-100/25 to-violet-400/40',
-          description: 'vs last month',
-          path: '/dashboard/analytics',
-        },
-        {
-          title: 'Top product sales',
-          value: topProduct ? formatCurrency(topProduct.sales, useInr) : '—',
-          change: topProduct ? formatSignedPct(topProduct.growthPercent) : '—',
-          isPositive: (topProduct?.growthPercent ?? 0) >= 0,
-          icon: Package,
-          iconTint: 'from-amber-600 to-orange-700',
-          ringAccent: 'from-orange-300/50 via-amber-100/35 to-orange-400/45',
-          description: topProduct?.name ? topProduct.name.slice(0, 28) : 'This month',
-          path: '/dashboard/products',
-        },
-      ];
-    }
+     if (analytics?.analyticsScope === 'operational') {
+       return [
+         {
+           title: 'Total Revenue',
+           value: formatCurrency(revenue, useInr),
+           change: formatSignedPct(revChange),
+           isPositive: revChange >= 0,
+           icon: DollarSign,
+           iconTint: 'from-[#d4af37] to-[#b87500]',
+           ringAccent: 'from-amber-300/70 via-amber-100/40 to-amber-400/50',
+           description: 'vs last month',
+           path: '/dashboard/analytics',
+         },
+         {
+           title: 'Orders this month',
+           value: orders.toLocaleString(),
+           change: formatSignedPct(ordChange),
+           isPositive: ordChange >= 0,
+           icon: ShoppingCart,
+           iconTint: 'from-[#d4af37] to-[#b87500]',
+           ringAccent: 'from-amber-300/70 via-amber-100/40 to-amber-400/50',
+           description: 'This month',
+           path: '/dashboard/orders',
+         },
+         {
+           title: 'Avg order value',
+           value: formatCurrency(avgOrder, useInr),
+           change: formatSignedPct(avgChange),
+           isPositive: avgChange >= 0,
+           icon: TrendingUp,
+           iconTint: 'from-[#d4af37] to-[#b87500]',
+           ringAccent: 'from-amber-300/70 via-amber-100/40 to-amber-400/50',
+           description: 'vs last month',
+           path: '/dashboard/analytics',
+         },
+         {
+           title: 'Top product sales',
+           value: topProduct ? formatCurrency(topProduct.sales, useInr) : '—',
+           change: topProduct ? formatSignedPct(topProduct.growthPercent) : '—',
+           isPositive: (topProduct?.growthPercent ?? 0) >= 0,
+           icon: Package,
+           iconTint: 'from-[#d4af37] to-[#b87500]',
+           ringAccent: 'from-amber-300/70 via-amber-100/40 to-amber-400/50',
+           description: topProduct?.name ? topProduct.name.slice(0, 28) : 'This month',
+           path: '/dashboard/products',
+         },
+       ];
+     }
 
     const activeCust = s.activeCustomers ?? 0;
     const activeCustChange = s.activeCustomersChange ?? 0;
@@ -512,32 +512,32 @@ export function DashboardStats({
         }
       }}
       tabIndex={stat.path ? 0 : undefined}
-      className={`group relative rounded-[1.125rem] p-px bg-gradient-to-br ${stat.ringAccent} shadow-sm transition-all duration-300 ease-out hover:scale-[1.02] hover:shadow-[0_20px_48px_-16px_rgba(212,175,55,0.28),0_0_0_1px_rgba(212,175,55,0.12)] dark:hover:shadow-[0_20px_48px_-16px_rgba(212,175,55,0.15)] ${
-        stat.path ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-500' : ''
+      className={`group relative rounded-[1.125rem] overflow-hidden bg-gradient-to-br from-[#fff7df] via-[#fffaf0] to-[#ffe7a3] border border-[#f6d365]/60 shadow-md shadow-amber-200/35 transition-all duration-300 ease-out hover:scale-[1.02] hover:shadow-[0_20px_48px_-12px_rgba(180,130,30,0.30)] ${
+        stat.path ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-400' : ''
       }`}
     >
-      <Card className="relative overflow-hidden rounded-[1.0625rem] border-0 bg-white/70 dark:bg-zinc-950/65 backdrop-blur-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.65)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] transition-all duration-300 ease-out group-hover:bg-white/80 dark:group-hover:bg-zinc-950/75">
+      <Card className="relative overflow-hidden rounded-[1.125rem] border-0 bg-transparent shadow-none">
         <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 pt-5 px-5">
-          <CardTitle className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground group-hover:text-foreground/90 transition-colors duration-300">
+          <CardTitle className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.18em] text-amber-900/75 group-hover:text-amber-900 transition-colors duration-300">
             {stat.title}
           </CardTitle>
           <div
-            className={`flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br ${stat.iconTint} text-white shadow-lg shadow-black/10 ring-4 ring-white/50 dark:ring-zinc-900/50 transition-transform duration-300 ease-out group-hover:scale-105 group-hover:shadow-[0_8px_24px_-6px_rgba(212,175,55,0.45)]`}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#d4af37] to-[#b87500] text-white shadow-lg shadow-amber-700/20 ring-4 ring-white/70 transition-transform duration-300 ease-out group-hover:scale-105"
           >
             <stat.icon className="h-5 w-5" strokeWidth={2.25} />
           </div>
         </CardHeader>
         <CardContent className="px-5 pb-5 pt-0">
           <div className="flex flex-col gap-1">
-            <span className="text-2xl sm:text-[1.75rem] font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums">
+            <span className="text-2xl sm:text-[1.75rem] font-extrabold tracking-tight text-zinc-900 tabular-nums">
               {stat.value}
             </span>
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <div
                 className={`inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full transition-colors duration-300 ${
                   stat.isPositive
-                    ? 'bg-emerald-100/90 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-300'
-                    : 'bg-rose-100/90 text-rose-800 dark:bg-rose-900/35 dark:text-rose-300'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-rose-100 text-rose-700'
                 }`}
               >
                 {stat.isPositive ? (
@@ -547,14 +547,14 @@ export function DashboardStats({
                 )}
                 {stat.change}
               </div>
-              <span className="text-[11px] text-muted-foreground font-medium tracking-wide">
+              <span className="text-[11px] text-amber-900/55 font-medium tracking-wide">
                 {stat.description}
               </span>
             </div>
           </div>
         </CardContent>
         <div
-          className={`pointer-events-none absolute -right-8 -bottom-10 h-36 w-36 rounded-full bg-gradient-to-br ${stat.iconTint} opacity-[0.07] blur-3xl transition-opacity duration-300 group-hover:opacity-[0.14]`}
+          className="pointer-events-none absolute -right-8 -bottom-10 h-36 w-36 rounded-full bg-amber-200 opacity-[0.22] blur-3xl transition-opacity duration-300 group-hover:opacity-[0.35]"
         />
       </Card>
     </motion.div>

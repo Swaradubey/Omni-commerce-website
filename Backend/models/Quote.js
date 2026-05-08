@@ -58,6 +58,20 @@ const quoteSchema = new mongoose.Schema(
       default: "pending",
       enum: ["pending", "countered", "accepted", "rejected"],
     },
+    paymentStatus: {
+      type: String,
+      default: "pending",
+      enum: ["pending", "paid", "failed"],
+    },
+    razorpayOrderId: {
+      type: String,
+    },
+    razorpayPaymentId: {
+      type: String,
+    },
+    razorpaySignature: {
+      type: String,
+    },
     validUntil: {
       type: Date,
     },

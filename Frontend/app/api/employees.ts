@@ -22,11 +22,11 @@ export type CreateEmployeePayload = {
   email: string;
   password: string;
   phone: string;
-  address: string;
+  address?: string;
   clientId?: string;
   managerId?: string;
   shopName?: string;
-  role?: 'employee' | 'staff' | 'seo_manager' | 'store_manager' | 'inventory_manager';
+  role?: 'user' | 'seo_manager' | 'store_manager' | 'counter_manager' | 'inventory_manager' | 'employee' | 'staff';
 };
 
 export const employeesApi = {

@@ -11,7 +11,6 @@ const INVENTORY_PRODUCT_CREATE_ROLES = [
   'employee',
   'staff',
   'store manager',
-  'seo manager',
   'inventory manager',
   'counter manager',
 ] as const;
@@ -27,8 +26,8 @@ function normalizeInventoryRole(role: string | undefined): string {
 export function getInventoryEditMode(role: string | undefined): InventoryEditMode | null {
   const normalized = normalizeRole(role);
   if (normalized === 'admin' || normalized === 'super_admin' || normalized === 'client') return 'admin';
-  if (normalized === 'store_manager' || normalized === 'employee' || normalized === 'staff' || normalized === 'seo_manager' || normalized === 'counter_manager') return 'admin';
-  if (normalized === 'inventory_manager') return 'inventory_manager';
+  if (normalized === 'store_manager' || normalized === 'employee' || normalized === 'staff' || normalized === 'counter_manager') return 'admin';
+  if (normalized === 'inventory_manager' || normalized === 'seo_manager') return 'inventory_manager';
   return null;
 }
 
@@ -48,6 +47,8 @@ export function canAccessInventoryEditor(role: string | undefined): boolean {
 }
 
 export function canCreateInventoryProduct(role: string | undefined): boolean {
+  const normalized = normalizeRole(role);
+  if (normalized === 'seo_manager') return false;
   return (INVENTORY_PRODUCT_CREATE_ROLES as readonly string[]).includes(
     normalizeInventoryRole(role)
   );
@@ -55,24 +56,30 @@ export function canCreateInventoryProduct(role: string | undefined): boolean {
 
 export function canDeleteInventoryProduct(role: string | undefined): boolean {
   const normalized = normalizeRole(role);
+  if (normalized === 'seo_manager') return false;
   return (
     normalized === 'admin' ||
     normalized === 'super_admin' ||
     normalized === 'client' ||
     normalized === 'store_manager' ||
     normalized === 'employee' ||
+    normalized === 'staff' ||
+    normalized === 'inventory_manager' ||
     normalized === 'counter_manager'
   );
 }
 
 export function canAdjustInventoryStock(role: string | undefined): boolean {
   const normalized = normalizeRole(role);
+  if (normalized === 'seo_manager') return false;
   return (
     normalized === 'admin' ||
     normalized === 'super_admin' ||
     normalized === 'client' ||
     normalized === 'store_manager' ||
     normalized === 'employee' ||
+    normalized === 'staff' ||
+    normalized === 'inventory_manager' ||
     normalized === 'counter_manager'
   );
 }

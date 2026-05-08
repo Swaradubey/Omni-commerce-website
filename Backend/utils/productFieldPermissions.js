@@ -3,7 +3,7 @@
  * Schema uses `name` for the product title; `title` in the body is accepted as an alias for `name`.
  */
 
-const { isClientScopedRole } = require("./clientScopedRoles");
+const { isClientScopedRole, normalizeRole } = require("./clientScopedRoles");
 
 function stripInternalKeys(body) {
   if (!body || typeof body !== "object") return {};
@@ -53,15 +53,42 @@ function isTitleDescriptionOnlyUpdate(update) {
   return keys.length > 0 && keys.every((k) => k === "name" || k === "description");
 }
 
-/**
- * @param {string} role
- * @param {object} body
- * @returns {{ ok: true, update: object } | { ok: false, status: number, message: string }}
- */
-function resolveProductUpdatePayload(role, body) {
+function resolveProductUpdatePayload(roleInput, body) {
+  const role = normalizeRole(roleInput);
   const clean = stripInternalKeys(body);
 
   if (role === "admin" || role === "super_admin" || isClientScopedRole(role)) {
+    // Only apply strict field checks for SEO Manager and Inventory Manager
+    if (role === "seo_manager" || role === "inventory_manager") {
+      const update = {};
+      if (clean.title !== undefined) update.name = clean.title;
+      else if (clean.name !== undefined) update.name = clean.name;
+      if (clean.description !== undefined) update.description = clean.description;
+      
+      // Strict field check for SEO Manager: Reject if other fields are present
+      if (role === "seo_manager") {
+        const keys = Object.keys(clean);
+        const forbiddenKeys = keys.filter(k => k !== "title" && k !== "name" && k !== "description");
+        if (forbiddenKeys.length > 0) {
+          return {
+            ok: false,
+            status: 403,
+            message: "Permission denied: SEO Manager can only update Product Name and Description",
+          };
+        }
+      }
+
+      if (Object.keys(update).length === 0) {
+        return {
+          ok: false,
+          status: 400,
+          message: "Provide at least one of: title, name, or description",
+        };
+      }
+      return { ok: true, update };
+    }
+
+    // Default behavior for other client-scoped roles or admins
     if (isTitleDescriptionOnlyBody(clean)) {
       return buildTitleDescriptionOnlyUpdate(clean);
     }
@@ -85,21 +112,6 @@ function resolveProductUpdatePayload(role, body) {
       };
     }
     return { ok: true, update: clean };
-  }
-
-  if (role === "inventory_manager") {
-    const update = {};
-    if (clean.title !== undefined) update.name = clean.title;
-    else if (clean.name !== undefined) update.name = clean.name;
-    if (clean.description !== undefined) update.description = clean.description;
-    if (Object.keys(update).length === 0) {
-      return {
-        ok: false,
-        status: 400,
-        message: "Provide at least one of: title, name, or description",
-      };
-    }
-    return { ok: true, update };
   }
 
   if (role === "staff") {

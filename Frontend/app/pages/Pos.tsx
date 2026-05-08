@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParams, Link } from 'react-router';
 import {
   Plus,
   Minus,
@@ -16,6 +16,10 @@ import {
   RotateCcw,
   Loader2,
   AlertCircle,
+  FileText,
+  Printer,
+  ArrowLeft,
+  Download,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import {
@@ -51,6 +55,8 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { getFullImageUrl } from '../utils/imageUrl';
+import ApiService from '../api/apiService';
+import { isStaffRole, isStoreManagerRole } from '../utils/staffRoles';
 
 interface CartItem extends Product {
   cartQuantity: number;
@@ -69,13 +75,13 @@ const POS_PAYMENT_OPTIONS: {
   { value: 'cod', label: 'Cash on Delivery (COD)', icon: Banknote },
   { value: 'card', label: 'Card Payment', icon: CreditCard },
   { value: 'upi', label: 'UPI Payment', icon: Smartphone },
-  { value: 'swipe', label: 'Swipe Machine', icon: CreditCard },
+  { value: 'swipe', label: 'Cash', icon: CreditCard },
 ];
 
 type PaymentFieldKey = 'cardholderName' | 'cardNumber' | 'expiryDate' | 'cvv' | 'upiId';
 
 /** Payment grid, COD shipping, Card shipping, or Card details (same modal) */
-type PosModalStep = 'payment' | 'cod-shipping' | 'card-shipping' | 'card-payment';
+type PosModalStep = 'payment' | 'cod-shipping' | 'card-shipping' | 'card-payment' | 'invoice';
 
 type CodShippingFieldKey =
   | 'fullName'
@@ -179,6 +185,9 @@ export function Pos() {
   const { user } = useAuth();
   const [wishlistKeySet, setWishlistKeySet] = useState<Set<string>>(() => new Set());
   const [wishlistBusyKey, setWishlistBusyKey] = useState<string | null>(null);
+  const [latestOrderData, setLatestOrderData] = useState<any | null>(null);
+  const [latestInvoiceData, setLatestInvoiceData] = useState<any | null>(null);
+  const [isFetchingInvoice, setIsFetchingInvoice] = useState(false);
 
   const wishlistPool = useMemo(
     () => products.map(posProductToShopProduct),
@@ -268,7 +277,7 @@ export function Pos() {
         updatedAt: new Date().toISOString()
       } as Product));
 
-      const merged = [...dbProducts, ...normalizedStatic];
+      const merged = isStoreManagerRole(user?.role) ? dbProducts : [...dbProducts, ...normalizedStatic];
       
       // Deduplicate by Name (case insensitive) or SKU
       const unique: Product[] = [];
@@ -552,12 +561,21 @@ export function Pos() {
   };
 
   const handlePaymentDialogOpenChange = (open: boolean) => {
+    // If the user is closing the modal from the invoice step, complete the checkout flow
+    if (!open && modalStep === 'invoice') {
+      setCart([]);
+      setCheckoutComplete(true);
+    }
+    
     setPaymentModalOpen(open);
     if (!open) {
       setSelectedPaymentMethod(null);
       setPaymentValidationMessage(null);
       setOrderPlacing(false);
       resetPaymentFormFields();
+      setLatestOrderData(null);
+      setLatestInvoiceData(null);
+      setIsFetchingInvoice(false);
     }
   };
 
@@ -641,6 +659,86 @@ export function Pos() {
     return errs;
   };
 
+  const onOrderSuccess = async (order: any, isOffline = false) => {
+    setLatestOrderData(order);
+    // REMOVED: setCart([]) and setCheckoutComplete(true) - now handled after invoice
+    setLastCheckoutOffline(isOffline);
+    setPaymentValidationMessage(null);
+    setSelectedPaymentMethod(null);
+    
+    if (isOffline) {
+      // For offline orders, we don't have a backend invoice yet.
+      // We'll generate a preview from the order data.
+      setLatestInvoiceData({
+        invoiceNumber: `PRO-FORMA-${order.orderId}`,
+        orderId: order.orderId,
+        customerName: order.customerName || (order.shippingAddress && order.shippingAddress.fullName) || "POS Customer",
+        customerEmail: order.customerEmail || (order.shippingAddress && order.shippingAddress.email) || "",
+        items: order.items.map((i: any) => ({
+          name: i.name,
+          quantity: i.quantity,
+          price: i.price,
+          subtotal: i.price * i.quantity
+        })),
+        subtotal: order.totalPrice,
+        tax: 0,
+        totalAmount: order.totalPrice,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: "Pending (Offline)",
+        createdAt: new Date().toISOString()
+      });
+      setModalStep('invoice');
+    } else {
+      setIsFetchingInvoice(true);
+      setModalStep('invoice');
+      
+      try {
+        // Try to fetch the invoice from the backend
+        // We might need to retry a few times as it's generated asynchronously
+        let retryCount = 0;
+        let foundInvoice = null;
+        
+        while (retryCount < 3 && !foundInvoice) {
+          if (retryCount > 0) await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          const res = await ApiService.get('/invoices');
+          if (res.success && Array.isArray(res.data)) {
+            foundInvoice = res.data.find((i: any) => i.orderId === order.orderId);
+          }
+          retryCount++;
+        }
+        
+        if (foundInvoice) {
+          setLatestInvoiceData(foundInvoice);
+        } else {
+          // Fallback to deriving from order data if backend invoice not found yet
+          setLatestInvoiceData({
+            invoiceNumber: `INV-${order.orderId}`,
+            orderId: order.orderId,
+            customerName: order.customerName || (order.shippingAddress && order.shippingAddress.fullName) || "POS Customer",
+            customerEmail: order.customerEmail || (order.shippingAddress && order.shippingAddress.email) || "",
+            items: order.items.map((i: any) => ({
+              name: i.name,
+              quantity: i.quantity,
+              price: i.price,
+              subtotal: i.price * i.quantity
+            })),
+            subtotal: order.totalPrice,
+            tax: 0,
+            totalAmount: order.totalPrice,
+            paymentMethod: order.paymentMethod,
+            paymentStatus: order.paymentStatus || "Completed",
+            createdAt: order.createdAt || new Date().toISOString()
+          });
+        }
+      } catch (err) {
+        console.error('Invoice fetch error:', err);
+      } finally {
+        setIsFetchingInvoice(false);
+      }
+    }
+  };
+
   const handlePlaceOrder = async () => {
     if (cart.length === 0) return;
 
@@ -698,13 +796,7 @@ export function Pos() {
           toast.success(
             'Order saved offline successfully and will sync when internet returns.'
           );
-          setCart([]);
-          setCheckoutComplete(true);
-          setLastCheckoutOffline(true);
-          setPaymentModalOpen(false);
-          setSelectedPaymentMethod(null);
-          setPaymentValidationMessage(null);
-          resetPaymentFormFields();
+          await onOrderSuccess(orderPayload, true);
           void refreshPendingOfflineCount();
         } catch (err: unknown) {
           const message =
@@ -735,13 +827,7 @@ export function Pos() {
 
         if (result.success) {
           toast.success('Order placed successfully');
-          setCart([]);
-          setCheckoutComplete(true);
-          setLastCheckoutOffline(false);
-          setPaymentModalOpen(false);
-          setSelectedPaymentMethod(null);
-          setPaymentValidationMessage(null);
-          resetPaymentFormFields();
+          await onOrderSuccess(result.data, false);
         } else {
           throw new Error(result.message || 'Failed to place order.');
         }
@@ -820,13 +906,7 @@ export function Pos() {
           toast.success(
             'Order saved offline successfully and will sync when internet returns.'
           );
-          setCart([]);
-          setCheckoutComplete(true);
-          setLastCheckoutOffline(true);
-          setPaymentModalOpen(false);
-          setSelectedPaymentMethod(null);
-          setPaymentValidationMessage(null);
-          resetPaymentFormFields();
+          await onOrderSuccess(orderPayload, true);
           void refreshPendingOfflineCount();
         } catch (err: unknown) {
           const message =
@@ -858,13 +938,7 @@ export function Pos() {
 
         if (result.success) {
           toast.success('Order placed successfully');
-          setCart([]);
-          setCheckoutComplete(true);
-          setLastCheckoutOffline(false);
-          setPaymentModalOpen(false);
-          setSelectedPaymentMethod(null);
-          setPaymentValidationMessage(null);
-          resetPaymentFormFields();
+          await onOrderSuccess(result.data, false);
         } else {
           throw new Error(result.message || 'Failed to place order.');
         }
@@ -917,7 +991,7 @@ export function Pos() {
           cod: 'COD',
           card: 'Card',
           upi: 'UPI',
-          swipe: 'Swipe',
+          swipe: 'Cash',
         };
 
         const orderPayload: OrderPayload = {
@@ -943,13 +1017,7 @@ export function Pos() {
         toast.success(
           'Order saved offline successfully and will sync when internet returns.'
         );
-        setCart([]);
-        setCheckoutComplete(true);
-        setLastCheckoutOffline(true);
-        setPaymentModalOpen(false);
-        setSelectedPaymentMethod(null);
-        setPaymentValidationMessage(null);
-        resetPaymentFormFields();
+        await onOrderSuccess(orderPayload, true);
         void refreshPendingOfflineCount();
       } catch (err: unknown) {
         const message =
@@ -968,7 +1036,7 @@ export function Pos() {
         cod: 'COD',
         card: 'Card',
         upi: 'UPI',
-        swipe: 'Swipe',
+        swipe: 'Cash',
       };
 
       const result = await createOrder({
@@ -991,13 +1059,7 @@ export function Pos() {
         if (selectedPaymentMethod === 'swipe') {
           setSwipePaymentStatus('success');
         }
-        setCart([]);
-        setCheckoutComplete(true);
-        setLastCheckoutOffline(false);
-        setPaymentModalOpen(false);
-        setSelectedPaymentMethod(null);
-        setPaymentValidationMessage(null);
-        resetPaymentFormFields();
+        await onOrderSuccess(result.data, false);
       } else {
         throw new Error(result.message || 'Failed to place order.');
       }
@@ -1025,6 +1087,13 @@ export function Pos() {
       {/* Products Section */}
       <div className="flex-1 flex flex-col lg:h-full border-b lg:border-b-0 lg:border-r border-black/10 lg:overflow-hidden">
         <div className="p-4 sm:p-6 bg-white/50 backdrop-blur-sm border-b border-black/10">
+          <Link 
+            to="/" 
+            className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-[#111111] transition-colors mb-3"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to Menu</span>
+          </Link>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start mb-3">
             <h1 className="text-2xl font-bold text-[#111111]">Point of Sale</h1>
             <div className="flex flex-col items-start sm:items-end gap-1.5">
@@ -1153,13 +1222,7 @@ export function Pos() {
                   </div>
                   <h3 className="font-semibold text-sm line-clamp-2 text-[#111111] mb-1">{product.name}</h3>
                   <div className="text-xs text-gray-500 mb-2">{product.category}</div>
-                  <div className="mb-2 flex items-start gap-2 rounded-lg border border-blue-100/70 bg-blue-50/50 px-2 py-1.5">
-                    <RotateCcw className="h-3.5 w-3.5 shrink-0 text-blue-600 mt-0.5" aria-hidden />
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-semibold leading-tight text-gray-900">7 Day Returns</p>
-                      <p className="text-[9px] leading-tight text-gray-600">Easy 7-day return policy</p>
-                    </div>
-                  </div>
+
                    <div className="mt-auto flex items-center justify-between">
                      <span className="font-bold text-[#111111]">{formatINR(product.price)}</span>
                      <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -1245,13 +1308,7 @@ export function Pos() {
                      </p>
                      <p className="text-sm text-gray-600">{formatINR(currentOrderPreviewItem.price)}</p>
                    </div>
-                  <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-gray-200/90 bg-white px-3 py-2.5 shadow-sm">
-                    <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" aria-hidden />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">7 Day Returns</p>
-                      <p className="text-xs text-gray-600">Easy 7-day return policy</p>
-                    </div>
-                  </div>
+
                 </div>
               ) : null}
               <div className="space-y-3">
@@ -1359,11 +1416,15 @@ export function Pos() {
           <div className="shrink-0 px-6 pt-6 pb-4 border-b border-black/5 bg-white z-10">
             <DialogHeader className="text-left pr-6">
               <DialogTitle className="text-xl font-bold text-[#111111]">
-                {modalStep === 'cod-shipping' || modalStep === 'card-shipping'
-                  ? 'Shipping address'
-                  : modalStep === 'card-payment'
-                    ? 'Card payment'
-                    : 'Payment method'}
+                {modalStep === 'cod-shipping'
+                  ? ''
+                  : modalStep === 'card-shipping'
+                    ? 'Shipping address'
+                    : modalStep === 'card-payment'
+                      ? 'Card payment'
+                    : modalStep === 'invoice'
+                      ? 'Invoice Generated'
+                      : 'Payment method'}
               </DialogTitle>
               <DialogDescription className="text-sm text-gray-600">
                 {modalStep === 'cod-shipping'
@@ -1372,13 +1433,178 @@ export function Pos() {
                     ? 'Card payment — enter the delivery address, then continue to card details.'
                     : modalStep === 'card-payment'
                       ? 'Enter valid card details, then place the order. Only the last four digits and name are stored with the order.'
-                      : 'Choose how the customer will pay, then place the order.'}
+                      : modalStep === 'invoice'
+                        ? 'Your order has been placed. You can now preview, print or download your invoice.'
+                        : 'Choose how the customer will pay, then place the order.'}
               </DialogDescription>
             </DialogHeader>
           </div>
 
           <div className="flex-1 overflow-y-auto px-6 pt-4 pb-8 space-y-4">
 
+          {modalStep === 'invoice' ? (
+            <div className="space-y-6">
+              {isFetchingInvoice ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                  <div className="relative">
+                    <Loader2 className="h-10 w-10 animate-spin text-[#b89146]" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="h-4 w-4 bg-[#b89146]/20 rounded-full animate-pulse"></div>
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-gray-500">Preparing your premium invoice...</p>
+                </div>
+              ) : latestInvoiceData ? (
+                <div id="pos-invoice-content" className="bg-[#fffcf5] rounded-2xl border border-[#e6d5b8] p-6 shadow-xl relative overflow-hidden print:shadow-none print:border-none print:p-0 print:bg-white">
+                  {/* Premium Accent Corner */}
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-[#b89146]/5 -mr-16 -mt-16 rounded-full blur-2xl print:hidden"></div>
+                  
+                  {/* Invoice Header */}
+                  <div className="flex justify-between items-start mb-8 pb-6 border-b border-[#e6d5b8]/50 relative z-10">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="h-8 w-1.5 bg-[#b89146] rounded-full"></div>
+                        <h3 className="text-3xl font-black text-[#111111] tracking-tight">INVOICE</h3>
+                      </div>
+                      <p className="text-sm text-[#b89146] font-bold tracking-wider">{latestInvoiceData.invoiceNumber}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Order ID:</p>
+                        <p className="text-[10px] text-[#111111] font-mono font-bold bg-white px-1.5 py-0.5 rounded border border-black/5">{latestInvoiceData.orderId}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold uppercase tracking-wider mb-4">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {latestInvoiceData.paymentStatus === 'Paid' || latestInvoiceData.paymentStatus === 'Completed' ? 'Payment Success' : latestInvoiceData.paymentStatus}
+                      </div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Issue Date</p>
+                      <p className="text-sm font-bold text-[#111111]">
+                        {new Date(latestInvoiceData.createdAt || Date.now()).toLocaleDateString('en-IN', {
+                          day: '2-digit',
+                          month: 'long',
+                          year: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Customer Info */}
+                  <div className="grid grid-cols-2 gap-8 mb-8 relative z-10">
+                    <div className="space-y-3">
+                      <p className="text-[10px] font-black text-[#b89146] uppercase tracking-[0.2em]">Billed To</p>
+                      <div className="p-3 bg-white/60 rounded-xl border border-[#e6d5b8]/30">
+                        <p className="text-sm font-bold text-[#111111]">{latestInvoiceData.customerName}</p>
+                        {latestInvoiceData.customerEmail && (
+                          <p className="text-xs text-gray-500 mt-1.5 flex items-center gap-1.5 italic">
+                            {latestInvoiceData.customerEmail}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right space-y-3">
+                      <p className="text-[10px] font-black text-[#b89146] uppercase tracking-[0.2em]">Payment Method</p>
+                      <div className="p-3 bg-white/60 rounded-xl border border-[#e6d5b8]/30 inline-block min-w-[140px]">
+                        <p className="text-sm font-bold text-[#111111]">{latestInvoiceData.paymentMethod}</p>
+                        <p className="text-[10px] text-emerald-600 mt-1 font-bold uppercase tracking-tight">Verified Transaction</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Items Table */}
+                  <div className="mb-8 overflow-hidden rounded-2xl border border-[#e6d5b8]/50 bg-white/40 backdrop-blur-sm relative z-10">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-[#b89146]/5 text-[#b89146]">
+                          <th className="px-5 py-3 text-left text-[10px] font-black uppercase tracking-widest">Item Description</th>
+                          <th className="px-5 py-3 text-center text-[10px] font-black uppercase tracking-widest">Qty</th>
+                          <th className="px-5 py-3 text-right text-[10px] font-black uppercase tracking-widest">Price</th>
+                          <th className="px-5 py-3 text-right text-[10px] font-black uppercase tracking-widest">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#e6d5b8]/20">
+                        {latestInvoiceData.items?.map((item: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-white/40 transition-colors">
+                            <td className="px-5 py-4 font-bold text-[#111111]">{item.name}</td>
+                            <td className="px-5 py-4 text-center text-gray-600 font-medium">{item.quantity}</td>
+                            <td className="px-5 py-4 text-right text-gray-600 font-medium">{formatINR(item.price)}</td>
+                            <td className="px-5 py-4 text-right font-bold text-[#111111]">{formatINR(item.subtotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Totals Section */}
+                  <div className="flex justify-end relative z-10">
+                    <div className="w-full max-w-[240px] space-y-3 p-4 bg-[#b89146]/5 rounded-2xl border border-[#e6d5b8]/30">
+                      <div className="flex justify-between text-xs">
+                        <span className="font-bold text-gray-500 uppercase tracking-tighter">Subtotal</span>
+                        <span className="font-bold text-[#111111]">{formatINR(latestInvoiceData.subtotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="font-bold text-gray-500 uppercase tracking-tighter">GST / Tax (0%)</span>
+                        <span className="font-bold text-[#111111]">{formatINR(latestInvoiceData.tax || 0)}</span>
+                      </div>
+                      <div className="pt-3 border-t border-[#b89146]/20 flex justify-between items-center">
+                        <span className="text-[10px] font-black text-[#b89146] uppercase tracking-widest">Grand Total</span>
+                        <span className="text-xl font-black text-[#111111] drop-shadow-sm">{formatINR(latestInvoiceData.totalAmount)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Footer Note */}
+                  <div className="mt-8 text-center">
+                    <p className="text-[10px] text-gray-400 font-medium italic">Thank you for your business. We hope to see you again soon!</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-[#fffcf5] rounded-2xl border border-dashed border-[#e6d5b8]">
+                  <AlertCircle className="h-8 w-8 text-[#b89146] mx-auto mb-3 opacity-50" />
+                  <p className="text-sm font-medium text-gray-500">Could not retrieve invoice details.</p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-3 pt-2 print:hidden">
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline"
+                    type="button"
+                    className="flex-1 h-12 rounded-xl border-[#e6d5b8] bg-white text-[#b89146] hover:bg-[#b89146]/5 hover:text-[#b89146] gap-2 font-bold transition-all active:scale-[0.98]"
+                    onClick={() => window.print()}
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print Invoice
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    type="button"
+                    className="flex-1 h-12 rounded-xl border-[#e6d5b8] bg-white text-[#b89146] hover:bg-[#b89146]/5 hover:text-[#b89146] gap-2 font-bold transition-all active:scale-[0.98]"
+                    onClick={() => {
+                      // Basic download implementation using print as well, 
+                      // but visually distinct for the user. In many browsers, print allows saving as PDF.
+                      window.print();
+                    }}
+                  >
+                    <Download className="h-4 w-4" />
+                    Download
+                  </Button>
+                </div>
+                <Button 
+                  type="button"
+                  className="w-full h-12 rounded-xl bg-[#111111] hover:bg-black text-white font-bold shadow-lg shadow-black/10 transition-all active:scale-[0.98]"
+                  onClick={() => {
+                    handlePaymentDialogOpenChange(false);
+                    setLatestOrderData(null);
+                    setLatestInvoiceData(null);
+                  }}
+                >
+                  Continue Shopping
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
           <div className="rounded-xl border border-black/10 bg-[#f7f6f2]/80 px-4 py-3">
             <div className="flex items-center justify-between text-sm text-gray-600">
               <span>Order total</span>
@@ -1745,55 +1971,55 @@ export function Pos() {
                 </div>
               ) : null}
 
-              {selectedPaymentMethod === 'swipe' ? (
-                <div className="space-y-4 rounded-xl border border-black/10 bg-white p-5 shadow-sm animate-in fade-in slide-in-from-bottom-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold text-[#111111] flex items-center gap-2">
-                      <CreditCard className="w-5 h-5 text-blue-600" />
-                      Card Payment in Progress
-                    </p>
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
-                      {swipePaymentStatus === 'waiting' && (
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                          </span>
-                          Waiting for Payment
-                        </span>
-                      )}
-                      {swipePaymentStatus === 'processing' && (
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                          <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                          Processing...
-                        </span>
-                      )}
-                      {swipePaymentStatus === 'success' && (
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                          <CheckCircle2 className="h-2.5 w-2.5" />
-                          Payment Successful
-                        </span>
-                      )}
-                      {swipePaymentStatus === 'failed' && (
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-700 border border-red-100">
-                          <AlertCircle className="h-2.5 w-2.5" />
-                          Payment Failed
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-600 leading-relaxed">
-                    Use the external card/swipe machine to complete the payment. After successful payment, click &quot;Confirm Payment&quot; to finalize the order.
-                  </p>
-                  
-                  {swipePaymentStatus === 'success' && (
-                    <div className="mt-2 flex items-center gap-2 rounded-lg bg-emerald-50/50 border border-emerald-100 p-2.5 text-emerald-800 text-xs animate-in zoom-in-95 duration-300">
-                      <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      <p>Card transaction verified. Order finalized.</p>
-                    </div>
-                  )}
-                </div>
-              ) : null}
+{selectedPaymentMethod === 'swipe' ? (
+                 <div className="space-y-4 rounded-xl border border-black/10 bg-white p-5 shadow-sm animate-in fade-in slide-in-from-bottom-2">
+                   <div className="flex items-center justify-between">
+                     <p className="text-sm font-bold text-[#111111] flex items-center gap-2">
+                       <CreditCard className="w-5 h-5 text-blue-600" />
+                       Cash Payment
+                     </p>
+                     <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                       {swipePaymentStatus === 'waiting' && (
+                         <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                           <span className="relative flex h-2 w-2">
+                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                             <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                           </span>
+                           Waiting for Payment
+                         </span>
+                       )}
+                       {swipePaymentStatus === 'processing' && (
+                         <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                           <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                           Processing...
+                         </span>
+                       )}
+                       {swipePaymentStatus === 'success' && (
+                         <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                           <CheckCircle2 className="h-2.5 w-2.5" />
+                           Payment Successful
+                         </span>
+                       )}
+                       {swipePaymentStatus === 'failed' && (
+                         <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-700 border border-red-100">
+                           <AlertCircle className="h-2.5 w-2.5" />
+                           Payment Failed
+                         </span>
+                       )}
+                     </div>
+                   </div>
+                   <p className="text-xs text-gray-600 leading-relaxed">
+                     Cash payment received. Click &quot;Confirm Payment&quot; to finalize the order.
+                   </p>
+               
+                   {swipePaymentStatus === 'success' && (
+                     <div className="mt-2 flex items-center gap-2 rounded-lg bg-emerald-50/50 border border-emerald-100 p-2.5 text-emerald-800 text-xs animate-in zoom-in-95 duration-300">
+                       <CheckCircle2 className="h-4 w-4 shrink-0" />
+                       <p>Cash payment verified. Order finalized.</p>
+                     </div>
+                   )}
+                 </div>
+               ) : null}
             </>
           )}
 
@@ -1802,43 +2028,47 @@ export function Pos() {
               {paymentValidationMessage}
             </p>
           ) : null}
+          </>
+          )}
           </div>
 
-          <div className="shrink-0 border-t border-black/5 bg-white px-6 py-4 z-10">
-            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end sm:gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full rounded-xl border-black/15 sm:w-auto"
-              disabled={orderPlacing}
-              onClick={() => {
-                if (modalStep === 'cod-shipping' || modalStep === 'card-shipping') {
-                  goBackFromShippingStep();
-                } else if (modalStep === 'card-payment') {
-                  goBackFromCardPaymentStep();
-                } else {
-                  handlePaymentDialogOpenChange(false);
-                }
-              }}
-            >
-              Back
-            </Button>
-            <Button
-              type="button"
-              className="w-full rounded-xl bg-[#111111] font-semibold text-white hover:bg-black sm:w-auto"
-              disabled={orderPlacing}
-              onClick={handlePlaceOrder}
-            >
-              {orderPlacing
-                ? 'Placing order…'
-                : modalStep === 'card-shipping'
-                  ? 'Continue'
-                  : selectedPaymentMethod === 'swipe'
-                    ? 'Confirm Payment'
-                    : 'Place Order'}
-            </Button>
-            </DialogFooter>
-          </div>
+          {modalStep !== 'invoice' && (
+            <div className="shrink-0 border-t border-black/5 bg-white px-6 py-4 z-10">
+              <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end sm:gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full rounded-xl border-black/15 sm:w-auto"
+                disabled={orderPlacing}
+                onClick={() => {
+                  if (modalStep === 'cod-shipping' || modalStep === 'card-shipping') {
+                    goBackFromShippingStep();
+                  } else if (modalStep === 'card-payment') {
+                    goBackFromCardPaymentStep();
+                  } else {
+                    handlePaymentDialogOpenChange(false);
+                  }
+                }}
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                className="w-full rounded-xl bg-[#111111] font-semibold text-white hover:bg-black sm:w-auto"
+                disabled={orderPlacing}
+                onClick={handlePlaceOrder}
+              >
+                {orderPlacing
+                  ? 'Placing order…'
+                  : modalStep === 'card-shipping'
+                    ? 'Continue'
+                    : selectedPaymentMethod === 'swipe'
+                      ? 'Confirm Payment'
+                      : 'Place Order'}
+              </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

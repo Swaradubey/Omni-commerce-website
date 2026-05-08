@@ -145,9 +145,9 @@ export const router = createBrowserRouter([
           {
             path: 'dashboard/users',
             element: (
-              <SuperAdminOrClientRoute>
+              <FullAdminOnlyRoute>
                 <DashboardUsers />
-              </SuperAdminOrClientRoute>
+              </FullAdminOnlyRoute>
             ),
           },
           {

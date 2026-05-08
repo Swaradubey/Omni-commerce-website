@@ -61,8 +61,16 @@ const protect = async (req, res, next) => {
           }
         }
 
-        // Trial System Check for Admin/Client
-        if (req.user.role === "admin" || req.user.role === "client") {
+        // Final fallback: if clientId is still missing, check Employee record
+        if (!req.user.clientId) {
+          const emp = await Employee.findOne({ userId: req.user._id }).select("clientId");
+          if (emp && emp.clientId) {
+            req.user.clientId = emp.clientId;
+          }
+        }
+
+        // Trial System Check for Client-scoped roles
+        if (req.user.role === "client") {
           if (req.user.clientId) {
             const client = await Client.findById(req.user.clientId);
             if (client) {
@@ -84,6 +92,28 @@ const protect = async (req, res, next) => {
                 });
               }
             }
+          }
+        }
+      }
+
+      // Trial System Check for Admin role (Admin is global, not client-scoped,
+      // but may still have a linked clientId for trial tracking purposes)
+      if (req.user.role === "admin" && req.user.clientId) {
+        const client = await Client.findById(req.user.clientId);
+        if (client) {
+          const now = new Date();
+          const isExpired = client.isTrialExpired || (client.trialEndDate && client.trialEndDate < now);
+          if (isExpired) {
+            if (!client.isTrialExpired) {
+              client.isTrialExpired = true;
+              client.trialStatus = "expired";
+              await client.save();
+            }
+            return res.status(403).json({
+              success: false,
+              message: "Your 14 days trial has expired. Please contact Super Admin.",
+              trialExpired: true
+            });
           }
         }
       }

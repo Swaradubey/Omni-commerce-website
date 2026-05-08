@@ -16,7 +16,7 @@ export function DashboardAddEmployee() {
     address: '',
     password: '',
     confirmPassword: '',
-    role: 'employee' as 'employee' | 'staff' | 'seo_manager' | 'store_manager' | 'inventory_manager' | 'counter_manager',
+    role: 'user' as 'user' | 'seo_manager' | 'store_manager' | 'counter_manager' | 'inventory_manager',
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -35,8 +35,8 @@ export function DashboardAddEmployee() {
     e.preventDefault();
 
     // Basic validation
-    if (!formData.name || !formData.email || !formData.phone || !formData.address || !formData.password || !formData.confirmPassword) {
-      toast.error('Please fill in all required fields');
+    if (!formData.name || !formData.email || !formData.phone || !formData.password || !formData.confirmPassword) {
+      toast.error('Please fill in all required fields: Name, Email, Phone, Password');
       return;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -46,19 +46,22 @@ export function DashboardAddEmployee() {
 
     setSubmitting(true);
     try {
-      const normalizedRole = String(formData.role || 'employee')
+      const normalizedRole = String(formData.role || 'user')
         .trim()
         .toLowerCase()
-        .replace(/\s+/g, '_') as 'employee' | 'staff' | 'seo_manager' | 'store_manager' | 'inventory_manager' | 'counter_manager';
+        .replace(/\s+/g, '_') as 'user' | 'seo_manager' | 'store_manager' | 'counter_manager' | 'inventory_manager';
 
-      const payload = {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        address: formData.address,
+      const payload: Record<string, string> = {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
         password: formData.password,
         role: normalizedRole,
       };
+      // Include address only if provided
+      if (formData.address.trim()) {
+        payload.address = formData.address.trim();
+      }
 
       console.log('[AddEmployee] Submitting payload', {
         ...payload,
@@ -75,7 +78,7 @@ export function DashboardAddEmployee() {
           address: '',
           password: '',
           confirmPassword: '',
-          role: 'employee',
+          role: 'user',
         });
       } else {
         toast.error(res.message || 'Failed to add employee');
@@ -182,12 +185,11 @@ export function DashboardAddEmployee() {
                       value={formData.role}
                       onChange={e => setFormData({ ...formData, role: e.target.value as any })}
                     >
-                      <option value="employee">Employee</option>
-                      <option value="staff">Staff</option>
+                      <option value="user">Employee</option>
                       <option value="seo_manager">SEO Manager</option>
                       <option value="store_manager">Store Manager</option>
-                      <option value="inventory_manager">Inventory Manager</option>
                       <option value="counter_manager">Counter Manager</option>
+                      <option value="inventory_manager">Inventory Manager</option>
                     </select>
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
                       <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">

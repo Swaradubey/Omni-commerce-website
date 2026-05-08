@@ -43,7 +43,7 @@ router.get("/:id", optionalProtect, tenantMiddleware, getProductById);
 router.post(
   "/",
   protect,
-  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "inventory_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "inventory_manager", "counter_manager"),
   tenantMiddleware,
   [
     check("name", "Name is required").not().isEmpty(),
@@ -76,7 +76,7 @@ router.put(
 router.patch(
   "/:id/stock",
   protect,
-  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "inventory_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "inventory_manager", "counter_manager"),
   tenantMiddleware,
   [check("stock", "Stock count is required").isInt({ min: 0 })],
   updateProductStock
@@ -90,7 +90,7 @@ router.patch(
 router.delete(
   "/:id",
   protect,
-  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "seo_manager", "inventory_manager", "counter_manager"),
+  allowRoles("super_admin", "admin", "client", "client_admin", "store_manager", "employee", "staff", "inventory_manager", "counter_manager"),
   tenantMiddleware,
   deleteProduct
 );

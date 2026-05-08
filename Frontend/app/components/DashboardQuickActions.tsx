@@ -3,7 +3,7 @@ import { Card, CardContent } from './ui/card';
 import { useAuth } from '../context/AuthContext';
 import { canAccessInventoryEditor } from '../utils/inventoryPermissions';
 import { isStaffRole, isSuperAdminRole, isCustomerAccountRole } from '../utils/staffRoles';
-import { Plus, Package, ShoppingCart, RefreshCw, ArrowRight, TrendingUp } from 'lucide-react';
+import { Plus, Package, ShoppingCart, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -32,20 +32,6 @@ const actions = [
     ring: 'from-orange-300/50 via-amber-100/35 to-orange-400/45',
     description: 'Track and fulfill pending orders',
   },
-  {
-    label: 'Sync',
-    icon: RefreshCw,
-    gradient: 'from-violet-600 to-indigo-800',
-    ring: 'from-violet-300/45 via-indigo-100/25 to-violet-400/40',
-    description: 'Refresh data across all channels',
-  },
-  {
-    label: 'Top Products',
-    icon: TrendingUp,
-    gradient: 'from-pink-600 to-rose-800',
-    ring: 'from-pink-300/50 via-rose-100/30 to-pink-400/40',
-    description: 'View best-selling items',
-  },
 ] as const;
 
 type DashboardQuickActionsProps = {
@@ -63,7 +49,6 @@ export function DashboardQuickActions({ onSync, syncing }: DashboardQuickActions
   const visibleActions = useMemo(
     () =>
       actions.filter((a) => {
-        if (a.label === 'Sync' && isSuperAdminRole(user?.role)) return false;
         if (a.label === 'Inventory') return canAccessInventoryEditor(user?.role);
         if (a.label === 'Orders' && isCustomerAccountRole(user?.role)) return false;
         return true;
@@ -115,24 +100,8 @@ export function DashboardQuickActions({ onSync, syncing }: DashboardQuickActions
         navigate('/dashboard/orders');
         return;
       }
-      if (label === 'Top Products') {
-        if (isCustomerAccountRole(user?.role)) {
-          navigate('/shop?sort=rating');
-        } else {
-          navigate('/dashboard/products');
-        }
-        return;
-      }
-      if (label === 'Sync') {
-        if (syncing) return;
-        try {
-          await onSync();
-        } catch {
-          toast.error('Could not refresh dashboard.');
-        }
-      }
     },
-    [navigate, onSync, staff, syncing, user?.role]
+    [navigate, user?.role]
   );
 
   const onKeyActivate = (e: React.KeyboardEvent, label: string) => {
@@ -149,28 +118,22 @@ export function DashboardQuickActions({ onSync, syncing }: DashboardQuickActions
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 sm:gap-6">
         {visibleActions.map((action, index) => {
-          const isSync = action.label === 'Sync';
-          const disabled = isSync && syncing;
           return (
             <motion.div
               key={action.label}
               initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: index * 0.06, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              whileHover={disabled ? undefined : { y: -4, scale: 1.02 }}
-              whileTap={disabled ? undefined : { scale: 0.98 }}
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               role="button"
-              tabIndex={disabled ? -1 : 0}
-              aria-busy={isSync ? syncing : undefined}
-              aria-disabled={disabled || undefined}
+              tabIndex={0}
               onClick={() => void handleAction(action.label)}
-              onKeyDown={(e) => !disabled && onKeyActivate(e, action.label)}
+              onKeyDown={(e) => onKeyActivate(e, action.label)}
               className={cn(
                 'group rounded-[1.125rem] p-px bg-gradient-to-br shadow-sm transition-all duration-300 ease-out outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fdf6e3] dark:focus-visible:ring-offset-zinc-950',
                 action.ring,
-                disabled
-                  ? 'cursor-wait opacity-80'
-                  : 'cursor-pointer hover:shadow-[0_20px_48px_-16px_rgba(212,175,55,0.22)]'
+                'cursor-pointer hover:shadow-[0_20px_48px_-16px_rgba(212,175,55,0.22)]'
               )}
             >
               <Card className="relative overflow-hidden rounded-[1.0625rem] border-0 bg-white/70 dark:bg-zinc-950/65 backdrop-blur-xl h-full transition-all duration-300 ease-out group-hover:bg-white/85 dark:group-hover:bg-zinc-950/75 pointer-events-none">
@@ -180,9 +143,7 @@ export function DashboardQuickActions({ onSync, syncing }: DashboardQuickActions
                       action.label === 'Orders' && orderCount !== null ? 'scale-105' : ''
                     }`}
                   >
-                    {isSync && syncing ? (
-                      <RefreshCw className="w-6 h-6 animate-spin" strokeWidth={2.25} />
-                    ) : action.label === 'Orders' ? (
+                    {action.label === 'Orders' ? (
                       loadingCount ? (
                         <span className="w-6 h-6 animate-pulse bg-white/30 rounded-full"></span>
                       ) : (
@@ -197,7 +158,7 @@ export function DashboardQuickActions({ onSync, syncing }: DashboardQuickActions
                   </h4>
                   <p className="text-sm text-muted-foreground leading-relaxed mb-4">{action.description}</p>
                   <div className="flex items-center text-xs font-bold text-[#b8860b] dark:text-amber-300 uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    {isSync && syncing ? 'Syncing…' : 'Get Started'}
+                    Get Started
                     <ArrowRight className="w-3.5 h-3.5 ml-2" />
                   </div>
                 </CardContent>

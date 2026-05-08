@@ -26,6 +26,7 @@ const ROLE_LABEL: Record<string, string> = {
   staff: 'Staff',
   store_manager: 'Store Manager',
   employee: 'Employee',
+  counter_manager: 'Counter Manager',
 };
 
 export function roleDisplayName(role: string | undefined): string {
@@ -46,6 +47,7 @@ const OPEN_PANEL: Record<string, Omit<RoleOpenPanelConfig, 'useImpersonation'>> 
   staff: { buttonLabel: 'Open Staff', path: '/dashboard' },
   store_manager: { buttonLabel: 'Open Store Manager', path: '/dashboard/inventory' },
   employee: { buttonLabel: 'Open Employee', path: '/dashboard/inventory' },
+  counter_manager: { buttonLabel: 'Open Counter Manager', path: '/dashboard/inventory' },
 };
 
 export function getRoleOpenPanelConfig(role: string | undefined): RoleOpenPanelConfig | null {
