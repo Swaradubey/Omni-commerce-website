@@ -14,9 +14,7 @@ import { toast } from 'sonner';
 
 const ASSIGNABLE_ROLES = [
   'user',
-  'customer',
   'admin',
-  'staff',
   'cashier',
   'inventory_manager',
   'seo_manager',
