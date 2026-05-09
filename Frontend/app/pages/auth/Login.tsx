@@ -227,7 +227,7 @@ export function Login() {
               <div className="w-full border-t border-gray-200" />
             </div>
             <div className="relative flex justify-center text-sm text-gray-400 bg-gray-50 px-3">
-              Secured with JWT Authentication
+
             </div>
           </div>
 

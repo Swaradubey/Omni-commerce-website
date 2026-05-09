@@ -7,16 +7,25 @@ const { resolveStaffClientId, canAccessStaffRecord } = require("../utils/staffAc
 const { isValidObjectId } = require("../utils/tenantResolver");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const EMPLOYEE_MANAGED_ROLES = new Set(["employee", "staff", "seo_manager", "store_manager", "inventory_manager", "counter_manager", "user"]);
-const EMPLOYEE_MANAGED_ROLES_ARRAY = ["employee", "staff", "seo_manager", "store_manager", "inventory_manager", "counter_manager", "user"];
+const EMPLOYEE_MANAGED_ROLES = new Set(["employee", "staff", "seo_manager", "store_manager", "manager", "inventory_manager", "counter_manager", "user", "viewer", "admin", "super_admin"]);
+const EMPLOYEE_MANAGED_ROLES_ARRAY = ["employee", "staff", "seo_manager", "store_manager", "manager", "inventory_manager", "counter_manager", "user", "viewer", "admin", "super_admin"];
 // Roles that Admin (not Super Admin) is allowed to assign
-const ADMIN_CREATABLE_ROLES = new Set(["seo_manager", "store_manager", "counter_manager", "inventory_manager", "user"]);
+const ADMIN_CREATABLE_ROLES = new Set(["seo_manager", "store_manager", "counter_manager", "inventory_manager", "employee"]);
 
 function normalizeEmployeeRole(rawRole) {
-  const normalized = String(rawRole || "employee")
+  if (!rawRole) return "employee";
+  const normalized = String(rawRole)
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "_");
+  
+  // Map specific legacy or label-like roles to canonical values if needed
+  if (normalized === "employee") return "employee";
+  if (normalized === "seo_manager") return "seo_manager";
+  if (normalized === "store_manager") return "store_manager";
+  if (normalized === "counter_manager") return "counter_manager";
+  if (normalized === "inventory_manager") return "inventory_manager";
+  
   return EMPLOYEE_MANAGED_ROLES.has(normalized) ? normalized : null;
 }
 
@@ -105,7 +114,8 @@ async function resolveManagerEmployeeId(clientOid, managerIdRaw) {
 const createEmployee = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({ success: false, errors: errors.array() });
+    const message = errors.array().map((err) => err.msg).join(", ");
+    return res.status(400).json({ success: false, message, errors: errors.array() });
   }
 
   const bodyClientId =
@@ -140,7 +150,7 @@ const createEmployee = async (req, res) => {
   if (!targetRole) {
     return res.status(400).json({
       success: false,
-      message: "Role must be one of: employee, staff, seo_manager, store_manager, inventory_manager, counter_manager, user",
+      message: "Role must be one of: employee, seo_manager, store_manager, inventory_manager, counter_manager",
     });
   }
 
@@ -166,7 +176,7 @@ const createEmployee = async (req, res) => {
     if (!ADMIN_CREATABLE_ROLES.has(targetRole)) {
       return res.status(403).json({
         success: false,
-        message: "Admin accounts can only create: SEO Manager, Store Manager, Counter Manager, Inventory Manager, or User roles.",
+        message: "Admin accounts can only create: SEO Manager, Store Manager, Counter Manager, Inventory Manager, or Employee roles.",
       });
     }
   } else if (req.user.role !== "super_admin") {
@@ -186,9 +196,12 @@ const createEmployee = async (req, res) => {
     });
   }
 
-  // For "user" role created by admin, clientId is still required for tenant scoping.
-  // However, if admin has no clientId linked, provide a clear 400 error instead of 500.
-  if (!ctx.clientId || !isValidObjectId(ctx.clientId)) {
+  // For Super Admin and Admin, clientId is optional.
+  const isSuperAdmin = req.user.role === "super_admin";
+  const isAdminRole = req.user.role === "admin";
+  const isPrivilegedCreator = isSuperAdmin || isAdminRole;
+
+  if (!isPrivilegedCreator && (!ctx.clientId || !isValidObjectId(ctx.clientId))) {
     console.error("[Employees] createEmployee - invalid or missing clientId:", {
       ctxClientId: ctx.clientId,
       userRole: req.user?.role,
@@ -196,18 +209,22 @@ const createEmployee = async (req, res) => {
     });
     return res.status(400).json({
       success: false,
-      message: "Cannot create employee: your admin account is not linked to a client organization. Please contact Super Admin.",
+      message: "Cannot create employee: your account is not linked to a client organization. Please contact Super Admin.",
     });
   }
-  const clientOid = new mongoose.Types.ObjectId(String(ctx.clientId));
-  const clientExists = await Client.exists({ _id: clientOid });
-  if (!clientExists) {
-    return res.status(404).json({ success: false, message: "Client organization not found. Please contact Super Admin." });
+
+  const clientOid = ctx.clientId && isValidObjectId(ctx.clientId) ? new mongoose.Types.ObjectId(String(ctx.clientId)) : null;
+  if (clientOid) {
+    const clientExists = await Client.exists({ _id: clientOid });
+    if (!clientExists) {
+      return res.status(404).json({ success: false, message: "Client organization not found. Please contact Super Admin." });
+    }
   }
-  const shopFromClient = await loadClientShopName(clientOid);
+
+  const shopFromClient = clientOid ? await loadClientShopName(clientOid) : "";
   const shopName = shopNameBody || shopFromClient;
 
-  const mgr = await resolveManagerEmployeeId(clientOid, managerIdRaw);
+  const mgr = clientOid ? await resolveManagerEmployeeId(clientOid, managerIdRaw) : { ok: true, managerId: null, managerUserId: null };
   if (!mgr.ok) {
     return res.status(400).json({ success: false, message: mgr.message });
   }

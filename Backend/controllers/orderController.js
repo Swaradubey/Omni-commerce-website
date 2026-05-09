@@ -622,6 +622,7 @@ const createOrder = async (req, res) => {
       isPosMarkerValue(source) ||
       isPosMarkerValue(orderType) ||
       isPosMarkerValue(channel) ||
+      /^POS-/i.test(orderIdStr) ||
       /^ORD-POS-/i.test(orderIdStr);
 
     console.log(
@@ -772,15 +773,35 @@ const createOrder = async (req, res) => {
 
       const resolvedProductId = item.productId || item._id || item.id || `unknown-${Date.now()}`;
 
-      // If productId is a valid ObjectId, we try to find it for stock management
+      // 5. Finalize items and check stock (if product exists in DB)
       if (mongoose.Types.ObjectId.isValid(resolvedProductId)) {
-        const product = await Product.findOne({ _id: resolvedProductId, clientId });
-        if (product && product.stock < item.quantity) {
-          console.warn(`[VALIDATION] Insufficient stock for ${product.name}`);
-          return res.status(400).json({
-            success: false,
-            message: `Insufficient stock for ${product.name}. Available: ${product.stock}`
-          });
+        // Build query to find product (matching client or global)
+        const stockQuery = { _id: resolvedProductId };
+        if (clientId && mongoose.Types.ObjectId.isValid(clientId)) {
+          stockQuery.$or = [
+            { clientId: clientId },
+            { clientId: null },
+            { clientId: { $exists: false } }
+          ];
+        }
+
+        const product = await Product.findOne(stockQuery);
+        
+        if (product) {
+          const availableStock = Number(product.stock || 0);
+          const orderedQty = Number(item.quantity || 0);
+          
+          console.log(`[STOCK CHECK] Product: ${product.name} (${resolvedProductId}), DB Stock: ${product.stock}, Ordered Qty: ${item.quantity}, Comparison: ${orderedQty} > ${availableStock}`);
+
+          if (orderedQty > availableStock) {
+            console.warn(`[VALIDATION] Insufficient stock for ${product.name}. Ordered: ${orderedQty}, Available: ${availableStock}`);
+            return res.status(400).json({
+              success: false,
+              message: `Insufficient stock for ${product.name}. Available: ${availableStock}`
+            });
+          }
+        } else {
+          console.log(`[STOCK CHECK] Product not found in DB for validation: ${resolvedProductId} (clientId: ${clientId})`);
         }
       }
 
@@ -896,9 +917,9 @@ const createOrder = async (req, res) => {
       razorpayOrderId,
       razorpayPaymentId,
       razorpaySignature,
-      paymentStatus: paymentMethod === "razorpay" ? "paid" : "pending",
-      isPaid: paymentMethod === "razorpay",
-      paidAt: paymentMethod === "razorpay" ? Date.now() : undefined,
+      paymentStatus: (isPosOrder || paymentMethod === "razorpay") ? "paid" : "pending",
+      isPaid: (isPosOrder || paymentMethod === "razorpay"),
+      paidAt: (isPosOrder || paymentMethod === "razorpay") ? Date.now() : undefined,
       amount: paymentMethod === "razorpay" ? Number(totalPrice) : undefined,
       currency: paymentMethod === "razorpay" ? "INR" : undefined,
       ...buildInitialTracking(),
@@ -907,24 +928,70 @@ const createOrder = async (req, res) => {
     try {
       const createdOrder = await order.save();
       console.log("[BACKEND] Order Created Successfully:", createdOrder.orderId);
-      console.log(
-        "[BACKEND] Saved order ids — mongo _id:",
-        String(createdOrder._id),
-        "| business orderId:",
-        createdOrder.orderId
-      );
 
-      console.log("\n[BACKEND] --- SAVED ORDER DOCUMENT DEBUG ---");
-      console.log(JSON.stringify({
-        orderId: createdOrder.orderId,
-        shippingAddress: createdOrder.shippingAddress,
-        items: createdOrder.items,
-        paymentMethod: createdOrder.paymentMethod,
-        paymentDetails: createdOrder.paymentDetails,
-        totalPrice: createdOrder.totalPrice,
-        user: createdOrder.user
-      }, null, 2));
-      console.log("--------------------------------------------\n");
+      // 7. Update stock with robust validation and rollback (Manual Transaction)
+      const deductedItems = [];
+      try {
+        for (const item of createdOrder.items) {
+          const stockId = item.productId;
+          if (stockId && mongoose.Types.ObjectId.isValid(stockId)) {
+            const orderedQty = Number(item.quantity || 0);
+            
+            // Build update query (matching client or global, and ensuring enough stock)
+            const updateQuery = { 
+              _id: stockId, 
+              stock: { $gte: orderedQty } 
+            };
+            
+            if (clientId && mongoose.Types.ObjectId.isValid(clientId)) {
+              updateQuery.$or = [
+                { clientId: clientId },
+                { clientId: null },
+                { clientId: { $exists: false } }
+              ];
+            }
+
+            console.log(`[STOCK DEDUCTION] Attempting deduction for ${item.name} (${stockId}). Qty: ${orderedQty}`);
+
+            const updatedProduct = await Product.findOneAndUpdate(
+              updateQuery,
+              { $inc: { stock: -orderedQty } },
+              { new: true, runValidators: true }
+            );
+
+            if (!updatedProduct) {
+              // Fetch current stock for better error message
+              const checkProduct = await Product.findById(stockId);
+              const currentStock = checkProduct ? Number(checkProduct.stock || 0) : 0;
+              
+              console.warn(`[STOCK ERROR] Insufficient stock for ${item.name} during final deduction. Requested: ${orderedQty}, Available: ${currentStock}`);
+              throw new Error(`Insufficient stock for ${item.name}. Available: ${currentStock}. Order could not be completed.`);
+            }
+            
+            console.log(`[STOCK DEDUCTION] Success for ${item.name}. New Stock: ${updatedProduct.stock}`);
+            deductedItems.push({ productId: stockId, quantity: orderedQty });
+          }
+        }
+      } catch (stockError) {
+        console.error("[BACKEND] Stock deduction failed, rolling back:", stockError.message);
+        
+        // Rollback deducted stock
+        for (const rolledBack of deductedItems) {
+          await Product.updateOne(
+            { _id: rolledBack.productId, clientId },
+            { $inc: { stock: rolledBack.quantity } }
+          );
+        }
+        
+        // Remove the order and invoice (if possible) to maintain consistency
+        await Order.findByIdAndDelete(createdOrder._id);
+        await Invoice.deleteOne({ orderRef: createdOrder._id });
+        
+        return res.status(400).json({
+          success: false,
+          message: stockError.message || "Failed to update inventory stock"
+        });
+      }
 
       // Create Invoice dynamically
       try {
@@ -944,7 +1011,7 @@ const createOrder = async (req, res) => {
           tax: 0,
           totalAmount: Number(totalPrice),
           paymentMethod: createdOrder.paymentMethod,
-          paymentStatus: createdOrder.paymentStatus,
+          paymentStatus: isPosOrder ? "paid" : createdOrder.paymentStatus,
           orderStatus: createdOrder.orderStatus,
           clientId: createdOrder.clientId
         });
@@ -954,34 +1021,15 @@ const createOrder = async (req, res) => {
         console.error("[ERROR] Failed to generate automatic Invoice:", invErr);
       }
 
-      // 7. Update stock only if product exists (supports productId or _id from POS)
-      for (const item of items) {
-        const stockId = item.productId || item._id || item.id;
-        if (stockId && mongoose.Types.ObjectId.isValid(stockId)) {
-          await Product.findOneAndUpdate(
-            { _id: stockId, clientId },
-            { $inc: { stock: -item.quantity } }
-          );
-        }
-      }
-
       // 8. Shiprocket: auto-create shipment for website delivery orders (COD & prepaid share this path).
-      // Best-effort only — order is already saved; failures are logged and stored on the order document.
       let responseOrder = createdOrder;
       if (isPosOrder) {
         console.log(
           `[Shiprocket] Auto shipment skipped — POS / in-store order ${createdOrder.orderId}`
         );
       } else if (shiprocketService.isShiprocketConfigured()) {
-        console.log(
-          `[Shiprocket] Auto shipment — pickup_location is fixed to "Home" (must match Shiprocket pickup location name)`
-        );
-        if (shiprocketService.orderAlreadyHasShipment(createdOrder)) {
-          console.log(
-            `[Shiprocket] Auto shipment skipped — order ${createdOrder.orderId} already has shipment / AWB refs`
-          );
-        } else {
-          try {
+        try {
+          if (!shiprocketService.orderAlreadyHasShipment(createdOrder)) {
             const sr = await shiprocketService.createAdhocShipmentFromOrder(createdOrder);
             if (!sr.duplicateSkipped) {
               createdOrder.shiprocketRawResponse = sr.shipmentResponse;
@@ -995,80 +1043,13 @@ const createOrder = async (req, res) => {
               if (sr.shiprocketOrderId) createdOrder.shiprocketOrderId = sr.shiprocketOrderId;
               if (sr.trackingUrl) createdOrder.trackingUrl = sr.trackingUrl;
               if (sr.trackingStatus) createdOrder.trackingStatus = sr.trackingStatus;
-              createdOrder.shiprocketShipmentError = undefined;
-              if (sr.awbCode && String(sr.awbCode).trim()) {
-                createdOrder.shipmentCreateError = undefined;
-              } else if (sr.awbAssignErrorMessage) {
-                createdOrder.shipmentCreateError = String(sr.awbAssignErrorMessage).slice(0, 2000);
-              } else {
-                createdOrder.shipmentCreateError = undefined;
-              }
               await createdOrder.save();
               responseOrder = createdOrder;
-              const awbSaved = createdOrder.awbCode ? String(createdOrder.awbCode).trim() : "";
-              console.log(
-                "[Shiprocket] MongoDB update after shipment creation —",
-                JSON.stringify({
-                  orderId: createdOrder.orderId,
-                  shiprocketOrderId: createdOrder.shiprocketOrderId || null,
-                  shiprocketShipmentId: createdOrder.shiprocketShipmentId || null,
-                  awbCode: awbSaved ? `…${awbSaved.slice(-4)}` : null,
-                  courierName: createdOrder.courierName || null,
-                  trackingStatus: createdOrder.trackingStatus || null,
-                  shipmentCreateError: createdOrder.shipmentCreateError || null,
-                  shiprocketShipmentError: null,
-                })
-              );
-              if (awbSaved) {
-                console.log(
-                  `[Shiprocket] awbCode saved to DB — orderId=${createdOrder.orderId} suffix=…${awbSaved.slice(-4)}`
-                );
-              } else {
-                console.log(
-                  `[Shiprocket] awbCode saved to DB — orderId=${createdOrder.orderId} (none yet; shipment ids only)`
-                );
-              }
             }
-          } catch (srErr) {
-            const code = srErr && srErr.code ? String(srErr.code) : "UNKNOWN";
-            const msg =
-              srErr && srErr.message ? String(srErr.message).slice(0, 500) : "Shiprocket error";
-            console.error(
-              `[Shiprocket] Auto shipment failed orderId=${createdOrder.orderId} code=${code}:`,
-              msg
-            );
-            if (srErr && srErr.shiprocketJson) {
-              console.error(
-                "[Shiprocket] Exact error response from Shiprocket (truncated):",
-                JSON.stringify(srErr.shiprocketJson).slice(0, 2000)
-              );
-            }
-            try {
-              createdOrder.shipmentCreateError = msg.slice(0, 2000);
-              createdOrder.shiprocketShipmentError = {
-                code,
-                message: msg,
-                at: new Date(),
-                ...(srErr && srErr.shiprocketJson ? { shiprocketResponse: srErr.shiprocketJson } : {}),
-              };
-              await createdOrder.save();
-              console.error(
-                `[Shiprocket] Persisted shipmentCreateError on order ${createdOrder.orderId} (see shiprocketShipmentError for full JSON)`
-              );
-            } catch (persistErr) {
-              console.error(
-                "[Shiprocket] Could not persist shiprocketShipmentError:",
-                persistErr.message || persistErr
-              );
-            }
-            responseOrder = createdOrder;
           }
+        } catch (srErr) {
+          console.error(`[Shiprocket] Auto shipment failed:`, srErr.message);
         }
-      } else {
-        const diag = shiprocketService.getShiprocketEnvDiagnostics();
-        console.warn(
-          `[Shiprocket] Auto shipment skipped — missing env: ${diag.missingAuthEnv.join(", ") || "(none)"}`
-        );
       }
 
       res.status(201).json({
@@ -1076,6 +1057,7 @@ const createOrder = async (req, res) => {
         message: "Order placed successfully",
         data: enrichOrderTracking(responseOrder),
       });
+
     } catch (saveError) {
       if (saveError.code === 11000 && offlineOrderIdStr) {
         const existingDup = await Order.findOne({ offlineOrderId: offlineOrderIdStr });

@@ -7,8 +7,10 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { employeesApi } from '../../api/employees';
 import { toast } from 'sonner';
+import { useAuth } from '../../context/AuthContext';
 
 export function DashboardAddEmployee() {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -16,7 +18,7 @@ export function DashboardAddEmployee() {
     address: '',
     password: '',
     confirmPassword: '',
-    role: 'user' as 'user' | 'seo_manager' | 'store_manager' | 'counter_manager' | 'inventory_manager',
+    role: 'employee',
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -46,18 +48,29 @@ export function DashboardAddEmployee() {
 
     setSubmitting(true);
     try {
-      const normalizedRole = String(formData.role || 'user')
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, '_') as 'user' | 'seo_manager' | 'store_manager' | 'counter_manager' | 'inventory_manager';
+      const roleMap: Record<string, string> = {
+        'employee': 'EMPLOYEE',
+        'seo_manager': 'SEO_MANAGER',
+        'store_manager': 'STORE_MANAGER',
+        'counter_manager': 'COUNTER_MANAGER',
+        'inventory_manager': 'INVENTORY_MANAGER'
+      };
 
-      const payload: Record<string, string> = {
+      const mappedRole = roleMap[formData.role] || 'EMPLOYEE';
+
+      const payload: Record<string, any> = {
         name: formData.name.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
         password: formData.password,
-        role: normalizedRole,
+        role: mappedRole,
       };
+
+      // Add clientId only if it exists
+      if (user?.clientId) {
+        payload.clientId = user.clientId;
+      }
+
       // Include address only if provided
       if (formData.address.trim()) {
         payload.address = formData.address.trim();
@@ -78,16 +91,22 @@ export function DashboardAddEmployee() {
           address: '',
           password: '',
           confirmPassword: '',
-          role: 'user',
+          role: 'employee',
         });
       } else {
         toast.error(res.message || 'Failed to add employee');
       }
     } catch (error: any) {
-      const message =
-        (error instanceof Error && error.message) ||
-        error?.message ||
-        'Error occurred while creating employee';
+      let message = 'Error occurred while creating employee';
+      
+      if (error?.response?.data?.errors && Array.isArray(error.response.data.errors)) {
+        message = error.response.data.errors.map((err: any) => err.msg).join(', ');
+      } else if (error?.response?.data?.message) {
+        message = error.response.data.message;
+      } else if (error?.message) {
+        message = error.message;
+      }
+      
       console.error('[AddEmployee] Create failed:', message);
       toast.error(message);
     } finally {
@@ -183,9 +202,9 @@ export function DashboardAddEmployee() {
                     <select
                       className="w-full h-13 pl-12 pr-10 rounded-2xl bg-white/50 dark:bg-zinc-950/30 border border-gray-200/80 dark:border-white/10 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 appearance-none transition-all cursor-pointer"
                       value={formData.role}
-                      onChange={e => setFormData({ ...formData, role: e.target.value as any })}
+                      onChange={e => setFormData({ ...formData, role: e.target.value })}
                     >
-                      <option value="user">Employee</option>
+                      <option value="employee">Employee</option>
                       <option value="seo_manager">SEO Manager</option>
                       <option value="store_manager">Store Manager</option>
                       <option value="counter_manager">Counter Manager</option>

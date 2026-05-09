@@ -61,4 +61,10 @@ export const userApi = {
 
   patchPlatformUserRole: (id: string, role: string) =>
     ApiService.patch<ProfileUser>(`/api/users/platform/${id}/role`, { role }),
+
+  patchPlatformUserStatus: (id: string, isActive: boolean) =>
+    ApiService.patch<{ _id: string; isActive: boolean }>(`/api/users/platform/${id}/status`, { isActive }),
+
+  postPlatformUserResetPassword: (id: string, password: string) =>
+    ApiService.post<{ success: boolean; message: string }>(`/api/users/platform/${id}/reset-password`, { password }),
 };

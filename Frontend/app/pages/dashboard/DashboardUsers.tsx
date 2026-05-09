@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
-import { ExternalLink, Search, Save, Shield } from 'lucide-react';
+import { ExternalLink, Search, Save, Shield, Phone, UserCheck, UserX, Lock, Clock, User as UserIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -11,17 +11,15 @@ import { useAuth, IMPERSONATION_SUPER_TOKEN_BACKUP_KEY } from '../../context/Aut
 import { getRoleOpenPanelConfig, roleDisplayName } from '../../utils/roleOpenPanelConfig';
 import { isSuperAdminRole } from '../../utils/staffRoles';
 import { toast } from 'sonner';
+import { EditUserModal } from '../../components/dashboard/EditUserModal';
 
 const ASSIGNABLE_ROLES = [
-  'user',
   'admin',
-  'cashier',
-  'inventory_manager',
-  'seo_manager',
-  'client',
-  'store_manager',
-  'employee',
   'counter_manager',
+  'seo_manager',
+  'store_manager',
+  'inventory_manager',
+  'employee',
 ] as const;
 
 export function DashboardUsers() {
@@ -29,6 +27,7 @@ export function DashboardUsers() {
   const { user, refreshSession } = useAuth();
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
+  const [selectedRole, setSelectedRole] = useState('');
   const [page, setPage] = useState(1);
   const [users, setUsers] = useState<PlatformUserRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -38,6 +37,10 @@ export function DashboardUsers() {
   const [pendingRole, setPendingRole] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [openingPanelUserId, setOpeningPanelUserId] = useState<string | null>(null);
+  const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
+  const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<PlatformUserRow | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const limit = 15;
 
@@ -49,6 +52,7 @@ export function DashboardUsers() {
         page,
         limit,
         search: appliedSearch.trim() || undefined,
+        role: selectedRole || undefined,
       }, { pageName: 'Users & roles' });
       if (!res.success || !res.data) {
         throw new Error(res.message || 'Could not load users');
@@ -71,7 +75,7 @@ export function DashboardUsers() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, selectedRole]);
 
   const handleOpenRolePanel = async (u: PlatformUserRow) => {
     const cfg = getRoleOpenPanelConfig(u.role);
@@ -132,6 +136,48 @@ export function DashboardUsers() {
       setSavingId(null);
     }
   };
+  
+  const handleToggleStatus = async (u: PlatformUserRow) => {
+    const id = u._id;
+    const nextStatus = !u.isActive;
+    setTogglingStatusId(id);
+    try {
+      const res = await userApi.patchPlatformUserStatus(id, nextStatus);
+      if (!res.success) {
+        throw new Error(res.message || 'Update failed');
+      }
+      toast.success(`User ${nextStatus ? 'activated' : 'deactivated'}`);
+      setUsers((prev) =>
+        prev.map((row) => (String(row._id) === String(id) ? { ...row, isActive: nextStatus } : row)),
+      );
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Could not update status');
+    } finally {
+      setTogglingStatusId(null);
+    }
+  };
+
+  const handleResetPassword = async (u: PlatformUserRow) => {
+    const newPassword = window.prompt(`Enter new password for ${u.name} (min 8 chars):`);
+    if (!newPassword) return;
+    if (newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+    
+    setResettingPasswordId(u._id);
+    try {
+      const res = await userApi.postPlatformUserResetPassword(u._id, newPassword);
+      if (!res.success) {
+        throw new Error(res.message || 'Reset failed');
+      }
+      toast.success('Password reset successfully');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Could not reset password');
+    } finally {
+      setResettingPasswordId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -159,33 +205,46 @@ export function DashboardUsers() {
           <CardDescription>{total.toLocaleString()} user(s) match filters</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder="Search name or email…"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    setPage(1);
-                    setAppliedSearch(searchInput.trim());
-                  }
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search name or email…"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setPage(1);
+                      setAppliedSearch(searchInput.trim());
+                    }
+                  }}
+                />
+              </div>
+<select
+  className="rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-zinc-900 px-3 py-2 text-base font-medium"
+  value={selectedRole}
+  onChange={(e) => {
+    setPage(1);
+    setSelectedRole(e.target.value);
+  }}
+>
+<option value="" className="text-base font-medium">All Roles</option>
+                 {ASSIGNABLE_ROLES.map(r => (
+                   <option key={r} value={r} className="text-base font-medium">{roleDisplayName(r)}</option>
+                 ))}
+              </select>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setPage(1);
+                  setAppliedSearch(searchInput.trim());
                 }}
-              />
+              >
+                Search
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setPage(1);
-                setAppliedSearch(searchInput.trim());
-              }}
-            >
-              Search
-            </Button>
-          </div>
 
           {fetchError ? (
             <div
@@ -197,14 +256,16 @@ export function DashboardUsers() {
           ) : null}
 
           <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-x-auto">
-            <table className="w-full text-sm text-left">
+<table className="w-full text-left">
               <thead className="bg-gray-50 dark:bg-white/5 text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Name</th>
-                  <th className="px-4 py-3 font-semibold">Email</th>
-                  <th className="px-4 py-3 font-semibold">Role</th>
-                  <th className="px-4 py-3 font-semibold w-[140px]">Open panel</th>
-                  <th className="px-4 py-3 font-semibold w-[140px]" />
+                  <th className="px-4 py-3 font-semibold text-[15px]">Name</th>
+                  <th className="px-4 py-3 font-semibold text-[15px]">Email / Phone</th>
+                  <th className="px-4 py-3 font-semibold text-[15px]">Role</th>
+                  <th className="px-4 py-3 font-semibold text-[15px]">Status</th>
+                  <th className="px-4 py-3 font-semibold text-[15px]">Created</th>
+                  <th className="px-4 py-3 font-semibold text-[15px] w-[100px]">Actions</th>
+                  <th className="px-4 py-3 font-semibold text-[15px] w-[100px]" />
                 </tr>
               </thead>
               <tbody>
@@ -221,90 +282,154 @@ export function DashboardUsers() {
                     </td>
                   </tr>
                 ) : (
-                  users.map((u) => {
+                  (users || []).map((u) => {
                     const id = u._id;
-                    const current = pendingRole[id] ?? u.role;
+                    const safeRole = u.role || 'Unknown Role';
+                    const safeName = u.name || u.email || 'Unnamed User';
+                    const current = pendingRole[id] ?? safeRole;
                     const isSA = isSuperAdminRole(user?.role);
-                    const ADMIN_ALLOWED_ROLES = ['seo_manager', 'counter_manager', 'store_manager', 'inventory_manager', 'user'];
-                    
+                    const ADMIN_ALLOWED_ROLES = ['counter_manager', 'seo_manager', 'store_manager', 'inventory_manager', 'employee'];
+
                     let roleOptions: string[] = [];
-                    if (u.role === 'super_admin') {
+                    if (safeRole === 'super_admin') {
                       roleOptions = ['super_admin'];
                     } else if (!isSA) {
                       // Tenant Admins (Admin, Client, etc.)
-                      if (u.role === 'admin' || u.role === 'super_admin') {
-                        roleOptions = [u.role];
+                      if (safeRole === 'admin') {
+                        roleOptions = [safeRole];
                       } else {
-                        // Admin can only see and assign specific roles
                         roleOptions = ADMIN_ALLOWED_ROLES;
-                        if (!ADMIN_ALLOWED_ROLES.includes(u.role)) {
-                          roleOptions = [u.role, ...ADMIN_ALLOWED_ROLES];
-                        }
                       }
-                      // Filter out admin and super_admin from options if the current user is not Super Admin
-                      roleOptions = roleOptions.filter(r => r === u.role || (r !== 'admin' && r !== 'super_admin'));
+                      roleOptions = roleOptions.filter(r => r !== 'admin' && r !== 'super_admin');
                     } else {
                       // Super Admin can assign all roles
-                      roleOptions = [...new Set([u.role, ...ASSIGNABLE_ROLES])];
+                      roleOptions = [...ASSIGNABLE_ROLES];
                     }
 
-                    const panelCfg = getRoleOpenPanelConfig(u.role);
+                    const isOldRole = safeRole !== 'super_admin' && !ASSIGNABLE_ROLES.includes(safeRole as any) && !ADMIN_ALLOWED_ROLES.includes(safeRole as any);
+
+                    const panelCfg = getRoleOpenPanelConfig(safeRole);
                     return (
                       <tr
                         key={id}
                         className="border-t border-gray-100 dark:border-white/10 hover:bg-gray-50/80 dark:hover:bg-white/5"
                       >
-                        <td className="px-4 py-3 font-medium">{u.name}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
+                        <td className="px-4 py-3 font-semibold text-[17px] leading-relaxed">{safeName}</td>
                         <td className="px-4 py-3">
-                          <select
-                            className="rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm"
-                            value={current}
-                            disabled={u.role === 'super_admin' || (!isSA && u.role === 'admin')}
-                            onChange={(e) => setPendingRole((prev) => ({ ...prev, [id]: e.target.value }))}
-                          >
-                            {roleOptions.map((r) => (
-                              <option key={r} value={r}>
-                                {roleDisplayName(r)}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-medium text-[16px]">{u.email}</span>
+                            {u.phone && (
+                              <span className="text-[14px] text-muted-foreground flex items-center gap-1">
+                                <Phone className="w-3 h-3" />
+                                {u.phone}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
-                          {isSuperAdminRole(user?.role) && panelCfg ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="secondary"
-                              disabled={openingPanelUserId === u._id}
-                              onClick={() => void handleOpenRolePanel(u)}
-                              title={
-                                panelCfg.useImpersonation
-                                  ? `Open this account’s panel (Super Admin impersonation)`
-                                  : `Open the ${roleDisplayName(u.role)} workspace`
-                              }
-                            >
-                              <ExternalLink className="w-3.5 h-3.5 mr-1" />
-                              {openingPanelUserId === u._id ? 'Opening…' : panelCfg.buttonLabel}
-                            </Button>
+                          {isOldRole ? (
+                            <span className="px-2.5 py-1.5 text-xs font-medium text-muted-foreground border border-transparent">
+                              {roleDisplayName(safeRole)}
+                            </span>
                           ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
+ <select
+   className="rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-zinc-900 px-3 py-2.5 text-[16px] font-medium h-10"
+   value={current}
+   disabled={safeRole === 'super_admin' || (!isSA && safeRole === 'admin')}
+   onChange={(e) => setPendingRole((prev) => ({ ...prev, [id]: e.target.value }))}
+ >
+ {roleOptions.map((r) => (
+   <option key={r} value={r} className="text-[16px] font-medium">
+     {roleDisplayName(r)}
+   </option>
+ ))}
+                            </select>
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {u.role !== 'super_admin' ? (
+                          <button
+                            onClick={() => void handleToggleStatus(u)}
+                            disabled={togglingStatusId === id || safeRole === 'super_admin'}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold uppercase tracking-wider transition-all ${
+                              u.isActive
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+                                : 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400'
+                            }`}
+                          >
+                            {u.isActive ? (
+                              <UserCheck className="w-3.5 h-3.5" />
+                            ) : (
+                              <UserX className="w-3.5 h-3.5" />
+                            )}
+                            {u.isActive ? 'Active' : 'Disabled'}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground text-[13px] whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 opacity-60" />
+                            {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {isSuperAdminRole(user?.role) && panelCfg ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                className="h-9 px-2.5"
+                                disabled={openingPanelUserId === u._id}
+                                onClick={() => void handleOpenRolePanel(u)}
+                                title={
+                                  panelCfg.useImpersonation
+                                    ? `Open this account's panel (Super Admin impersonation)`
+                                    : `Open the ${roleDisplayName(safeRole)} workspace`
+                                }
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </Button>
+                            ) : null}
                             <Button
                               type="button"
                               size="sm"
                               variant="outline"
-                              disabled={savingId === id || current === u.role}
+                              className="h-9 px-2.5"
+                              onClick={() => {
+                                setEditingUser(u);
+                                setIsEditModalOpen(true);
+                              }}
+                              title="Edit User"
+                            >
+                              <UserIcon className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-9 px-2.5"
+                              disabled={resettingPasswordId === id || safeRole === 'super_admin'}
+                              onClick={() => void handleResetPassword(u)}
+                              title="Reset Password"
+                            >
+                              <Lock className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {safeRole !== 'super_admin' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className={`h-9 px-3.5 ${current !== safeRole ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/10' : ''}`}
+                              disabled={savingId === id || current === safeRole}
                               onClick={() => void handleSaveRole(u)}
                             >
-                              <Save className="w-3.5 h-3.5 mr-1" />
+                              <Save className="w-4 h-4 mr-1.5" />
                               Save
                             </Button>
                           ) : (
-                            <span className="text-xs text-muted-foreground">Protected</span>
+                            <span className="text-[11px] font-bold uppercase text-muted-foreground">Protected</span>
                           )}
                         </td>
                       </tr>
@@ -335,6 +460,16 @@ export function DashboardUsers() {
           )}
         </CardContent>
       </Card>
+      
+      <EditUserModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        user={editingUser}
+        isSuperAdmin={isSuperAdminRole(user?.role)}
+        onUpdate={(updated) => {
+          setUsers(prev => prev.map(u => u._id === updated._id ? { ...u, ...updated } : u));
+        }}
+      />
     </div>
   );
 }

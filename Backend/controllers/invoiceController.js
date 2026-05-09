@@ -39,6 +39,7 @@ const getInvoices = async (req, res) => {
       const derivedInvoices = orders
         .filter(order => !existingOrderIds.has(order.orderId))
         .map(order => {
+          const isPos = /^POS-/i.test(order.orderId) || /^ORD-POS-/i.test(order.orderId) || order.orderSource === "pos";
           return {
             _id: order._id,
             invoiceNumber: `INV-${order.orderId || order._id.toString().substring(0, 8).toUpperCase()}`,
@@ -50,7 +51,7 @@ const getInvoices = async (req, res) => {
             tax: 0,
             totalAmount: order.totalPrice || 0,
             paymentMethod: order.paymentMethod || "N/A",
-            paymentStatus: order.paymentStatus || "pending",
+            paymentStatus: isPos ? "paid" : (order.paymentStatus || "pending"),
             orderStatus: order.orderStatus || "placed",
             createdAt: order.createdAt,
             clientId: order.clientId,
@@ -59,6 +60,15 @@ const getInvoices = async (req, res) => {
 
       invoices = [...(invoices || []), ...derivedInvoices].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
+    
+    // Ensure all POS invoices return "paid" regardless of database state
+    invoices = invoices.map(inv => {
+      const isPos = /^POS-/i.test(inv.orderId) || /^ORD-POS-/i.test(inv.orderId);
+      if (isPos) {
+        inv.paymentStatus = "paid";
+      }
+      return inv;
+    });
 
     res.json({ success: true, count: invoices.length, data: invoices });
   } catch (error) {
@@ -97,10 +107,16 @@ const getInvoiceById = async (req, res) => {
     if (!invoice) {
       return res.status(404).json({ success: false, message: "Invoice not found or access denied" });
     }
+    
+    // Override payment status for POS
+    const invoiceObj = invoice.toObject ? invoice.toObject() : { ...invoice };
+    if (/^POS-/i.test(invoiceObj.orderId) || /^ORD-POS-/i.test(invoiceObj.orderId)) {
+      invoiceObj.paymentStatus = "paid";
+    }
 
     console.log(`[invoiceController] DB Query - Collection: invoices, Filter: ${JSON.stringify(query)}, Found: true`);
 
-    res.json({ success: true, data: invoice });
+    res.json({ success: true, data: invoiceObj });
   } catch (error) {
     console.error("[invoiceController] getInvoiceById error:", error.message);
     res.status(500).json({ success: false, message: error.message });

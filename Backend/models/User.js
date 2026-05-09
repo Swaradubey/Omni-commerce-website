@@ -71,6 +71,7 @@ const userSchema = new mongoose.Schema(
       enum: [
         "super_admin",
         "admin",
+        "manager",
         "staff",
         "customer",
         "user",
@@ -81,8 +82,9 @@ const userSchema = new mongoose.Schema(
         "store_manager",
         "employee",
         "counter_manager",
+        "viewer",
       ],
-      default: "user",
+      default: "employee",
     },
     isActive: {
       type: Boolean,

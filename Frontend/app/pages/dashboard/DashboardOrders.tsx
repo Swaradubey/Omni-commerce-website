@@ -8,7 +8,6 @@ import {
   Filter,
   Route,
   DollarSign,
-  Trash2,
   Receipt,
   Eye,
   CreditCard,
@@ -18,6 +17,7 @@ import {
   Mail,
   Phone,
   Package,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -31,7 +31,7 @@ import {
 } from '../../components/ui/dialog';
 import { useNavigate } from 'react-router';
 import ApiService from '../../api/apiService';
-import { patchOrderTrackingStatus } from '../../api/orders';
+import { patchOrderTrackingStatus, deleteOrder } from '../../api/orders';
 import { useAuth } from '../../context/AuthContext';
 import { hasFullAdminPrivileges, isStaffRole, isCustomerAccountRole, isSuperAdminRole } from '../../utils/staffRoles';
 import { OrderTrackingTimeline, type TimelineStage } from '../../components/orders/OrderTrackingTimeline';
@@ -184,25 +184,22 @@ export function DashboardOrders() {
     });
   };
 
-  const handleDeleteOrder = async (orderIdToUse: string) => {
-    if (!isAdmin) return;
-    const confirmDelete = window.confirm("Are you sure you want to delete this order?");
-    if (!confirmDelete) return;
-
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!window.confirm('Are you sure you want to delete this order permanently?')) return;
     try {
-      const res = await ApiService.delete(`/orders/${orderIdToUse}`);
+      const order = orders.find((o) => o.orderId === orderId);
+      const idToDelete = order?._id || orderId;
+      const res = await deleteOrder(idToDelete);
       if (res.success) {
-        toast.success("Order deleted successfully");
-        setOrders((prev) => prev.filter((o) => String(o._id) !== String(orderIdToUse) && String(o.orderId) !== String(orderIdToUse)));
-      } else {
-        toast.error(res.message || "Failed to delete order");
+        toast.success(res.message || 'Order deleted');
+        setOrders((prev) => prev.filter((o) => o.orderId !== orderId && o._id !== idToDelete));
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete order");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Delete failed');
     }
   };
 
-  const handleTrackingAction = async (trackingStatus: string) => {
+   const handleTrackingAction = async (trackingStatus: string) => {
     if (!manageOrder || !isAdmin) return;
     const oid = manageOrder.orderId || manageOrder._id;
     if (!oid) return;
@@ -487,38 +484,40 @@ export function DashboardOrders() {
                               {isAdmin && (
                                 <>
                                   {isSuperAdmin && (
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      className="rounded-lg border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40"
-                                      onClick={() => navigate(`/super-admin/invoice/${order.orderId}`)}
-                                    >
-                                      <Receipt className="mr-1.5 h-3.5 w-3.5" />
-                                      Invoice
-                                    </Button>
+                                    <>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-lg border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                                        onClick={() => navigate(`/super-admin/invoice/${order.orderId}`)}
+                                      >
+                                        <Receipt className="mr-1.5 h-3.5 w-3.5" />
+                                        Invoice
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-lg border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                                        onClick={() => void handleDeleteOrder(order.orderId)}
+                                      >
+                                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                        Delete
+                                      </Button>
+                                    </>
                                   )}
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-lg border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40"
-                                    onClick={() => setManageOrder(order)}
-                                  >
-                                    <Route className="mr-1.5 h-3.5 w-3.5" />
-                                    Manage
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-lg border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
-                                    onClick={() => handleDeleteOrder(order._id || order.orderId)}
-                                  >
-                                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                    Delete
-                                  </Button>
-                                </>
+                                   <Button
+                                     type="button"
+                                     variant="outline"
+                                     size="sm"
+                                     className="rounded-lg border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40"
+                                     onClick={() => setManageOrder(order)}
+                                   >
+                                     <Route className="mr-1.5 h-3.5 w-3.5" />
+                                     Manage
+                                   </Button>
+                                 </>
                               )}
                               {!isAdmin && <span className="text-xs text-muted-foreground">Limited access</span>}
                             </div>

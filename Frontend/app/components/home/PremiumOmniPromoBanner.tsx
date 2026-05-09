@@ -6,21 +6,21 @@ import { ArrowRight, Footprints, Headphones, Sparkles, Watch } from 'lucide-reac
 const MOBILE_PRODUCTS = [
   {
     name: 'Studio Headphones',
-    price: '$249',
+    price: '₹249',
     Icon: Headphones,
     thumbClass:
       'bg-gradient-to-br from-amber-100/95 via-orange-50/90 to-[#f4e4d4] text-[#5c4030]',
   },
   {
     name: 'Classic Sneakers',
-    price: '$189',
+    price: '₹189',
     Icon: Footprints,
     thumbClass:
       'bg-gradient-to-br from-stone-100/95 via-zinc-50/90 to-[#ebe8e4] text-[#4a423c]',
   },
   {
     name: 'Smart Watch Pro',
-    price: '$329',
+    price: '₹329',
     Icon: Watch,
     thumbClass:
       'bg-gradient-to-br from-sky-50/95 via-blue-50/80 to-indigo-50/70 text-[#3d4f5c]',

@@ -8,8 +8,10 @@ export const STAFF_ROLES = [
   'seo_manager',
   'client',
   'store_manager',
+  'manager',
   'employee',
   'counter_manager',
+  'viewer',
 ] as const;
 
 /**
@@ -98,6 +100,8 @@ export function accountRoleBadgeText(role: string | undefined): string | null {
   const normalized = normalizeRole(role);
   if (normalized === 'super_admin') return 'Super Admin';
   if (normalized === 'admin') return 'Admin';
+  if (normalized === 'manager') return 'Manager';
+  if (normalized === 'viewer') return 'Viewer';
   return null;
 }
 

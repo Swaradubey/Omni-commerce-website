@@ -13,11 +13,11 @@ const {
 const router = express.Router();
 
 const phoneValidator = check("phone")
+  .optional({ checkFalsy: true })
   .trim()
-  .notEmpty()
-  .withMessage("Phone number is required")
   .custom((value) => {
-    const digits = String(value || "").replace(/\D/g, "");
+    if (!value) return true;
+    const digits = String(value).replace(/\D/g, "");
     if (digits.length < 10) {
       throw new Error("Enter a valid phone number (at least 10 digits)");
     }
@@ -29,7 +29,7 @@ const createValidators = [
   check("name", "Name is required").trim().notEmpty(),
   check("email", "Email is required").trim().notEmpty().isEmail().withMessage("Please enter a valid email"),
   phoneValidator,
-  check("address").optional().trim(),
+  check("address").optional({ checkFalsy: true }).trim(),
   check("password")
     .trim()
     .notEmpty()
@@ -38,17 +38,15 @@ const createValidators = [
     .withMessage("Password must be at least 8 characters"),
   check("clientId")
     .optional()
-    .trim()
-    .notEmpty()
-    .withMessage("clientId cannot be empty when provided"),
+    .trim(),
   check("managerId").optional().trim(),
   check("shopName").optional().trim(),
   check("role")
     .optional()
     .trim()
     .customSanitizer((value) => String(value || "").toLowerCase().replace(/\s+/g, "_"))
-    .isIn(["employee", "staff", "seo_manager", "store_manager", "inventory_manager", "counter_manager", "user"])
-    .withMessage("Role must be one of: employee, staff, seo_manager, store_manager, inventory_manager, counter_manager, user"),
+    .isIn(["employee", "staff", "seo_manager", "store_manager", "manager", "inventory_manager", "counter_manager", "user", "viewer", "admin", "super_admin"])
+    .withMessage("Role must be one of: employee, staff, seo_manager, store_manager, manager, inventory_manager, counter_manager, user, viewer, admin, super_admin"),
 ];
 
 const updatePhoneOptional = check("phone")

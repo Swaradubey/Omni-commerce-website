@@ -5,22 +5,21 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogClose,
 } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
-import { 
-  Search, 
-  Plus, 
-  Trash2, 
-  User, 
-  Package, 
-  DollarSign, 
+import {
+  Search,
+  Plus,
+  Package,
+  DollarSign,
   Calculator,
-  X,
   Check,
-  AlertCircle
+  AlertCircle,
+  X,
 } from 'lucide-react';
 import ApiService from '../api/apiService';
 import { toast } from 'sonner';
@@ -33,15 +32,12 @@ interface CreateQuoteModalProps {
 }
 
 export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModalProps) {
-  const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form State
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [customerName, setCustomerName] = useState('');
 
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [productSearch, setProductSearch] = useState('');
@@ -51,21 +47,9 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
 
   useEffect(() => {
     if (isOpen) {
-      fetchCustomers();
       fetchProducts();
     }
   }, [isOpen]);
-
-  const fetchCustomers = async () => {
-    try {
-      const res = await ApiService.get('/admin/customers', { pageName: 'Customers' });
-      if (res.success) {
-        setCustomers(res.data.customers || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch customers', err);
-    }
-  };
 
   const fetchProducts = async () => {
     try {
@@ -78,59 +62,54 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
     }
   };
 
-  const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return customers;
-    return customers.filter(c => 
-      c.name?.toLowerCase().includes(customerSearch.toLowerCase()) || 
-      c.email?.toLowerCase().includes(customerSearch.toLowerCase())
-    );
-  }, [customers, customerSearch]);
-
   const filteredProducts = useMemo(() => {
     if (!productSearch) return products;
-    return products.filter(p => 
-      p.name?.toLowerCase().includes(productSearch.toLowerCase()) || 
+    return products.filter(p =>
+      p.name?.toLowerCase().includes(productSearch.toLowerCase()) ||
       p.sku?.toLowerCase().includes(productSearch.toLowerCase())
     );
   }, [products, productSearch]);
 
   const addItem = (product: any) => {
-    const existing = selectedItems.find(item => item.productId === product._id);
-    if (existing) {
-      setSelectedItems(selectedItems.map(item => 
-        item.productId === product._id 
-          ? { ...item, quantity: item.quantity + 1 } 
-          : item
-      ));
-    } else {
-      setSelectedItems([...selectedItems, {
-        productId: product._id,
+    const resolvedId = product._id || product.id || product.productId;
+    setSelectedItems((prev) => [
+      ...prev,
+      {
+        id: `${resolvedId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        productId: resolvedId,
         name: product.name,
         price: product.price,
         quantity: 1,
-        image: product.image
-      }]);
-    }
+        image: product.image,
+      },
+    ]);
     setProductSearch('');
     setShowProductDropdown(false);
   };
 
-  const removeItem = (productId: string) => {
-    setSelectedItems(selectedItems.filter(item => item.productId !== productId));
+  const removeItem = (itemId: string) => {
+    setSelectedItems((prev) => prev.filter((item) => item.id !== itemId));
   };
 
-  const updateQuantity = (productId: string, qty: number) => {
-    if (qty < 1) return;
-    setSelectedItems(selectedItems.map(item => 
-      item.productId === productId ? { ...item, quantity: qty } : item
-    ));
+  const updateQuantity = (itemId: string, qty: number) => {
+    if (qty <= 0) {
+      removeItem(itemId);
+      return;
+    }
+    setSelectedItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId ? { ...item, quantity: qty } : item
+      )
+    );
   };
 
-  const updatePrice = (productId: string, price: number) => {
+  const updatePrice = (itemId: string, price: number) => {
     if (price < 0) return;
-    setSelectedItems(selectedItems.map(item => 
-      item.productId === productId ? { ...item, price: price } : item
-    ));
+    setSelectedItems(prev =>
+      prev.map(item =>
+        item.id === itemId ? { ...item, price: price } : item
+      )
+    );
   };
 
   const totalAmount = selectedItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
@@ -138,8 +117,8 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedCustomer) {
-      toast.error('Please select a customer');
+    if (!customerName.trim()) {
+      toast.error('Please enter a customer name');
       return;
     }
 
@@ -151,10 +130,10 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
     setIsSubmitting(true);
     try {
       const payload = {
-        userId: selectedCustomer._id,
-        customerName: selectedCustomer.name,
-        customerEmail: selectedCustomer.email,
-        clientId: selectedCustomer.clientId || products[0]?.clientId, // Fallback to first product's client if available
+        userId: null,
+        customerName: customerName,
+        customerEmail: '',
+        clientId: products[0]?.clientId,
         products: selectedItems.map(item => ({
           productId: item.productId,
           name: item.name,
@@ -162,7 +141,7 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
           price: item.price
         })),
         originalTotal: totalAmount,
-        requestedPrice: totalAmount, // Default to total for admin creation
+        requestedPrice: totalAmount,
         message: message,
       };
 
@@ -183,8 +162,7 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
   };
 
   const resetForm = () => {
-    setSelectedCustomer(null);
-    setCustomerSearch('');
+    setCustomerName('');
     setSelectedItems([]);
     setProductSearch('');
     setMessage('');
@@ -192,226 +170,298 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl p-0 border-stone-200 bg-white dark:bg-zinc-950">
-        <form onSubmit={handleSubmit} className="flex flex-col h-full">
-          <div className="p-8 space-y-8">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-3 text-3xl font-black text-[#1F1F1F] dark:text-[#F9FAFB]">
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl">
-                  <Plus className="h-7 w-7 text-blue-600 dark:text-blue-400" />
-                </div>
-                Create New Quotation
-              </DialogTitle>
-            </DialogHeader>
+      <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950 p-0">
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              .quote-modal-scroll::-webkit-scrollbar {
+                width: 6px;
+                height: 6px;
+              }
+              .quote-modal-scroll::-webkit-scrollbar-track {
+                background: transparent;
+              }
+              .quote-modal-scroll::-webkit-scrollbar-thumb {
+                background: #e2e8f0;
+                border-radius: 10px;
+              }
+              .dark .quote-modal-scroll::-webkit-scrollbar-thumb {
+                background: #374151;
+              }
+              .quote-modal-scroll::-webkit-scrollbar-thumb:hover {
+                background: #cbd5e1;
+              }
+              .dark .quote-modal-scroll::-webkit-scrollbar-thumb:hover {
+                background: #4b5563;
+              }
+              .quote-input {
+                transition: all 0.15s ease;
+              }
+              .quote-input:focus {
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+              }
+              .order-item-hover:hover {
+                background-color: #f8fafc;
+              }
+              .dark .order-item-hover:hover {
+                background-color: #1e293b;
+              }
+              .quantity-input::-webkit-inner-spin-button,
+              .quantity-input::-webkit-outer-spin-button {
+                -webkit-appearance: none;
+                margin: 0;
+              }
+              .quantity-input {
+                -moz-appearance: textfield;
+              }
+            `,
+          }}
+        />
+        <form onSubmit={handleSubmit} className="flex flex-col h-full quote-modal-scroll overflow-y-auto">
+          {/* Sticky Header */}
+          <div className="sticky top-0 z-10 flex items-center justify-between bg-white/95 backdrop-blur-sm border-b border-gray-100 px-8 py-5 dark:border-gray-800 dark:bg-gray-950/95">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20">
+                <Plus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                  Create New Quotation
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  Fill in the details below to generate a new quote
+                </p>
+              </div>
+            </div>
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                aria-label="Close dialog"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </DialogClose>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Left Column: Customer & Details */}
+          {/* Main Content */}
+          <div className="flex-1 p-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
+              {/* Left Column: Customer & Notes */}
               <div className="space-y-6">
-                <div className="space-y-2 relative">
-                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Select Customer</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search customers by name or email..."
-                      value={selectedCustomer ? selectedCustomer.name : customerSearch}
-                      onChange={(e) => {
-                        setCustomerSearch(e.target.value);
-                        if (selectedCustomer) setSelectedCustomer(null);
-                        setShowCustomerDropdown(true);
-                      }}
-                      onFocus={() => setShowCustomerDropdown(true)}
-                      className="pl-10 h-12 rounded-xl border-gray-200 dark:border-zinc-800"
-                    />
-                    {selectedCustomer && (
-                      <button 
-                        type="button"
-                        onClick={() => setSelectedCustomer(null)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full"
-                      >
-                        <X className="h-4 w-4 text-muted-foreground" />
-                      </button>
-                    )}
-                  </div>
-
-                  <AnimatePresence>
-                    {showCustomerDropdown && filteredCustomers.length > 0 && !selectedCustomer && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="absolute z-50 w-full mt-2 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl shadow-xl max-h-60 overflow-y-auto"
-                      >
-                        {filteredCustomers.map(c => (
-                          <div
-                            key={c._id}
-                            onClick={() => {
-                              setSelectedCustomer(c);
-                              setShowCustomerDropdown(false);
-                            }}
-                            className="p-4 hover:bg-gray-50 dark:hover:bg-zinc-800 cursor-pointer flex items-center gap-3 transition-colors"
-                          >
-                            <div className="h-10 w-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                              <User className="h-5 w-5 text-blue-600" />
-                            </div>
-                            <div>
-                              <p className="font-bold text-sm text-gray-900 dark:text-gray-100">{c.name}</p>
-                              <p className="text-xs text-muted-foreground">{c.email}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                <div>
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 block">
+                    Customer Name
+                  </Label>
+                  <Input
+                    type="text"
+                    placeholder="Enter customer name"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="quote-input h-11 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white dark:focus:bg-gray-900"
+                  />
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Notes / Message</Label>
+                <div>
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 block">
+                    Notes / Message
+                  </Label>
                   <Textarea
-                    placeholder="Add special instructions or terms..."
+                    placeholder="Add special instructions or terms for this quotation..."
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    className="min-h-[120px] rounded-2xl border-gray-200 dark:border-zinc-800 focus:ring-blue-500/20"
+                    className="quote-input min-h-[128px] resize-none rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4 py-3 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white dark:focus:bg-gray-900"
                   />
                 </div>
               </div>
 
-              {/* Right Column: Products Selection */}
+              {/* Right Column: Products */}
               <div className="space-y-6">
-                <div className="space-y-2 relative">
-                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Add Products</Label>
+                {/* Add Products Search */}
+                <div>
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 block">
+                    Add Products
+                  </Label>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-400 pointer-events-none" />
                     <Input
                       placeholder="Search products by name or SKU..."
                       value={productSearch}
                       onChange={(e) => setProductSearch(e.target.value)}
                       onFocus={() => setShowProductDropdown(true)}
-                      className="pl-10 h-12 rounded-xl border-gray-200 dark:border-zinc-800"
+                      className="quote-input pl-11 h-11 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white dark:focus:bg-gray-900"
                     />
                   </div>
 
                   <AnimatePresence>
                     {showProductDropdown && filteredProducts.length > 0 && (
                       <motion.div
-                        initial={{ opacity: 0, y: -10 }}
+                        initial={{ opacity: 0, y: -6 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="absolute z-50 w-full mt-2 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl shadow-xl max-h-60 overflow-y-auto"
+                        exit={{ opacity: 0, y: -6 }}
+                        className="absolute z-50 w-full mt-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden"
                       >
-                        {filteredProducts.map(p => (
-                          <div
-                            key={p._id}
-                            onClick={() => addItem(p)}
-                            className="p-4 hover:bg-gray-50 dark:hover:bg-zinc-800 cursor-pointer flex items-center justify-between transition-colors"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center overflow-hidden">
-                                {p.image ? <img src={p.image} alt="" className="h-full w-full object-cover" /> : <Package className="h-5 w-5 text-amber-600" />}
+                        <div className="max-h-56 overflow-y-auto">
+                          {filteredProducts.map(p => (
+                            <div
+                              key={p._id}
+                              onClick={() => addItem(p)}
+                              className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 cursor-pointer flex items-center justify-between transition-colors border-b border-gray-100 dark:border-gray-800 last:border-b-0"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="h-9 w-9 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                  {p.image ? (
+                                    <img src={p.image} alt="" className="h-full w-full object-cover" />
+                                  ) : (
+                                    <Package className="h-4 w-4 text-amber-500" />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{p.name}</p>
+                                  <p className="text-xs text-gray-400 dark:text-gray-500 truncate">SKU: {p.sku} · Stock: {p.stock}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-bold text-sm text-gray-900 dark:text-gray-100">{p.name}</p>
-                                <p className="text-xs text-muted-foreground">SKU: {p.sku} • Stock: {p.stock}</p>
-                              </div>
+                              <p className="font-semibold text-sm text-blue-600 dark:text-blue-400 flex-shrink-0 ml-3">₹{p.price}</p>
                             </div>
-                            <p className="font-black text-sm text-blue-600">₹{p.price}</p>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
 
-                <div className="p-6 bg-gray-50 dark:bg-white/5 rounded-3xl border border-gray-100 dark:border-white/5">
+                {/* Order Summary Card */}
+                <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700/60 p-5 flex flex-col" style={{ minHeight: 200 }}>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-black uppercase tracking-widest text-gray-900 dark:text-gray-100">Order Summary</h3>
-                    <div className="flex items-center gap-2 text-blue-600">
-                      <Calculator className="h-4 w-4" />
-                      <span className="text-xs font-bold">Auto-calculated</span>
+                    <div className="flex items-center gap-2">
+                      <Calculator className="h-4.5 w-4.5 text-gray-400" />
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                        Order Summary
+                      </h3>
                     </div>
+                    <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-200 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                      {selectedItems.length} item{selectedItems.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
-                  
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+
+                  {/* Items List */}
+                  <div className="flex-1 space-y-2 overflow-y-auto quote-modal-scroll pr-1">
                     {selectedItems.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                        <Package className="h-10 w-10 mb-2 opacity-20" />
-                        <p className="text-xs font-medium">No products added yet</p>
+                      <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-600">
+                        <div className="h-14 w-14 rounded-2xl bg-gray-100 dark:bg-gray-800/60 flex items-center justify-center mb-3">
+                          <Package className="h-6 w-6 text-gray-300 dark:text-gray-600" />
+                        </div>
+                        <p className="text-sm font-medium">No products added yet</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 max-w-[200px] text-center">
+                          Search and add products to build your quotation
+                        </p>
                       </div>
                     ) : (
                       selectedItems.map(item => (
-                        <div key={item.productId} className="flex items-center justify-between gap-4 p-3 bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-bold text-sm truncate">{item.name}</p>
-                            <div className="flex items-center gap-2 mt-1">
+                        <div
+                          key={item.id}
+                          className="order-item-hover group flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-900/70 border border-gray-100 dark:border-gray-800/60 transition-colors relative"
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              removeItem(item.id);
+                            }}
+                            className="absolute top-2 right-2 text-gray-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-0.5 rounded"
+                            aria-label="Remove product"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                          <div className="h-10 w-10 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {item.image ? (
+                              <img src={item.image} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <Package className="h-4 w-4 text-amber-500" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0 pl-2 flex items-center justify-between">
+                            <p className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{item.name}</p>
+                            <div className="flex items-center gap-1.5">
                               <Input
                                 type="number"
                                 value={item.quantity}
-                                onChange={(e) => updateQuantity(item.productId, parseInt(e.target.value) || 0)}
-                                className="w-16 h-8 text-xs text-center rounded-lg px-1"
+                                onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 0)}
+                                className="quantity-input w-14 h-7 text-[11px] text-center rounded-lg px-1 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                               />
-                              <span className="text-[10px] text-muted-foreground">x</span>
+                              <span className="text-[10px] text-gray-400">×</span>
                               <div className="relative">
-                                <DollarSign className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                                <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
                                 <Input
                                   type="number"
                                   value={item.price}
-                                  onChange={(e) => updatePrice(item.productId, parseFloat(e.target.value) || 0)}
-                                  className="w-24 h-8 text-xs pl-5 rounded-lg"
+                                  onChange={(e) => updatePrice(item.id, parseFloat(e.target.value) || 0)}
+                                  className="pl-7 w-20 h-7 text-[11px] rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                                 />
                               </div>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-black text-sm">₹{(item.price * item.quantity).toLocaleString()}</p>
-                            <button 
-                              type="button"
-                              onClick={() => removeItem(item.productId)}
-                              className="text-rose-500 hover:text-rose-600 p-1 mt-1"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
                           </div>
                         </div>
                       ))
                     )}
                   </div>
 
-                  <div className="mt-6 pt-6 border-t border-gray-200 dark:border-white/10 space-y-2">
-                    <div className="flex justify-between items-center text-muted-foreground">
-                      <span className="text-xs font-bold uppercase tracking-wider">Subtotal</span>
-                      <span className="font-bold">₹{totalAmount.toLocaleString()}</span>
+                  {/* Totals */}
+                  {selectedItems.length > 0 && (
+                    <div className="mt-5 pt-5 border-t border-gray-200 dark:border-gray-700/60 space-y-2.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                          Subtotal
+                        </span>
+                        <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                          ₹{totalAmount.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-800">
+                        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                          Grand Total
+                        </span>
+                        <span className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                          ₹{totalAmount.toLocaleString()}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-black text-gray-900 dark:text-gray-100">Grand Total</span>
-                      <span className="text-2xl font-black text-blue-600">₹{totalAmount.toLocaleString()}</span>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
-          <DialogFooter className="p-8 bg-gray-50 dark:bg-zinc-900/50 border-t border-gray-200 dark:border-zinc-800 rounded-b-3xl">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-              className="rounded-xl px-8"
-            >
-              Cancel
-            </Button>
+          {/* Footer */}
+          <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 bg-white/95 backdrop-blur-sm border-t border-gray-100 px-8 py-4 dark:border-gray-800 dark:bg-gray-950/95">
+            <DialogClose asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-xl px-6 h-11 text-sm font-medium"
+              >
+                Cancel
+              </Button>
+            </DialogClose>
             <Button
               type="submit"
-              disabled={isSubmitting || selectedItems.length === 0 || !selectedCustomer}
-              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-10 gap-2 shadow-xl shadow-blue-600/20 h-12"
+              disabled={isSubmitting || selectedItems.length === 0 || !customerName.trim()}
+              className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-lg shadow-blue-600/20 disabled:opacity-60 disabled:shadow-none rounded-xl px-10 gap-2 h-12 text-sm font-semibold"
             >
               {isSubmitting ? (
-                <div className="h-5 w-5 border-2 border-white/30 border-t-white animate-spin rounded-full" />
+                <>
+                  <div className="h-4 w-4 border-2 border-white/30 border-t-white animate-spin rounded-full" />
+                  <span>Generating...</span>
+                </>
               ) : (
-                <Check className="h-5 w-5" />
+                <>
+                  <Check className="h-4.5 w-4.5" />
+                  <span>Generate Quote</span>
+                </>
               )}
-              <span className="font-bold">Generate Quote</span>
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

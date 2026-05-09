@@ -1,22 +1,19 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
+const Client = require("../models/Client");
 const { SUPER_ADMIN_EMAIL } = require("../utils/authConstants");
 const { ensureRoleProfilesForUser } = require("../utils/ensureRoleProfiles");
 const { isValidObjectId } = require("../utils/tenantResolver");
+const { normalizeRole } = require("../utils/clientScopedRoles");
 
 /** Roles Super Admin may assign (never `super_admin` via API — use seeded account only). */
 const ASSIGNABLE_ROLES = [
-  "user",
-  "customer",
   "admin",
-  "staff",
-  "cashier",
-  "inventory_manager",
-  "seo_manager",
-  "client",
-  "store_manager",
-  "employee",
   "counter_manager",
+  "seo_manager",
+  "store_manager",
+  "inventory_manager",
+  "employee",
 ];
 
 const getMe = async (req, res) => {
@@ -96,14 +93,20 @@ const updateMe = async (req, res) => {
 };
 
 // @route   GET /api/users  (alias)  |  GET /api/users/platform/list
-// @access  Super Admin
+// @access  Super Admin / Admin / Client
 const listPlatformUsers = async (req, res) => {
   try {
-    const isSuperAdmin = req.user && req.user.role === "super_admin";
+    const userRole = normalizeRole(req.user?.role);
+    const isSuperAdmin = userRole === "super_admin";
+    const isAdmin = userRole === "admin";
+    const isClientAdmin = userRole === "client" || userRole === "client_admin";
+    
+    // Privileged roles can access the directory
+    const isPrivileged = isSuperAdmin || isAdmin || isClientAdmin;
+
     const clientId = req.user?.clientId || req.clientId;
 
-    // Requirement 10 & 16: Log data retrieval details
-    console.log(`[UserController] listPlatformUsers - Page: Users & roles, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+    console.log(`[UserController] listPlatformUsers - Role: ${userRole}, ResolvedClientId: ${clientId || "global"}`);
 
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
@@ -111,11 +114,33 @@ const listPlatformUsers = async (req, res) => {
     const roleFilter = req.query.role ? String(req.query.role).trim() : "";
 
     const q = {};
-    if (!isSuperAdmin) {
+
+    // Requirement 3: Exclude seeded Super Admin from general directory list
+    q.email = { $ne: SUPER_ADMIN_EMAIL };
+
+    if (isSuperAdmin || isAdmin) {
+      // Global Admins see everything. 
+      // If ?clientId is provided, filter by it (Admin intentional filtering).
+      if (isValidObjectId(req.query.clientId)) {
+        q.clientId = req.query.clientId;
+      }
+    } else if (isClientAdmin) {
+      // Client Admins see only their own organization's users
       if (clientId) {
         q.clientId = clientId;
       } else {
-        // If not super_admin and no clientId resolved, they should see nothing (strict isolation)
+        // If no clientId resolved for client role, they see nothing
+        return res.json({
+          success: true,
+          data: { users: [], total: 0, page, limit, pages: 1 }
+        });
+      }
+    } else {
+      // Non-privileged roles see nothing or only themselves (strict isolation)
+      // Usually they shouldn't even reach here due to allowRoles middleware
+      if (clientId) {
+        q.clientId = clientId;
+      } else {
         return res.json({
           success: true,
           data: { users: [], total: 0, page, limit, pages: 1 }
@@ -125,15 +150,20 @@ const listPlatformUsers = async (req, res) => {
 
     if (search) {
       const esc = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      q.$or = [{ name: new RegExp(esc, "i") }, { email: new RegExp(esc, "i") }];
+      // Requirement 4: Search should work by name, email, and phone
+      q.$or = [
+        { name: new RegExp(esc, "i") }, 
+        { email: new RegExp(esc, "i") },
+        { phone: new RegExp(esc, "i") }
+      ];
     }
+    
     if (roleFilter) {
       q.role = roleFilter;
     }
 
-    console.log("-----------------------------------------");
-    console.log("role:", req.user?.role, "clientId:", clientId, "query:", JSON.stringify(q));
-    console.log("-----------------------------------------");
+    console.log("[UserController] listPlatformUsers Query:", JSON.stringify(q));
+
     const skip = (page - 1) * limit;
     const [users, total] = await Promise.all([
       User.find(q).select("-password").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
@@ -182,56 +212,47 @@ const updateUserRole = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    const isSuperAdmin = req.user && req.user.role === "super_admin";
-    const isAdmin = req.user && req.user.role === "admin";
+    const userRole = normalizeRole(req.user?.role);
+    const isSuperAdmin = userRole === "super_admin";
+    const isAdmin = userRole === "admin";
     const clientId = req.user?.clientId || req.clientId;
 
-    if (!isSuperAdmin) {
+    if (!isSuperAdmin && !isAdmin) {
+      // Tenant-scoped management (Client / Client Admin)
       if (!clientId) {
         return res.status(403).json({
           success: false,
           message: "Access denied. Organization scope not identified.",
         });
       }
-      if (String(target.clientId) !== String(clientId)) {
+      if (target.clientId && String(target.clientId) !== String(clientId)) {
         return res.status(403).json({
           success: false,
           message: "Access denied. You can only manage users within your own organization.",
         });
       }
 
-      // Admin/Client specific restrictions
-      const isTenantAdmin = isAdmin || req.user.role === "client";
-      if (isTenantAdmin) {
-        // Cannot modify Admin or Super Admin roles
-        if (target.role === "admin" || target.role === "super_admin") {
-          return res.status(403).json({
-            success: false,
-            message: "Access denied. You cannot modify Admin or Super Admin roles.",
-          });
-        }
+      // Cannot modify Admin or Super Admin roles
+      if (target.role === "admin" || target.role === "super_admin") {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You cannot modify Admin or Super Admin roles.",
+        });
+      }
 
-        const ADMIN_ALLOWED_ROLES = ["seo_manager", "store_manager", "counter_manager", "inventory_manager", "user"];
-        if (!ADMIN_ALLOWED_ROLES.includes(nextRole)) {
-          return res.status(403).json({
-            success: false,
-            message: "Access denied. You can only assign SEO Manager, Store Manager, Counter Manager, Inventory Manager, or User roles.",
-          });
-        }
+      const ADMIN_ALLOWED_ROLES = ["counter_manager", "seo_manager", "store_manager", "inventory_manager", "employee"];
+      if (!ADMIN_ALLOWED_ROLES.includes(nextRole)) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only assign Counter Manager, SEO Manager, Store Manager, Inventory Manager, or Employee roles.",
+        });
       }
     }
 
-    if (target.role === "super_admin") {
+    if (target.role === "super_admin" || target.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim()) {
       return res.status(403).json({
         success: false,
-        message: "Super Admin accounts cannot be reassigned via API",
-      });
-    }
-
-    if (target.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim()) {
-      return res.status(403).json({
-        success: false,
-        message: "The seeded Super Admin account cannot be reassigned via API",
+        message: "The seeded Super Admin account cannot be modified via API",
       });
     }
 
@@ -255,4 +276,90 @@ const updateUserRole = async (req, res) => {
   }
 };
 
-module.exports = { getMe, updateMe, listPlatformUsers, updateUserRole };
+// @route   PATCH /api/users/platform/:id/status
+// @access  Super Admin / Admin
+const updateUserStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "Invalid user id" });
+    }
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({ success: false, message: "isActive status is required" });
+    }
+
+    const target = await User.findById(id);
+    if (!target) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const userRole = normalizeRole(req.user?.role);
+    const isSuperAdmin = userRole === "super_admin";
+    const isAdmin = userRole === "admin";
+    const clientId = req.user?.clientId || req.clientId;
+
+    if (!isSuperAdmin && !isAdmin) {
+      if (!clientId || (target.clientId && String(target.clientId) !== String(clientId))) {
+        return res.status(403).json({ success: false, message: "Access denied" });
+      }
+    }
+
+    if (target.role === "super_admin" || target.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim()) {
+      return res.status(403).json({ success: false, message: "Super Admin status cannot be changed via API" });
+    }
+
+    target.isActive = isActive;
+    await target.save();
+
+    res.json({ success: true, message: `User ${isActive ? "activated" : "deactivated"}`, data: { _id: target._id, isActive: target.isActive } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @route   POST /api/users/platform/:id/reset-password
+// @access  Super Admin / Admin
+const resetUserPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "Invalid user id" });
+    }
+    if (!password || password.length < 8) {
+      return res.status(400).json({ success: false, message: "Password must be at least 8 characters" });
+    }
+
+    const target = await User.findById(id);
+    if (!target) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const userRole = normalizeRole(req.user?.role);
+    const isSuperAdmin = userRole === "super_admin";
+    const isAdmin = userRole === "admin";
+    const clientId = req.user?.clientId || req.clientId;
+
+    if (!isSuperAdmin && !isAdmin) {
+      if (!clientId || (target.clientId && String(target.clientId) !== String(clientId))) {
+        return res.status(403).json({ success: false, message: "Access denied" });
+      }
+    }
+
+    if (target.role === "super_admin" || target.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim()) {
+      return res.status(403).json({ success: false, message: "Super Admin password cannot be reset via API" });
+    }
+
+    target.password = password; // Mongoose 'pre-save' hook will hash it
+    await target.save();
+
+    res.json({ success: true, message: "Password reset successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { getMe, updateMe, listPlatformUsers, updateUserRole, updateUserStatus, resetUserPassword };

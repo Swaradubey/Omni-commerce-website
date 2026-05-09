@@ -15,18 +15,18 @@ const employeeSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: [true, "Phone number is required"],
+      required: false,
       trim: true,
     },
     address: {
       type: String,
-      required: [true, "Address is required"],
+      required: false,
       trim: true,
     },
     role: {
       type: String,
       enum: {
-        values: ["store_manager", "employee", "staff", "seo_manager", "inventory_manager", "counter_manager"],
+        values: ["store_manager", "manager", "employee", "staff", "seo_manager", "inventory_manager", "counter_manager", "viewer"],
         message: "{VALUE} is not a valid staff role",
       },
       required: true,
@@ -34,7 +34,7 @@ const employeeSchema = new mongoose.Schema(
     clientId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Client",
-      required: [true, "Client reference is required"],
+      required: false,
       index: true,
     },
     /** Store manager Employee doc when role is employee (optional). */

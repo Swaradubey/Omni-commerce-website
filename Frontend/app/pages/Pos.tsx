@@ -666,6 +666,9 @@ export function Pos() {
     setPaymentValidationMessage(null);
     setSelectedPaymentMethod(null);
     
+    // Refresh products to show updated stock immediately
+    void fetchProducts();
+    
     if (isOffline) {
       // For offline orders, we don't have a backend invoice yet.
       // We'll generate a preview from the order data.

@@ -14,7 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { isInventoryManagerRole, hasFullAdminPrivileges } from '../utils/staffRoles';
+import { isInventoryManagerRole, hasFullAdminPrivileges, isSuperAdminRole } from '../utils/staffRoles';
  import {
    getMyOrdersTracking,
    getOrderTrackingByIdentifier,
@@ -586,7 +586,7 @@ export function TrackOrder({ variant = 'page' }: Props) {
                       <span className="text-stone-500">Total</span>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-stone-900">{formatMoney(o.totalPrice)}</span>
-                        {hasFullAdminPrivileges(user?.role) && (
+                        {isSuperAdminRole(user?.role) && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -653,7 +653,7 @@ export function TrackOrder({ variant = 'page' }: Props) {
                         Cancel order
                       </Button>
                     )}
-                    {hasFullAdminPrivileges(user?.role) && (
+                    {isSuperAdminRole(user?.role) && (
                       <Button
                         type="button"
                         variant="outline"

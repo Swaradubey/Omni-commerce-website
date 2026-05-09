@@ -5,10 +5,7 @@
 function resolveStaffClientId(req, bodyClientId, paramClientId) {
   if (req.user.role === "super_admin") {
     const raw = bodyClientId ?? paramClientId;
-    if (!raw) {
-      return { ok: false, code: 400, message: "clientId is required for super admin staff operations" };
-    }
-    return { ok: true, clientId: String(raw) };
+    return { ok: true, clientId: raw ? String(raw) : null };
   }
   if (req.user.role === "admin") {
     if (req.user.clientId) {
@@ -30,14 +27,7 @@ function resolveStaffClientId(req, bodyClientId, paramClientId) {
       return { ok: true, clientId: own };
     }
     const raw = bodyClientId ?? paramClientId;
-    if (!raw) {
-      return {
-        ok: false,
-        code: 400,
-        message: "clientId is required when admin account is not linked to a client",
-      };
-    }
-    return { ok: true, clientId: String(raw) };
+    return { ok: true, clientId: raw ? String(raw) : null };
   }
   if (req.user.role === "client") {
     if (!req.user.clientId) {

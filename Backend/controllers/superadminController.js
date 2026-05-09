@@ -351,7 +351,15 @@ const getClientInvoices = async (req, res) => {
     // Step 2: find invoices whose orderId matches one of those order IDs
     let invoices = [];
     if (orderIds.length > 0) {
-      invoices = await Invoice.find({ orderId: { $in: orderIds } }).sort({ createdAt: -1 });
+      const rawInvoices = await Invoice.find({ orderId: { $in: orderIds } }).sort({ createdAt: -1 });
+      invoices = rawInvoices.map((inv) => {
+        const invObj = inv.toObject ? inv.toObject() : { ...inv };
+        const isPos = /^POS-/i.test(invObj.orderId) || /^ORD-POS-/i.test(invObj.orderId);
+        if (isPos) {
+          invObj.paymentStatus = "paid";
+        }
+        return invObj;
+      });
     }
 
     console.log(`[Superadmin] getClientInvoices count: ${invoices.length}`);
@@ -707,6 +715,12 @@ const getInvoiceByOrderId = async (req, res) => {
     // 3. Fallback logic: return existing invoice OR generate from order
     const invoiceNo = invoice?.invoiceNumber || invoice?.invoiceNo || `INV-${order.orderId.replace("ORD-", "")}`;
     
+    const isPos = order.orderSource === "pos" || /^POS-/i.test(order.orderId) || /^ORD-POS-/i.test(order.orderId);
+    let finalPaymentStatus = order.paymentStatus || (order.isPaid ? "paid" : "pending");
+    if (isPos) {
+      finalPaymentStatus = "paid";
+    }
+    
     const responseData = {
       invoiceNo,
       orderId: order.orderId,
@@ -723,7 +737,7 @@ const getInvoiceByOrderId = async (req, res) => {
       tax: order.taxPrice || order.tax || 0,
       discount: order.discount || 0,
       total: order.totalPrice || order.amount || 0,
-      paymentStatus: order.paymentStatus || (order.isPaid ? "paid" : "pending"),
+      paymentStatus: invoice?.paymentStatus === "paid" ? "paid" : finalPaymentStatus,
       paymentMethod: order.paymentMethod || "N/A",
       orderStatus: order.orderStatus || order.status || "placed",
       createdAt: order.createdAt
