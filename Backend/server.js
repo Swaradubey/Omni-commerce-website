@@ -10,9 +10,12 @@ if (envLoad.error) {
 
 const express = require("express");
 const cors = require("cors");
+const session = require("express-session");
 const connectDB = require("./config/db");
 const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 const tenantMiddleware = require("./middleware/tenantMiddleware");
+const passport = require("./config/passport");
+const generateToken = require("./utils/generateToken");
 
 const app = express();
 
@@ -84,6 +87,23 @@ app.use(cors({
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
+// Session middleware (required for Passport OAuth flow)
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || "google-oauth-session-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 5 * 60 * 1000, // 5 minutes — only needed during OAuth handshake
+    },
+  })
+);
+
+// Passport middleware
+app.use(passport.initialize());
+app.use(passport.session());
+
 // Attach tenant resolution globally before any routes
 // app.use(tenantMiddleware); // Disabled global use to follow strict middleware ordering for sensitive routes
 
@@ -154,6 +174,62 @@ app.get("/api/health", (req, res) => {
 // Root route
 app.get("/", (req, res) => {
   res.send("API is running...");
+});
+
+// ── Google OAuth Routes ─────────────────────────────────────────────────────
+const googleOAuthEnabled = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+
+app.get("/auth/google", (req, res, next) => {
+  if (!googleOAuthEnabled) {
+    return res.status(503).json({ success: false, message: "Google Sign-In is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env" });
+  }
+  passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+});
+
+app.get("/auth/google/callback", (req, res, next) => {
+  if (!googleOAuthEnabled) {
+    return res.status(503).json({ success: false, message: "Google Sign-In is not configured." });
+  }
+  passport.authenticate("google", { failureRedirect: "/auth/google/failure" })(req, res, (err) => {
+    if (err) return next(err);
+    // Success handler below
+    try {
+      const user = req.user;
+      if (!user) {
+        console.error("[Google OAuth] No user after callback");
+        const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_ORIGIN || "http://localhost:5173";
+        return res.redirect(`${frontendUrl}/register?error=google_auth_failed`);
+      }
+
+      // Create JWT using the same method as existing login system
+      const token = generateToken(user._id, user.email, user.role);
+
+      // Update lastLoginAt
+      user.lastLoginAt = new Date();
+      user.save().catch((err) => console.error("[Google OAuth] Failed to update lastLoginAt:", err.message));
+
+      const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_ORIGIN || "http://localhost:5173";
+      const params = new URLSearchParams({
+        token,
+        name: user.name || "",
+        email: user.email || "",
+        role: user.role || "user",
+        id: String(user._id),
+      });
+
+      console.log(`[Google OAuth] Success — redirecting to frontend for user ${user.email}`);
+      return res.redirect(`${frontendUrl}/auth/google/success?${params.toString()}`);
+    } catch (err) {
+      console.error("[Google OAuth] Callback error:", err.message);
+      const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_ORIGIN || "http://localhost:5173";
+      return res.redirect(`${frontendUrl}/register?error=google_auth_failed`);
+    }
+  });
+});
+
+app.get("/auth/google/failure", (req, res) => {
+  const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_ORIGIN || "http://localhost:5173";
+  res.redirect(`${frontendUrl}/register?error=google_auth_failed`);
 });
 
 // Error handling middleware

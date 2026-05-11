@@ -20,6 +20,7 @@ import { Login } from './pages/auth/Login';
 import { SuperAdminLogin } from './pages/auth/SuperAdminLogin';
 import { SuperAdminDashboard } from './pages/super-admin/SuperAdminDashboard';
 import { Register } from './pages/auth/Register';
+import { GoogleAuthCallback } from './pages/auth/GoogleAuthCallback';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { Contact } from './pages/Contact';
 import { About } from './pages/About';
@@ -79,6 +80,7 @@ export const router = createBrowserRouter([
         ),
       },
       { path: 'register', Component: Register },
+      { path: 'auth/google/success', Component: GoogleAuthCallback },
       { path: 'forgot-password', Component: ForgotPassword },
       { path: 'contact', Component: Contact },
       { path: 'about', Component: About },

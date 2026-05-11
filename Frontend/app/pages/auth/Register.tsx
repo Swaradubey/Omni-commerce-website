@@ -97,6 +97,13 @@ export function Register() {
             </Link>
           </p>
         </div>
+
+        {/* Google Sign-In */}
+        <a href="http://localhost:5000/auth/google" className="google-signin-btn">
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
+          <span>Sign in with Google</span>
+        </a>
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md">

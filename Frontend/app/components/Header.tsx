@@ -4,7 +4,15 @@ import { useCart } from '../context/CartContext';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { canAccessInventoryEditor } from '../utils/inventoryPermissions';
-import { accountRoleBadgeText, accountRoleSubtitle, isCustomerAccountRole, isStaffRole, isSuperAdminRole } from '../utils/staffRoles';
+import { accountRoleBadgeText, accountRoleSubtitle, isCustomerAccountRole, isStaffRole, isSuperAdminRole, normalizeRole } from '../utils/staffRoles';
+
+const HIDDEN_HEADER_ROLES = [
+  'employee',
+  'counter_manager',
+  'seo_manager',
+  'store_manager',
+  'inventory_manager',
+];
 
 export function Header() {
   const { cartCount } = useCart();
@@ -12,7 +20,9 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
 
-  /** Hide storefront nav links (Products, Category, etc.) for Super Admin only; logo + account + logout stay visible. */
+  /** Hide storefront nav links (Products, Category, etc.) for Super Admin and restricted employee roles. */
+  const normalizedRole = normalizeRole(user?.role);
+  const shouldHideHeaderNav = normalizedRole && HIDDEN_HEADER_ROLES.includes(normalizedRole);
   const hideStorefrontNavForSuperAdmin = Boolean(user && isSuperAdminRole(user.role));
 
   /** Pricing link is now disabled globally per requirement. */
@@ -50,8 +60,8 @@ export function Header() {
               </div>
             </Link>
 
-          {/* Desktop Nav — hidden for Super Admin only */}
-          {!hideStorefrontNavForSuperAdmin ? (
+          {/* Desktop Nav — hidden for Super Admin and restricted employee roles */}
+          {!hideStorefrontNavForSuperAdmin && !shouldHideHeaderNav ? (
             <nav className="hidden lg:flex items-center rounded-full border border-black/6 bg-white/70 px-3 py-2 shadow-[0_4px_18px_rgba(0,0,0,0.03)] backdrop-blur-sm">
               <Link
                 to="/shop"
@@ -103,20 +113,20 @@ export function Header() {
 
            {/* Right Actions */}
            <div className="flex items-center gap-1.5 min-[375px]:gap-2 sm:gap-3 lg:gap-4">
-             {/* Cart - hidden for Super Admin */}
-             {!hideStorefrontNavForSuperAdmin && (
-               <Link
-                 to="/cart"
-                 className="relative hidden sm:flex h-11 w-11 items-center justify-center rounded-full border border-black/8 bg-white/70 text-[#111111] shadow-[0_4px_14px_rgba(0,0,0,0.03)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-white"
-               >
-                 <ShoppingCart className="h-5 w-5" />
-                 {cartCount > 0 && (
-                   <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#C4973F] px-1 text-[10px] font-bold text-black shadow-sm">
-                     {cartCount}
-                   </span>
-                 )}
-               </Link>
-             )}
+{/* Cart - hidden for Super Admin and restricted employee roles */}
+              {!hideStorefrontNavForSuperAdmin && !shouldHideHeaderNav && (
+                <Link
+                  to="/cart"
+                  className="relative hidden sm:flex h-11 w-11 items-center justify-center rounded-full border border-black/8 bg-white/70 text-[#111111] shadow-[0_4px_14px_rgba(0,0,0,0.03)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-white"
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                  {cartCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#C4973F] px-1 text-[10px] font-bold text-black shadow-sm">
+                      {cartCount}
+                    </span>
+                  )}
+                </Link>
+              )}
 
             {/* Desktop Auth */}
             {user ? (
@@ -169,20 +179,20 @@ export function Header() {
               </div>
             )}
 
-             {/* Mobile Cart - hidden for Super Admin */}
-             {!hideStorefrontNavForSuperAdmin && (
-               <Link
-                 to="/cart"
-                 className="relative flex h-10 w-10 items-center justify-center rounded-full border border-black/8 bg-white/70 text-[#111111] backdrop-blur-sm transition-all duration-300 hover:bg-white sm:hidden"
-               >
-                 <ShoppingCart className="h-4.5 w-4.5" />
-                 {cartCount > 0 && (
-                   <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#C4973F] px-1 text-[9px] font-bold text-black">
-                     {cartCount}
-                   </span>
-                 )}
-               </Link>
-             )}
+{/* Mobile Cart - hidden for Super Admin and restricted employee roles */}
+              {!hideStorefrontNavForSuperAdmin && !shouldHideHeaderNav && (
+                <Link
+                  to="/cart"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-full border border-black/8 bg-white/70 text-[#111111] backdrop-blur-sm transition-all duration-300 hover:bg-white sm:hidden"
+                >
+                  <ShoppingCart className="h-4.5 w-4.5" />
+                  {cartCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#C4973F] px-1 text-[9px] font-bold text-black">
+                      {cartCount}
+                    </span>
+                  )}
+                </Link>
+              )}
 
             {/* Mobile Menu Button */}
             <button
@@ -200,11 +210,11 @@ export function Header() {
         </div>
       </div>
 
-      {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="absolute left-0 w-full border-t border-black/8 bg-[#f7f6f2]/95 backdrop-blur-xl lg:hidden">
-          <div className="mx-auto max-w-[88rem] px-4 pb-6 pt-5 sm:px-6">
-            {!hideStorefrontNavForSuperAdmin ? (
+{/* Mobile Menu */}
+       {mobileMenuOpen && (
+         <div className="absolute left-0 w-full border-t border-black/8 bg-[#f7f6f2]/95 backdrop-blur-xl lg:hidden">
+           <div className="mx-auto max-w-[88rem] px-4 pb-6 pt-5 sm:px-6">
+             {!hideStorefrontNavForSuperAdmin && !shouldHideHeaderNav ? (
               <nav className="flex flex-col gap-2">
                 <Link
                   to="/shop"
@@ -262,7 +272,7 @@ export function Header() {
               </nav>
             ) : null}
 
-            {!hideStorefrontNavForSuperAdmin ? <div className="my-5 h-px bg-black/8" /> : null}
+            {!hideStorefrontNavForSuperAdmin && !shouldHideHeaderNav ? <div className="my-5 h-px bg-black/8" /> : null}
 
             {user ? (
               <div className="flex flex-col gap-3">
