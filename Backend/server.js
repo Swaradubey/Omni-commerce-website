@@ -26,6 +26,7 @@ const allowedOrigins = [
   "https://retailverse.in",
   "https://www.retailverse.in",
   "https://retail-verse-website-bj2s.vercel.app",
+  "https://retail-verse-website-bj2s-a8ccy75yo-swaradubeys-projects.vercel.app",
   "http://localhost:5173",
   "http://localhost:3000",
   "http://localhost:5174",
@@ -95,6 +96,7 @@ app.use(
     saveUninitialized: false,
     cookie: {
       secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 5 * 60 * 1000, // 5 minutes — only needed during OAuth handshake
     },
   })
@@ -197,7 +199,7 @@ app.get("/auth/google/callback", (req, res, next) => {
       const user = req.user;
       if (!user) {
         console.error("[Google OAuth] No user after callback");
-        const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_ORIGIN || "http://localhost:5173";
+        const frontendUrl = process.env.FRONTEND_URL || "https://www.retailverse.in";
         return res.redirect(`${frontendUrl}/register?error=google_auth_failed`);
       }
 
@@ -208,7 +210,7 @@ app.get("/auth/google/callback", (req, res, next) => {
       user.lastLoginAt = new Date();
       user.save().catch((err) => console.error("[Google OAuth] Failed to update lastLoginAt:", err.message));
 
-      const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_ORIGIN || "http://localhost:5173";
+      const frontendUrl = process.env.FRONTEND_URL || "https://www.retailverse.in";
       const params = new URLSearchParams({
         token,
         name: user.name || "",
@@ -221,14 +223,14 @@ app.get("/auth/google/callback", (req, res, next) => {
       return res.redirect(`${frontendUrl}/auth/google/success?${params.toString()}`);
     } catch (err) {
       console.error("[Google OAuth] Callback error:", err.message);
-      const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_ORIGIN || "http://localhost:5173";
+      const frontendUrl = process.env.FRONTEND_URL || "https://www.retailverse.in";
       return res.redirect(`${frontendUrl}/register?error=google_auth_failed`);
     }
   });
 });
 
 app.get("/auth/google/failure", (req, res) => {
-  const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_ORIGIN || "http://localhost:5173";
+  const frontendUrl = process.env.FRONTEND_URL || "https://www.retailverse.in";
   res.redirect(`${frontendUrl}/register?error=google_auth_failed`);
 });
 
