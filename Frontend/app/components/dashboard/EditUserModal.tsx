@@ -23,6 +23,7 @@ const ASSIGNABLE_ROLES = [
   'store_manager',
   'inventory_manager',
   'employee',
+  'user',
 ];
 
 const ADMIN_ALLOWED_ROLES = ['counter_manager', 'seo_manager', 'store_manager', 'inventory_manager', 'employee'];

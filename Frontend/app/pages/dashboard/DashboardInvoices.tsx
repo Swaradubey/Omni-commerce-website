@@ -38,6 +38,12 @@ import { useNavigate } from 'react-router';
 
 type TabType = 'invoices' | 'quotes';
 
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
 export function DashboardInvoices() {
   const { user } = useAuth();
   const { cart } = useCart();
@@ -59,6 +65,25 @@ export function DashboardInvoices() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCounterInput, setShowCounterInput] = useState(false);
   const [isRazorpayLoading, setIsRazorpayLoading] = useState(false);
+  const [isRazorpayOpen, setIsRazorpayOpen] = useState(false);
+
+  // Refs to hold quote/invoice data while dialog is closed during Razorpay payment
+  const paymentQuoteRef = React.useRef<any>(null);
+  const paymentInvoiceRef = React.useRef<any>(null);
+
+  // DEV NOTE: Test mode credentials for Razorpay:
+  // Card: 4111 1111 1111 1111 | Any future expiry | Any CVV | OTP: any 6 digits
+  // UPI: success@razorpay
+  // Netbanking: Select any test bank listed in the popup
+
+  /**
+   * Strips non-digit characters and returns last 10 digits.
+   * Razorpay requires a 10-digit contact number without country code or spaces.
+   */
+  const cleanPhoneNumber = (phone: string): string => {
+    if (!phone) return '';
+    return String(phone).replace(/\D/g, '').slice(-10);
+  };
 
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
@@ -76,69 +101,156 @@ export function DashboardInvoices() {
 
   const handlePayment = async () => {
     if (!viewQuote) return;
+
+    console.log('[QUOTE PAY NOW CLICKED]', { quotation: viewQuote, invoice: viewInvoice });
+
+    // ── 1. Snapshot quote/invoice data into refs BEFORE closing the dialog ──
+    paymentQuoteRef.current = { ...viewQuote };
+    paymentInvoiceRef.current = viewInvoice ? { ...viewInvoice } : null;
+
+    const quote = paymentQuoteRef.current;
+    const invoice = paymentInvoiceRef.current;
+
     setIsRazorpayLoading(true);
+
     try {
-      const amount = viewQuote.finalPrice || viewQuote.requestedPrice;
-      
+      // Amount source: use the final negotiated/accepted price, falling back through each field.
+      // DEV NOTE: Do NOT multiply by 100 here — the backend does that.
+      const amount =
+        quote.finalAcceptedPrice ||
+        quote.finalPrice ||
+        invoice?.totalAmount ||
+        invoice?.amount ||
+        quote.requestedPrice;
+
+      if (!amount || Number(amount) <= 0) {
+        toast.error('Invalid payment amount. Please contact support.');
+        setIsRazorpayLoading(false);
+        return;
+      }
+
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) {
         toast.error('Razorpay SDK failed to load. Are you online?');
+        setIsRazorpayLoading(false);
         return;
       }
 
-      const rzpOrder = await createRazorpayOrder(amount);
+      // DEV NOTE (test mode): Card: 4111 1111 1111 1111 | Expiry: 12/30 | CVV: 123 | OTP: 123456
+      // UPI: success@razorpay
+
+      const rzpOrder = await createRazorpayOrder(amount, {
+        quotationId: quote._id,
+        invoiceId: invoice?._id,
+      });
+
+      console.log('[QUOTE RAZORPAY ORDER]', rzpOrder);
+
       if (!rzpOrder.success) {
+        console.error('[QUOTE RAZORPAY] Order creation failed:', rzpOrder.message);
         toast.error(rzpOrder.message || 'Failed to create Razorpay order');
+        setIsRazorpayLoading(false);
         return;
       }
 
-      const options = {
+      // ── 2. Clean contact exactly like working Orders flow ──
+      const cleanContact = String(quote.customerPhone || quote.phone || '')
+        .replace(/\D/g, '')
+        .slice(-10);
+
+      // ── 3. Build options — mirror working Checkout.tsx pattern exactly ──
+      const options: Record<string, any> = {
         key: rzpOrder.key_id,
         amount: rzpOrder.amount,
-        currency: rzpOrder.currency,
+        currency: rzpOrder.currency || 'INR',
         name: 'E-commerce Store',
-        description: `Payment for Quote ${viewQuote.quoteNumber}`,
+        description: `Payment for quotation ${quote.quoteNumber || quote.reference || quote._id}`,
         order_id: rzpOrder.order_id,
         handler: async (response: any) => {
+          console.log('[QUOTE RAZORPAY SUCCESS]', response);
           try {
-            const verifyRes = await verifyRazorpayPayment({
+            setIsRazorpayLoading(true);
+            const verifyPayload = {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
-              internal_quote_id: viewQuote._id
-            });
+              quotationId: quote._id,
+              invoiceId: invoice?._id,
+              orderId: quote.quoteNumber || quote.reference || quote._id,
+              internal_quote_id: quote._id,
+            };
+
+            const verifyRes = await verifyRazorpayPayment(verifyPayload);
+            console.log('[QUOTE VERIFY RESPONSE]', verifyRes);
 
             if (verifyRes.success) {
               toast.success('Payment successful!');
-              setViewQuote(null);
+              // Clear refs
+              paymentQuoteRef.current = null;
+              paymentInvoiceRef.current = null;
               void fetchData();
             } else {
               toast.error(verifyRes.message || 'Payment verification failed');
             }
           } catch (err: any) {
+            console.error('[QUOTE RAZORPAY VERIFY ERROR]', err);
             toast.error(err.message || 'Payment verification failed');
+          } finally {
+            setIsRazorpayLoading(false);
+            setIsRazorpayOpen(false);
           }
         },
         prefill: {
-          name: viewQuote.customerName,
-          email: viewQuote.customerEmail,
+          name: quote.customerName || quote.preparedFor || '',
+          email: quote.customerEmail || quote.email || '',
+          ...(cleanContact.length === 10 ? { contact: cleanContact } : {}),
         },
         theme: {
-          color: '#D4AF37',
+          color: '#2563eb',
         },
         modal: {
-          ondismiss: function() {
+          ondismiss: function () {
+            console.log('[QUOTE RAZORPAY CLOSED]');
             setIsRazorpayLoading(false);
-          }
-        }
+            setIsRazorpayOpen(false);
+          },
+        },
       };
 
+      console.log('[QUOTE RAZORPAY OPTIONS]', {
+        key: options.key,
+        amount: options.amount,
+        currency: options.currency,
+        order_id: options.order_id,
+        prefill: options.prefill,
+      });
+
+      // ── 4. CRITICAL FIX: Close the dialog BEFORE opening Razorpay ──
+      // The Radix UI Dialog renders a `fixed inset-0 z-50` overlay that
+      // intercepts all pointer events and blocks the Razorpay iframe.
+      // We must close the dialog so the overlay is removed from the DOM.
+      setViewQuote(null);
+      setIsRazorpayOpen(true);
+
+      // Small delay to let React unmount the dialog overlay before Razorpay opens
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
       const rzp = new (window as any).Razorpay(options);
+
+      rzp.on('payment.failed', function (response: any) {
+        console.error('[QUOTE RAZORPAY FAILED]', response.error);
+        toast.error(response.error?.description || response.error?.reason || 'Payment failed');
+        setIsRazorpayLoading(false);
+        setIsRazorpayOpen(false);
+      });
+
+      console.log('[QUOTE RAZORPAY OPEN]');
       rzp.open();
     } catch (err: any) {
+      console.error('[QUOTE RAZORPAY] Error in handlePayment:', err);
       toast.error(err.message || 'Payment failed to initialize');
-    } finally {
       setIsRazorpayLoading(false);
+      setIsRazorpayOpen(false);
     }
   };
 

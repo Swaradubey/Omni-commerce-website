@@ -188,3 +188,13 @@
     line-height: 1.5;
   }
 }
+
+/* ── Razorpay checkout z-index safety net ──
+   Ensures Razorpay's iframe and backdrop always appear above any app modals.
+   The selectors target the elements Razorpay injects at the document body level. */
+.razorpay-container,
+.razorpay-backdrop,
+.razorpay-container iframe,
+iframe[src*="razorpay"] {
+  z-index: 99999 !important;
+}

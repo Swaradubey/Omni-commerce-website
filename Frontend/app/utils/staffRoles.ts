@@ -12,6 +12,7 @@ export const STAFF_ROLES = [
   'employee',
   'counter_manager',
   'viewer',
+  'user',
 ] as const;
 
 /**
@@ -165,6 +166,9 @@ export function resolvePostLoginPath(role: string | undefined, fromPath: string)
     !fromPath.startsWith('/dashboard')
   ) {
     return fromPath;
+  }
+  if (normalized === 'user') {
+    return '/dashboard';
   }
   return '/';
 }

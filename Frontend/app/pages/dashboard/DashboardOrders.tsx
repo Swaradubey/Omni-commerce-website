@@ -35,8 +35,8 @@ import { patchOrderTrackingStatus, deleteOrder } from '../../api/orders';
 import { useAuth } from '../../context/AuthContext';
 import { hasFullAdminPrivileges, isStaffRole, isCustomerAccountRole, isSuperAdminRole } from '../../utils/staffRoles';
 import { OrderTrackingTimeline, type TimelineStage } from '../../components/orders/OrderTrackingTimeline';
- import { toast } from 'sonner';
- import { formatINR } from '../../utils/formatINR';
+import { toast } from 'sonner';
+import { formatINR } from '../../utils/formatINR';
 
 const ADMIN_STAGE_ACTIONS: { label: string; trackingStatus: string; stage: number }[] = [
   { label: 'Confirm order', trackingStatus: 'Confirmed', stage: 2 },
@@ -199,7 +199,7 @@ export function DashboardOrders() {
     }
   };
 
-   const handleTrackingAction = async (trackingStatus: string) => {
+  const handleTrackingAction = async (trackingStatus: string) => {
     if (!manageOrder || !isAdmin) return;
     const oid = manageOrder.orderId || manageOrder._id;
     if (!oid) return;
@@ -261,30 +261,28 @@ export function DashboardOrders() {
           >
             <Card className="relative overflow-hidden border-none bg-white/50 shadow-md backdrop-blur-md dark:bg-black/40">
               <div
-                className={`absolute top-0 left-0 h-full w-1 opacity-70 ${
-                  stat.color === 'blue'
+                className={`absolute top-0 left-0 h-full w-1 opacity-70 ${stat.color === 'blue'
                     ? 'bg-blue-500'
                     : stat.color === 'amber'
                       ? 'bg-amber-500'
                       : stat.color === 'emerald'
                         ? 'bg-emerald-500'
                         : 'bg-indigo-500'
-                }`}
+                  }`}
               />
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   {stat.title}
                 </CardTitle>
                 <div
-                  className={`rounded-lg p-1.5 ${
-                    stat.color === 'blue'
+                  className={`rounded-lg p-1.5 ${stat.color === 'blue'
                       ? 'bg-blue-500/10 text-blue-500'
                       : stat.color === 'amber'
                         ? 'bg-amber-500/10 text-amber-500'
                         : stat.color === 'emerald'
                           ? 'bg-emerald-500/10 text-emerald-500'
                           : 'bg-indigo-500/10 text-indigo-500'
-                  }`}
+                    }`}
                 >
                   <stat.icon className="h-4 w-4" />
                 </div>
@@ -309,22 +307,22 @@ export function DashboardOrders() {
               </p>
             </div>
             {!isCustomer && (
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative">
-                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Order ID or customer..."
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pr-4 pl-10 text-sm transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-white/10 dark:bg-white/5 md:w-64"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Order ID or customer..."
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pr-4 pl-10 text-sm transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-white/10 dark:bg-white/5 md:w-64"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <Button variant="outline" className="h-10 rounded-xl border-gray-200 dark:border-white/10" disabled>
+                  <Filter className="mr-2 h-4 w-4" />
+                  Filter
+                </Button>
               </div>
-              <Button variant="outline" className="h-10 rounded-xl border-gray-200 dark:border-white/10" disabled>
-                <Filter className="mr-2 h-4 w-4" />
-                Filter
-              </Button>
-            </div>
             )}
           </div>
         </CardHeader>
@@ -333,9 +331,9 @@ export function DashboardOrders() {
             <div className="mx-6 my-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
               <p className="font-bold">Error loading orders</p>
               <p>{error}</p>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="mt-2 h-8 border-rose-200 text-rose-600 hover:bg-rose-100"
                 onClick={() => void fetchOrders()}
               >
@@ -362,7 +360,7 @@ export function DashboardOrders() {
                       <th className="px-6 py-4">Items</th>
                       <th className="px-6 py-4">Total</th>
                       <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4 text-right">Actions</th>
+                      <th className="px-6 py-4 text-center">Actions</th>
                     </>
                   )}
                 </tr>
@@ -507,17 +505,17 @@ export function DashboardOrders() {
                                       </Button>
                                     </>
                                   )}
-                                   <Button
-                                     type="button"
-                                     variant="outline"
-                                     size="sm"
-                                     className="rounded-lg border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40"
-                                     onClick={() => setManageOrder(order)}
-                                   >
-                                     <Route className="mr-1.5 h-3.5 w-3.5" />
-                                     Manage
-                                   </Button>
-                                 </>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-lg border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40"
+                                    onClick={() => setManageOrder(order)}
+                                  >
+                                    <Route className="mr-1.5 h-3.5 w-3.5" />
+                                    Manage
+                                  </Button>
+                                </>
                               )}
                               {!isAdmin && <span className="text-xs text-muted-foreground">Limited access</span>}
                             </div>
@@ -579,11 +577,10 @@ export function DashboardOrders() {
                         type="button"
                         disabled={disabled}
                         variant={isNext ? 'default' : 'outline'}
-                        className={`h-11 w-full justify-center rounded-xl ${
-                          alreadyApplied && !isNext
+                        className={`h-11 w-full justify-center rounded-xl ${alreadyApplied && !isNext
                             ? 'border-emerald-200 bg-emerald-50/50 text-emerald-800'
                             : ''
-                        }`}
+                          }`}
                         onClick={() => {
                           if (isNext) void handleTrackingAction(action.trackingStatus);
                         }}
@@ -793,8 +790,8 @@ export function DashboardOrders() {
               Close
             </Button>
             {isAdmin && !isCancelledOrder(viewOrder) && !viewOrder?.isDelivered && (
-              <Button 
-                type="button" 
+              <Button
+                type="button"
                 className="bg-blue-600 hover:bg-blue-700"
                 onClick={() => {
                   setManageOrder(viewOrder);

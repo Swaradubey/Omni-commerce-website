@@ -14,6 +14,7 @@ const ASSIGNABLE_ROLES = [
   "store_manager",
   "inventory_manager",
   "employee",
+  "user",
 ];
 
 const getMe = async (req, res) => {

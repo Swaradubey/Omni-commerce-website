@@ -79,6 +79,10 @@ export interface RazorpayVerifyPayload {
   razorpay_signature: string;
   internal_order_id?: string;
   internal_quote_id?: string;
+  /** New fields for Super Admin invoice flow */
+  quotationId?: string;
+  invoiceId?: string;
+  orderId?: string;
 }
 
 interface OrderCreateResponse {
@@ -215,13 +219,14 @@ export async function logOrderTracking(payload: {
 }
 
 export const createRazorpayOrder = async (
-  amount: number
+  amount: number,
+  meta?: { quotationId?: string; invoiceId?: string }
 ): Promise<RazorpayOrderResponse> => {
-  return ApiService.post('/payments/razorpay/create-order', { amount });
+  return ApiService.post('/razorpay/create-order', { amount, ...meta });
 };
 
 export const verifyRazorpayPayment = async (
   payload: RazorpayVerifyPayload
 ): Promise<{ success: boolean; message: string }> => {
-  return ApiService.post('/payments/razorpay/verify', payload);
+  return ApiService.post('/razorpay/verify-payment', payload);
 };

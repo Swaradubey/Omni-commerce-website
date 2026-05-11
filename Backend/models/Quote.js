@@ -72,6 +72,9 @@ const quoteSchema = new mongoose.Schema(
     razorpaySignature: {
       type: String,
     },
+    paidAt: {
+      type: Date,
+    },
     validUntil: {
       type: Date,
     },

@@ -84,7 +84,7 @@ import { toast } from 'sonner';
 const sidebarItems = [
   { title: "Overview", icon: LayoutDashboard, href: "/dashboard" },
   { title: "Products", icon: Package, href: "/dashboard/products", hideForSuperAdmin: true },
-  { title: "Inventory", icon: Warehouse, href: "/dashboard/inventory", staffOnly: true, hideForSuperAdmin: true },
+  { title: "Inventory", icon: Warehouse, href: "/dashboard/inventory", staffOnly: true, hideForSuperAdmin: true, hideForUser: true },
   { title: "POS", icon: ShoppingCart, href: "/pos", hideForSuperAdmin: true, hideForUser: true },
   { title: "Wishlist", icon: Heart, href: "/dashboard/wishlist", hideForSuperAdmin: true },
   { title: "Track Order", icon: Truck, href: "/track-order", hideForInventoryManager: true, hideForSuperAdmin: true },
@@ -96,7 +96,7 @@ const sidebarItems = [
   { title: "Users & roles", icon: UserCog, href: "/dashboard/users", adminOnly: true },
   { title: "Clients", icon: Building2, href: "/super-admin/clients", superAdminOnly: true },
   { title: "Add Custom Domain", icon: Globe, href: "/super-admin/custom-domain", superAdminOnly: true },
-  { title: "Add Employee", icon: UserPlus, href: "/dashboard/add-employee", staffOnly: true, hideForSuperAdmin: true },
+  { title: "Employee", icon: UserPlus, href: "/dashboard/add-employee", staffOnly: true, hideForSuperAdmin: true, hideForUser: true },
   { title: "Analytics", icon: PieChartIcon, href: "/dashboard/analytics", superAdminOnly: true },
   { title: "Support", icon: Headphones, href: "/dashboard/support" },
   { title: "Help Center", icon: HelpCircle, href: "/dashboard/help-center", helpCenter: true },
@@ -397,7 +397,7 @@ export function Dashboard() {
   if (user?.isTrialExpired && !isSuperAdminRole(user?.role)) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/90 backdrop-blur-md p-6">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden border border-rose-100 dark:border-rose-900/30"
@@ -418,13 +418,13 @@ export function Dashboard() {
               </p>
             </div>
             <div className="flex flex-col gap-3">
-              <Button 
+              <Button
                 onClick={() => window.location.reload()}
                 className="w-full h-12 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-white rounded-xl font-bold flex items-center justify-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" /> Check Status Again
               </Button>
-              <Button 
+              <Button
                 variant="outline"
                 onClick={handleLogout}
                 className="w-full h-12 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-xl font-bold"
@@ -491,7 +491,7 @@ export function Dashboard() {
                     {mainSidebarItems.map((item) => {
                       const href = item.href;
                       const isActive = href === '/dashboard' ? location.pathname === '/dashboard' : (href ? location.pathname.startsWith(href) : item.title === 'Overview' && location.pathname === '/dashboard');
-                      
+
                       if ('subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0) {
                         const isSubActive = item.subItems.some(sub => location.pathname.startsWith(sub.href));
                         return (

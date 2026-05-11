@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router';
-import { 
-  Headphones, 
-  Ticket, 
-  Eye, 
-  AlertCircle, 
-  Package, 
+import {
+  Headphones,
+  Ticket,
+  Eye,
+  AlertCircle,
+  Package,
   Mail,
   Search,
   Filter,
@@ -33,13 +33,13 @@ export function DashboardSupport() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewTicketsModalOpen, setIsViewTicketsModalOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [ticketForm, setTicketForm] = useState({ 
-    subject: '', 
-    description: '', 
-    name: user?.name || '', 
-    email: user?.email || '', 
-    category: 'Customer Queries', 
-    priority: 'normal' 
+  const [ticketForm, setTicketForm] = useState({
+    subject: '',
+    description: '',
+    name: user?.name || '',
+    email: user?.email || '',
+    category: 'Customer Queries',
+    priority: 'normal'
   });
   const [systemTickets, setSystemTickets] = useState([]);
   const [loadingStats, setLoadingStats] = useState(true);
@@ -74,7 +74,7 @@ export function DashboardSupport() {
       setFilteredTickets(tickets);
     } else {
       const q = searchQuery.toLowerCase();
-      setFilteredTickets(tickets.filter((t: any) => 
+      setFilteredTickets(tickets.filter((t: any) =>
         (t.subject && t.subject.toLowerCase().includes(q)) ||
         (t.id && String(t.id).includes(q)) ||
         (t.requesterName && t.requesterName.toLowerCase().includes(q)) ||
@@ -92,7 +92,7 @@ export function DashboardSupport() {
       if (res.success && res.data) {
         setStats(res.data);
       }
-    } catch(err: any) {
+    } catch (err: any) {
       console.error("[Zendesk Stats Error]", err);
     } finally {
       setLoadingStats(false);
@@ -103,7 +103,7 @@ export function DashboardSupport() {
     setLoadingTickets(true);
     try {
       const res = await ApiService.get('/support-tickets/zendesk', { pageName: 'Support' });
-      
+
       if (res.success && res.data && res.data.length > 0) {
         setTickets(res.data);
       } else {
@@ -113,7 +113,7 @@ export function DashboardSupport() {
           setTickets(adminRes.data);
         }
       }
-    } catch(err: any) {
+    } catch (err: any) {
       console.error("[Zendesk Tickets Error]", err);
       toast.error(err.message || "Failed to load tickets.");
     } finally {
@@ -177,17 +177,17 @@ export function DashboardSupport() {
       } else {
         toast.error(res.message || "Failed to create ticket.");
       }
-    } catch(err: any) {
-       toast.error(err.message || "Network error.");
+    } catch (err: any) {
+      toast.error(err.message || "Network error.");
     } finally {
-       setCreatingTicket(false);
+      setCreatingTicket(false);
     }
   };
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-10">
       {/* Header Section */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-start gap-6">
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400">
@@ -202,11 +202,11 @@ export function DashboardSupport() {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-center gap-4 lg:ml-10">
           <div className="hidden sm:flex -space-x-3 mr-2">
             {['JH', 'AK', 'MR'].map((initials, i) => (
-              <div 
-                key={i} 
+              <div
+                key={i}
                 className="w-10 h-10 rounded-full border-2 border-white dark:border-zinc-900 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-zinc-700 dark:to-zinc-800 flex items-center justify-center text-xs font-bold text-gray-700 dark:text-gray-300 shadow-sm"
                 style={{ zIndex: 3 - i }}
               >
@@ -214,21 +214,21 @@ export function DashboardSupport() {
               </div>
             ))}
           </div>
-          <button 
+          <button
             onClick={handleOpenViewTickets}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-200 font-semibold hover:bg-gray-50 dark:hover:bg-zinc-700 hover:text-gray-900 dark:hover:text-white transition-all duration-300 ease-out hover:scale-[1.03] shadow-sm">
+            className="w-full sm:min-w-[170px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-200 font-semibold hover:bg-gray-50 dark:hover:bg-zinc-700 hover:text-gray-900 dark:hover:text-white transition-all duration-300 ease-out hover:scale-[1.03] shadow-sm">
             <Eye className="w-4 h-4" />
             View Tickets
           </button>
-          <button 
+          <button
             onClick={handleOpenChat}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-all duration-300 ease-out hover:scale-[1.03] shadow-sm">
+            className="w-full sm:min-w-[170px] inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-indigo-200 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-all duration-300 ease-out hover:scale-[1.03] shadow-sm">
             <MessageSquare className="w-4 h-4" />
             Open Chat
           </button>
-          <button 
+          <button
             onClick={() => setIsModalOpen(true)}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold transition-all duration-300 ease-out hover:scale-[1.05] shadow-[0_4px_14px_0_rgba(245,158,11,0.39)] hover:shadow-[0_6px_20px_rgba(245,158,11,0.23)] border-none">
+            className="w-full sm:min-w-[170px] inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold transition-all duration-300 ease-out hover:scale-[1.05] shadow-[0_4px_14px_0_rgba(245,158,11,0.39)] hover:shadow-[0_6px_20px_rgba(245,158,11,0.23)] border-none">
             <Ticket className="w-4 h-4" />
             Raise Ticket
           </button>
@@ -261,9 +261,9 @@ export function DashboardSupport() {
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white/80 dark:bg-zinc-900/60 backdrop-blur-sm p-2 md:p-3 rounded-2xl border border-gray-100 dark:border-zinc-800/80 shadow-sm mt-2">
         <div className="relative w-full sm:w-96 pl-2">
           <Search className="w-4 h-4 text-gray-400 absolute left-5 top-1/2 -translate-y-1/2" />
-          <input 
-            type="text" 
-            placeholder="Search for tickets, users, or issues..." 
+          <input
+            type="text"
+            placeholder="Search for tickets, users, or issues..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-transparent border-none rounded-xl pl-10 pr-4 py-2 text-sm outline-none placeholder:text-gray-400 text-gray-800 dark:text-gray-200 focus:ring-0"
@@ -332,7 +332,7 @@ export function DashboardSupport() {
       <div className="pt-2">
         <div className="flex items-center justify-between px-1 mb-4">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Recent System Tickets</h2>
-          <button 
+          <button
             onClick={fetchSystemTickets}
             className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition-colors flex items-center gap-1"
           >
@@ -340,7 +340,7 @@ export function DashboardSupport() {
             Refresh
           </button>
         </div>
-        
+
         {loadingSystemTickets ? (
           <div className="py-20 flex flex-col items-center justify-center text-gray-500 gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
@@ -350,20 +350,20 @@ export function DashboardSupport() {
           <Card className="border border-dashed border-gray-300 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900/20 shadow-none rounded-[24px] overflow-hidden">
             <CardContent className="flex flex-col items-center justify-center py-20 text-center relative">
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-              
+
               <div className="relative w-24 h-24 mb-6 group">
                 <div className="absolute inset-0 bg-amber-500/10 rounded-full animate-ping opacity-75 duration-1000" />
                 <div className="bg-white dark:bg-zinc-800 rounded-full w-full h-full flex items-center justify-center shadow-lg border border-gray-100 dark:border-zinc-700 relative z-10 transition-transform duration-300 group-hover:scale-110">
-                   <Headphones className="w-10 h-10 text-amber-500" />
+                  <Headphones className="w-10 h-10 text-amber-500" />
                 </div>
               </div>
-              
+
               <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">No System Tickets Yet</h3>
               <p className="text-gray-500 dark:text-gray-400 text-[15px] max-w-sm mb-8 leading-relaxed">
                 You're all caught up! No support requests are currently available or pending your review.
               </p>
-              
-              <button 
+
+              <button
                 onClick={() => setIsModalOpen(true)}
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-zinc-900 font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-300 ease-out hover:scale-[1.03] shadow-md hover:shadow-lg">
                 <Plus className="w-4 h-4" />
@@ -381,11 +381,10 @@ export function DashboardSupport() {
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
                         {t.issueType?.replace(/_/g, ' ')}
                       </span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                        t.status === 'open' ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400' :
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${t.status === 'open' ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400' :
                         t.status === 'resolved' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' :
-                        'bg-gray-50 text-gray-600 dark:bg-gray-500/10 dark:text-gray-400'
-                      }`}>
+                          'bg-gray-50 text-gray-600 dark:bg-gray-500/10 dark:text-gray-400'
+                        }`}>
                         {t.status}
                       </span>
                       {t.priority && (
@@ -420,7 +419,7 @@ export function DashboardSupport() {
                       </div>
                     </div>
                   </div>
-                  <button 
+                  <button
                     onClick={() => {
                       setSelectedTicket(t);
                       setIsDetailModalOpen(true);
@@ -435,60 +434,60 @@ export function DashboardSupport() {
             ))}
           </div>
         )
-      }
+        }
       </div>
 
       {/* Modals implementation */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <Card className="w-full max-w-lg bg-white dark:bg-zinc-900 p-6 shadow-2xl relative">
-             <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700 transition">
-                <X className="w-5 h-5" />
-             </button>
-             <h2 className="text-2xl font-bold mb-6 dark:text-white">Raise New Ticket</h2>
-             <form onSubmit={handleCreateTicket} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                   <div className="flex flex-col gap-1">
-                      <label className="text-sm font-semibold dark:text-gray-300">Name</label>
-                      <input required type="text" className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.name} onChange={e => setTicketForm({...ticketForm, name: e.target.value})} placeholder="User Name" />
-                   </div>
-                   <div className="flex flex-col gap-1">
-                      <label className="text-sm font-semibold dark:text-gray-300">Email</label>
-                      <input required type="email" className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.email} onChange={e => setTicketForm({...ticketForm, email: e.target.value})} placeholder="user@example.com" />
-                   </div>
+            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700 transition">
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-2xl font-bold mb-6 dark:text-white">Raise New Ticket</h2>
+            <form onSubmit={handleCreateTicket} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-semibold dark:text-gray-300">Name</label>
+                  <input required type="text" className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.name} onChange={e => setTicketForm({ ...ticketForm, name: e.target.value })} placeholder="User Name" />
                 </div>
                 <div className="flex flex-col gap-1">
-                   <label className="text-sm font-semibold dark:text-gray-300">Subject</label>
-                   <input required type="text" className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.subject} onChange={e => setTicketForm({...ticketForm, subject: e.target.value})} placeholder="Brief ticket subject" />
+                  <label className="text-sm font-semibold dark:text-gray-300">Email</label>
+                  <input required type="email" className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.email} onChange={e => setTicketForm({ ...ticketForm, email: e.target.value })} placeholder="user@example.com" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                   <div className="flex flex-col gap-1">
-                      <label className="text-sm font-semibold dark:text-gray-300">Category</label>
-                      <select className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.category} onChange={e => setTicketForm({...ticketForm, category: e.target.value})}>
-                         <option value="Customer Queries">Customer Queries</option>
-                         <option value="Reported Issues">Reported Issues</option>
-                         <option value="Order Support">Order Support</option>
-                      </select>
-                   </div>
-                   <div className="flex flex-col gap-1">
-                      <label className="text-sm font-semibold dark:text-gray-300">Priority</label>
-                      <select className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.priority} onChange={e => setTicketForm({...ticketForm, priority: e.target.value})}>
-                         <option value="low">Low</option>
-                         <option value="normal">Normal</option>
-                         <option value="high">High</option>
-                         <option value="urgent">Urgent</option>
-                      </select>
-                   </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-semibold dark:text-gray-300">Subject</label>
+                <input required type="text" className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.subject} onChange={e => setTicketForm({ ...ticketForm, subject: e.target.value })} placeholder="Brief ticket subject" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-semibold dark:text-gray-300">Category</label>
+                  <select className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.category} onChange={e => setTicketForm({ ...ticketForm, category: e.target.value })}>
+                    <option value="Customer Queries">Customer Queries</option>
+                    <option value="Reported Issues">Reported Issues</option>
+                    <option value="Order Support">Order Support</option>
+                  </select>
                 </div>
                 <div className="flex flex-col gap-1">
-                   <label className="text-sm font-semibold dark:text-gray-300">Description</label>
-                   <textarea required rows={4} className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.description} onChange={e => setTicketForm({...ticketForm, description: e.target.value})} placeholder="Detailed description of the issue..."></textarea>
+                  <label className="text-sm font-semibold dark:text-gray-300">Priority</label>
+                  <select className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.priority} onChange={e => setTicketForm({ ...ticketForm, priority: e.target.value })}>
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
                 </div>
-                <button type="submit" disabled={creatingTicket} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition disabled:opacity-50">
-                  {creatingTicket ? <Loader2 className="w-5 h-5 animate-spin"/> : <Ticket className="w-5 h-5" />}
-                  {creatingTicket ? "Creating..." : "Submit Ticket"}
-                </button>
-             </form>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-semibold dark:text-gray-300">Description</label>
+                <textarea required rows={4} className="w-full px-3 py-2 rounded-lg border dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" value={ticketForm.description} onChange={e => setTicketForm({ ...ticketForm, description: e.target.value })} placeholder="Detailed description of the issue..."></textarea>
+              </div>
+              <button type="submit" disabled={creatingTicket} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition disabled:opacity-50">
+                {creatingTicket ? <Loader2 className="w-5 h-5 animate-spin" /> : <Ticket className="w-5 h-5" />}
+                {creatingTicket ? "Creating..." : "Submit Ticket"}
+              </button>
+            </form>
           </Card>
         </div>
       )}
@@ -496,85 +495,84 @@ export function DashboardSupport() {
       {isViewTicketsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <Card className="w-full max-w-5xl h-[80vh] flex flex-col bg-white dark:bg-zinc-900 shadow-2xl relative overflow-hidden rounded-2xl">
-             <div className="p-6 border-b dark:border-zinc-800 flex justify-between items-center bg-gray-50 dark:bg-zinc-800/50">
-                <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2">
-                   <Eye className="w-6 h-6 text-blue-500" /> Zendesk Tickets
-                </h2>
-                <button onClick={() => setIsViewTicketsModalOpen(false)} className="p-2 rounded-full bg-white dark:bg-zinc-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-600 shadow-sm transition">
-                   <X className="w-5 h-5" />
-                </button>
-             </div>
-             
-             <div className="flex-1 overflow-auto p-6">
-                {loadingTickets ? (
-                   <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 gap-4">
-                      <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-                      Loading Zendesk Tickets...
-                   </div>
-                ) : filteredTickets.length === 0 ? (
-                   <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                      <Ticket className="w-16 h-16 mb-4 opacity-20" />
-                      <p>No tickets found</p>
-                   </div>
-                ) : (
-                   <div className="space-y-4">
-                     {filteredTickets.map((t: any) => (
-                        <div key={t.id} className="p-4 border dark:border-zinc-800 rounded-xl hover:border-amber-500/50 transition-colors bg-white dark:bg-zinc-900 flex justify-between items-start gap-4">
-                           <div className="flex-1 min-w-0">
-                              <div className="flex gap-2 items-center mb-1 flex-wrap">
-                                 <span className="font-mono text-xs text-gray-500 dark:text-gray-400">#{t.id}</span>
-                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                   t.status === 'open' ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400' :
-                                   t.status === 'solved' || t.status === 'closed' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' :
-                                   'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
-                                 }`}>
-                                   {t.status}
-                                 </span>
-                                 <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-gray-300">
-                                   {t.priority}
-                                 </span>
-                              </div>
-                              <h4 className="font-bold text-gray-900 dark:text-white text-lg truncate mb-1">{t.subject}</h4>
-                               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                                  <div className="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
-                                    <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-[10px] font-bold text-blue-600 uppercase">
-                                      {t.requesterName?.charAt(0) || 'U'}
-                                    </div>
-                                    {t.requesterName}
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <Mail className="w-3.5 h-3.5" />
-                                    {t.requesterEmail}
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <Clock className="w-3.5 h-3.5" />
-                                    {new Date(t.createdAt).toLocaleDateString()}
-                                  </div>
-                               </div>
-                              {t.tags && t.tags.length > 0 && (
-                                <div className="mt-2 flex gap-2 flex-wrap">
-                                  {t.tags.map((tag:string) => (
-                                    <span key={tag} className="px-2 py-1 bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 text-xs rounded-md">
-                                      {tag.replace('_', ' ')}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                           </div>
-                           <button 
-                             className="whitespace-nowrap px-4 py-2 text-sm font-semibold rounded-lg border border-gray-200 dark:border-zinc-700 hover:bg-amber-500 hover:border-amber-500 hover:text-white transition shadow-sm"
-                             onClick={() => {
-                              const subdomain = 'hexerve'; 
-                              window.open(`https://${subdomain}.zendesk.com/agent/tickets/${t.id}`, '_blank');
-                             }}
-                            >
-                             View in Zendesk
-                           </button>
+            <div className="p-6 border-b dark:border-zinc-800 flex justify-between items-center bg-gray-50 dark:bg-zinc-800/50">
+              <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2">
+                <Eye className="w-6 h-6 text-blue-500" /> Zendesk Tickets
+              </h2>
+              <button onClick={() => setIsViewTicketsModalOpen(false)} className="p-2 rounded-full bg-white dark:bg-zinc-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-600 shadow-sm transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6">
+              {loadingTickets ? (
+                <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 gap-4">
+                  <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                  Loading Zendesk Tickets...
+                </div>
+              ) : filteredTickets.length === 0 ? (
+                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                  <Ticket className="w-16 h-16 mb-4 opacity-20" />
+                  <p>No tickets found</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredTickets.map((t: any) => (
+                    <div key={t.id} className="p-4 border dark:border-zinc-800 rounded-xl hover:border-amber-500/50 transition-colors bg-white dark:bg-zinc-900 flex justify-between items-start gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex gap-2 items-center mb-1 flex-wrap">
+                          <span className="font-mono text-xs text-gray-500 dark:text-gray-400">#{t.id}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${t.status === 'open' ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400' :
+                            t.status === 'solved' || t.status === 'closed' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                              'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
+                            }`}>
+                            {t.status}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-gray-300">
+                            {t.priority}
+                          </span>
                         </div>
-                     ))}
-                   </div>
-                )}
-             </div>
+                        <h4 className="font-bold text-gray-900 dark:text-white text-lg truncate mb-1">{t.subject}</h4>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                          <div className="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
+                            <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-[10px] font-bold text-blue-600 uppercase">
+                              {t.requesterName?.charAt(0) || 'U'}
+                            </div>
+                            {t.requesterName}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Mail className="w-3.5 h-3.5" />
+                            {t.requesterEmail}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            {new Date(t.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                        {t.tags && t.tags.length > 0 && (
+                          <div className="mt-2 flex gap-2 flex-wrap">
+                            {t.tags.map((tag: string) => (
+                              <span key={tag} className="px-2 py-1 bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 text-xs rounded-md">
+                                {tag.replace('_', ' ')}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        className="whitespace-nowrap px-4 py-2 text-sm font-semibold rounded-lg border border-gray-200 dark:border-zinc-700 hover:bg-amber-500 hover:border-amber-500 hover:text-white transition shadow-sm"
+                        onClick={() => {
+                          const subdomain = 'hexerve';
+                          window.open(`https://${subdomain}.zendesk.com/agent/tickets/${t.id}`, '_blank');
+                        }}
+                      >
+                        View in Zendesk
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </Card>
         </div>
       )}
@@ -583,23 +581,23 @@ export function DashboardSupport() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
           <Card className="w-full max-w-3xl bg-white dark:bg-zinc-900 shadow-2xl relative overflow-hidden rounded-[24px] border-none">
             <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-blue-500/5 pointer-events-none" />
-            
+
             <div className="p-6 border-b border-gray-100 dark:border-zinc-800 flex justify-between items-center bg-gray-50/50 dark:bg-zinc-800/30 relative z-10">
               <div>
                 <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2">
-                  <Ticket className="w-6 h-6 text-amber-500" /> 
+                  <Ticket className="w-6 h-6 text-amber-500" />
                   Ticket Details
                 </h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Ticket ID: {selectedTicket._id}</p>
               </div>
-              <button 
-                onClick={() => setIsDetailModalOpen(false)} 
+              <button
+                onClick={() => setIsDetailModalOpen(false)}
                 className="p-2.5 rounded-full bg-white dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-700 shadow-sm transition hover:rotate-90 duration-300"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-8 max-h-[70vh] overflow-y-auto relative z-10 scrollbar-thin scrollbar-thumb-amber-200 dark:scrollbar-thumb-zinc-800">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                 <div className="space-y-6">
@@ -616,21 +614,19 @@ export function DashboardSupport() {
                       </span>
                     </div>
                   </div>
-                  
+
                   <div>
                     <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Status & Priority</h4>
                     <div className="flex flex-wrap gap-3">
-                      <div className={`px-4 py-2 rounded-xl text-sm font-bold capitalize flex items-center gap-2 ${
-                        selectedTicket.status === 'open' ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400' :
+                      <div className={`px-4 py-2 rounded-xl text-sm font-bold capitalize flex items-center gap-2 ${selectedTicket.status === 'open' ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400' :
                         selectedTicket.status === 'resolved' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' :
-                        'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400'
-                      }`}>
-                         <div className={`w-2 h-2 rounded-full ${
-                           selectedTicket.status === 'open' ? 'bg-rose-500' :
-                           selectedTicket.status === 'resolved' ? 'bg-emerald-500' :
-                           'bg-blue-500'
-                         } animate-pulse`} />
-                         {selectedTicket.status}
+                          'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400'
+                        }`}>
+                        <div className={`w-2 h-2 rounded-full ${selectedTicket.status === 'open' ? 'bg-rose-500' :
+                          selectedTicket.status === 'resolved' ? 'bg-emerald-500' :
+                            'bg-blue-500'
+                          } animate-pulse`} />
+                        {selectedTicket.status}
                       </div>
                       <div className="px-4 py-2 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 text-sm font-bold capitalize">
                         {selectedTicket.priority || 'Normal'} Priority
@@ -638,7 +634,7 @@ export function DashboardSupport() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="space-y-6">
                   <div>
                     <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Ticket Metadata</h4>
@@ -663,12 +659,12 @@ export function DashboardSupport() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="mb-8">
                 <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Subject</h4>
                 <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{selectedTicket.subject}</p>
               </div>
-              
+
               <div className="mb-8">
                 <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Description</h4>
                 <div className="bg-gray-50 dark:bg-zinc-800/30 rounded-2xl p-6 text-gray-700 dark:text-gray-300 leading-relaxed text-sm whitespace-pre-wrap border border-gray-100 dark:border-zinc-800">
@@ -676,26 +672,26 @@ export function DashboardSupport() {
                 </div>
               </div>
             </div>
-            
+
             <div className="p-6 border-t border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/30 flex flex-wrap justify-end gap-3 relative z-10">
-              <button 
+              <button
                 onClick={() => setIsDetailModalOpen(false)}
                 className="px-6 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800 transition shadow-sm"
               >
                 Close
               </button>
-              
+
               {selectedTicket.status !== 'resolved' && (
                 <>
                   {selectedTicket.status !== 'pending' && (
-                    <button 
+                    <button
                       className="px-6 py-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-bold transition hover:bg-amber-200 dark:hover:bg-amber-900/50"
                       onClick={() => handleUpdateStatus(selectedTicket._id, 'pending')}
                     >
                       Mark Pending
                     </button>
                   )}
-                  <button 
+                  <button
                     className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-lg shadow-emerald-200/50 transition transform hover:-translate-y-0.5 active:translate-y-0"
                     onClick={() => handleUpdateStatus(selectedTicket._id, 'resolved')}
                   >
@@ -703,9 +699,9 @@ export function DashboardSupport() {
                   </button>
                 </>
               )}
-              
+
               {selectedTicket.status === 'resolved' && (
-                <button 
+                <button
                   className="px-6 py-2.5 rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-500 font-bold transition"
                   onClick={() => handleUpdateStatus(selectedTicket._id, 'open')}
                 >
@@ -717,11 +713,11 @@ export function DashboardSupport() {
         </div>
       )}
 
-      <SupportChatModal 
-        isOpen={isChatOpen} 
-        onClose={() => setIsChatOpen(false)} 
-        tickets={tickets} 
-        onRefreshTickets={fetchTickets} 
+      <SupportChatModal
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        tickets={tickets}
+        onRefreshTickets={fetchTickets}
       />
 
     </div>

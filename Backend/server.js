@@ -136,6 +136,7 @@ app.use("/api/store-managers", storeManagerRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/help-center", helpCenterRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/razorpay", paymentRoutes);
 app.use("/api/support-tickets", supportTicketRoutes);
 app.use("/api/support/tickets", supportTicketRoutes); // Alias as per request
 app.use("/api/invoices", invoiceRoutes);

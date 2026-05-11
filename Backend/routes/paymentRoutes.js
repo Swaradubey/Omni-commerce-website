@@ -11,9 +11,17 @@ router.post("/razorpay/create-order", (req, res, next) => {
   next();
 }, createRazorpayOrder);
 
+// Alias for requested path /api/razorpay/create-order (if mounted at /api/razorpay)
+router.post("/create-order", createRazorpayOrder);
+
 router.post("/razorpay/verify", (req, res, next) => {
   console.log("[Payment Route] POST /api/payments/razorpay/verify");
   next();
 }, verifyRazorpayPayment);
+
+// Alias for requested path /api/razorpay/verify-payment (if mounted at /api/razorpay)
+router.post("/verify-payment", verifyRazorpayPayment);
+router.post("/verify", verifyRazorpayPayment); // keep existing just in case
+
 
 module.exports = router;

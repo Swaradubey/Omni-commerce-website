@@ -20,11 +20,19 @@ const ASSIGNABLE_ROLES = [
   'store_manager',
   'inventory_manager',
   'employee',
+  'user',
 ] as const;
 
 export function DashboardUsers() {
   const navigate = useNavigate();
   const { user, refreshSession } = useAuth();
+
+  const isSA =
+    user?.role === "super_admin" ||
+    user?.role === "superadmin" ||
+    user?.role === "Super Admin" ||
+    user?.role === "SUPER_ADMIN";
+
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
@@ -230,7 +238,7 @@ export function DashboardUsers() {
   }}
 >
 <option value="" className="text-base font-medium">All Roles</option>
-                 {ASSIGNABLE_ROLES.map(r => (
+                 {ASSIGNABLE_ROLES.filter(r => isSA || r !== 'user').map(r => (
                    <option key={r} value={r} className="text-base font-medium">{roleDisplayName(r)}</option>
                  ))}
               </select>
@@ -287,7 +295,6 @@ export function DashboardUsers() {
                     const safeRole = u.role || 'Unknown Role';
                     const safeName = u.name || u.email || 'Unnamed User';
                     const current = pendingRole[id] ?? safeRole;
-                    const isSA = isSuperAdminRole(user?.role);
                     const ADMIN_ALLOWED_ROLES = ['counter_manager', 'seo_manager', 'store_manager', 'inventory_manager', 'employee'];
 
                     let roleOptions: string[] = [];

@@ -46,6 +46,15 @@ const invoiceSchema = new mongoose.Schema(
       type: String,
       default: "completed",
     },
+    razorpayOrderId: {
+      type: String,
+    },
+    razorpayPaymentId: {
+      type: String,
+    },
+    paidAt: {
+      type: Date,
+    },
     orderStatus: {
       type: String,
     },
