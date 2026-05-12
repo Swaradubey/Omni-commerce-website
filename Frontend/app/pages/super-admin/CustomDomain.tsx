@@ -3,11 +3,11 @@ import { Globe, Plus, CheckCircle2, AlertCircle, Trash2, ExternalLink, Loader2, 
 import { customDomainApi, CustomDomainData } from '../../api/customDomains';
 import { clientsApi, ClientRow } from '../../api/clients';
 import { useAuth } from '../../context/AuthContext';
-import { isSuperAdminRole } from '../../utils/staffRoles';
+import { isSuperAdminRole, hasFullAdminPrivileges } from '../../utils/staffRoles';
 
 export function CustomDomain() {
   const { user } = useAuth();
-  const isSuper = isSuperAdminRole(user?.role);
+  const isSuper = hasFullAdminPrivileges(user?.role);
   const [domains, setDomains] = useState<CustomDomainData[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);

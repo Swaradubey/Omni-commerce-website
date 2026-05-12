@@ -31,7 +31,7 @@ import {
 } from '../../components/ui/dialog';
 import { useNavigate } from 'react-router';
 import ApiService from '../../api/apiService';
-import { patchOrderTrackingStatus, deleteOrder } from '../../api/orders';
+import { patchOrderTrackingStatus, deleteOrder, cancelOrder } from '../../api/orders';
 import { useAuth } from '../../context/AuthContext';
 import { hasFullAdminPrivileges, isStaffRole, isCustomerAccountRole, isSuperAdminRole } from '../../utils/staffRoles';
 import { OrderTrackingTimeline, type TimelineStage } from '../../components/orders/OrderTrackingTimeline';
@@ -219,6 +219,34 @@ export function DashboardOrders() {
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Update failed';
+      toast.error(msg);
+    } finally {
+      setTrackingSubmitting(false);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!manageOrder) return;
+    if (!window.confirm('Are you sure you want to cancel this order?')) return;
+    
+    const oid = manageOrder.orderId || manageOrder._id;
+    if (!oid) return;
+    setTrackingSubmitting(true);
+    try {
+      const res = await cancelOrder(String(oid));
+      if (res.success && res.data) {
+        toast.success(res.message || 'Order cancelled successfully');
+        setManageOrder(res.data);
+        setOrders((prev) =>
+          prev.map((row) =>
+            row.orderId === res.data.orderId || String(row._id) === String(res.data._id)
+              ? { ...row, ...res.data }
+              : row
+          )
+        );
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Cancellation failed';
       toast.error(msg);
     } finally {
       setTrackingSubmitting(false);
@@ -591,6 +619,20 @@ export function DashboardOrders() {
                   })}
                 </div>
               </div>
+
+              {!isCancelledOrder(manageOrder) && !manageOrder.isDelivered && (
+                <div className="pt-4 border-t border-stone-100">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={trackingSubmitting}
+                    className="w-full"
+                    onClick={() => void handleCancelOrder()}
+                  >
+                    Cancel Order
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 

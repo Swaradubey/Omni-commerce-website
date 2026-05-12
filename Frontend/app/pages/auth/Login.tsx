@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import { resolvePostLoginPath } from '../../utils/staffRoles';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ShoppingBag } from 'lucide-react';
@@ -15,6 +15,14 @@ export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam === 'google_auth_failed') {
+      setError('Google authentication failed. Please try again or use your credentials.');
+    }
+  }, [searchParams]);
 
   const from =
     (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
@@ -221,17 +229,9 @@ export function Login() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="relative my-7">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200" />
-            </div>
-            <div className="relative flex justify-center text-sm text-gray-400 bg-gray-50 px-3">
 
-            </div>
-          </div>
 
-          <div className="flex items-start justify-center gap-2 px-2 sm:px-0">
+          <div className="mt-8 flex items-start justify-center gap-2 px-2 sm:px-0">
             <input
               type="checkbox"
               id="accept-terms"

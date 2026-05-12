@@ -132,6 +132,7 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const supportTicketRoutes = require("./routes/supportTicketRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const quoteRoutes = require("./routes/quoteRoutes");
+const searchRoutes = require("./routes/searchRoutes");
 const shiprocketService = require("./services/shiprocketService");
 
 const customDomainRoutes = require("./routes/customDomainRoutes");
@@ -163,6 +164,7 @@ app.use("/api/support-tickets", supportTicketRoutes);
 app.use("/api/support/tickets", supportTicketRoutes); // Alias as per request
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/quotes", quoteRoutes);
+app.use("/api/search", searchRoutes);
 
 // Health route
 app.get("/api/health", (req, res) => {
@@ -193,45 +195,55 @@ app.get("/auth/google/callback", (req, res, next) => {
     return res.status(503).json({ success: false, message: "Google Sign-In is not configured." });
   }
   passport.authenticate("google", { failureRedirect: "/auth/google/failure" })(req, res, (err) => {
-    if (err) return next(err);
+    if (err) {
+      console.error("[Google OAuth] Passport authenticate error:", err.message);
+      return next(err);
+    }
     // Success handler below
     try {
       const user = req.user;
+      const frontendUrl = process.env.FRONTEND_URL || "https://www.retailverse.in";
+      
+      console.log(`[Google OAuth Debug] FRONTEND_URL: ${frontendUrl}`);
+      
       if (!user) {
         console.error("[Google OAuth] No user after callback");
-        const frontendUrl = process.env.FRONTEND_URL || "https://www.retailverse.in";
-        return res.redirect(`${frontendUrl}/register?error=google_auth_failed`);
+        return res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
       }
 
       // Create JWT using the same method as existing login system
       const token = generateToken(user._id, user.email, user.role);
+      console.log(`[Google OAuth Debug] Token generated: ${!!token}`);
 
       // Update lastLoginAt
       user.lastLoginAt = new Date();
       user.save().catch((err) => console.error("[Google OAuth] Failed to update lastLoginAt:", err.message));
 
-      const frontendUrl = process.env.FRONTEND_URL || "https://www.retailverse.in";
       const params = new URLSearchParams({
         token,
         name: user.name || "",
         email: user.email || "",
         role: user.role || "user",
         id: String(user._id),
+        ...(user.clientId ? { clientId: String(user.clientId) } : {}),
       });
 
-      console.log(`[Google OAuth] Success — redirecting to frontend for user ${user.email}`);
-      return res.redirect(`${frontendUrl}/auth/google/success?${params.toString()}`);
+      const finalRedirectUrl = `${frontendUrl}/google-auth-callback?${params.toString()}`;
+      console.log("GOOGLE_FINAL_REDIRECT_URL:", finalRedirectUrl.split("token=")[0] + "token=[REDACTED]");
+      
+      // Redirect to a dedicated callback route — frontend handles the token/params
+      return res.redirect(finalRedirectUrl);
     } catch (err) {
       console.error("[Google OAuth] Callback error:", err.message);
       const frontendUrl = process.env.FRONTEND_URL || "https://www.retailverse.in";
-      return res.redirect(`${frontendUrl}/register?error=google_auth_failed`);
+      return res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
     }
   });
 });
 
 app.get("/auth/google/failure", (req, res) => {
   const frontendUrl = process.env.FRONTEND_URL || "https://www.retailverse.in";
-  res.redirect(`${frontendUrl}/register?error=google_auth_failed`);
+  res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
 });
 
 // Error handling middleware

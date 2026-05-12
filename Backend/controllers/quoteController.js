@@ -253,7 +253,7 @@ const convertToInvoice = async (req, res) => {
       })),
       subtotal: quote.finalPrice,
       totalAmount: quote.finalPrice,
-      paymentStatus: "pending",
+      paymentStatus: "paid",
       clientId: quote.clientId,
     });
 

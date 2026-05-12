@@ -12,9 +12,9 @@ const tenantMiddleware = require("../middleware/tenantMiddleware");
 
 // Routes for custom domains
 router.get("/resolve", tenantMiddleware, resolveDomain);
-router.get("/", protect, allowRoles("super_admin", "client", "client_admin"), tenantMiddleware, getAllCustomDomains);
-router.post("/", protect, allowRoles("super_admin", "client", "client_admin"), tenantMiddleware, createCustomDomain);
-router.get("/:id/status", protect, allowRoles("super_admin", "client", "client_admin"), tenantMiddleware, checkDomainStatus);
-router.delete("/:id", protect, allowRoles("super_admin", "client", "client_admin"), tenantMiddleware, deleteCustomDomain);
+router.get("/", protect, allowRoles("super_admin", "admin", "client", "client_admin"), tenantMiddleware, getAllCustomDomains);
+router.post("/", protect, allowRoles("super_admin", "admin", "client", "client_admin"), tenantMiddleware, createCustomDomain);
+router.get("/:id/status", protect, allowRoles("super_admin", "admin", "client", "client_admin"), tenantMiddleware, checkDomainStatus);
+router.delete("/:id", protect, allowRoles("super_admin", "admin", "client", "client_admin"), tenantMiddleware, deleteCustomDomain);
 
 module.exports = router;

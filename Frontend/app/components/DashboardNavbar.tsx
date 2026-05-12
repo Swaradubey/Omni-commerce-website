@@ -1,11 +1,13 @@
-import React, { useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bell, 
   Search, 
   User as UserIcon, 
   ChevronDown,
-  Settings
+  Settings,
+  Loader2
 } from 'lucide-react';
 import { 
   DropdownMenu, 
@@ -21,6 +23,7 @@ import { Input } from './ui/input';
 import { useAuth } from '../context/AuthContext';
 import { accountRoleSubtitle } from '../utils/staffRoles';
 import { SidebarTrigger } from './ui/sidebar';
+import ApiService from '../api/apiService';
 
 type DashboardNavbarProps = {
   /** Premium styling when viewing Dashboard Overview only */
@@ -29,6 +32,13 @@ type DashboardNavbarProps = {
 
 export function DashboardNavbar({ premiumOverview = false }: DashboardNavbarProps) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!premiumOverview) return;
@@ -45,6 +55,92 @@ export function DashboardNavbar({ premiumOverview = false }: DashboardNavbarProp
     };
   }, [premiumOverview]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (!searchQuery.trim()) {
+        setSearchResults([]);
+        setIsSearching(false);
+        return;
+      }
+      try {
+        setIsSearching(true);
+        const res = await ApiService.get<{success: boolean, data: any[]}>(`/search?q=${encodeURIComponent(searchQuery.trim())}`, { pageName: 'GlobalSearch' });
+        if (res.success && res.data) {
+          setSearchResults(res.data);
+        }
+      } catch (err) {
+        console.error("Search error", err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  /**
+   * Centralized route map for global search results.
+   * Only uses routes that are registered in routes.tsx — never generates 404s.
+   */
+  const handleResultClick = (result: any) => {
+    setShowDropdown(false);
+    setSearchQuery("");
+
+    const safeId = result.id ? encodeURIComponent(String(result.id)) : "";
+
+    switch (result.type) {
+      // CLIENT → detail page exists at /super-admin/clients/:clientId
+      case "Client":
+        navigate(`/super-admin/clients/${safeId}`);
+        break;
+
+      // USER / staff → /dashboard/users list page (no detail route exists)
+      case "User":
+        navigate(safeId ? `/dashboard/users?userId=${safeId}` : "/dashboard/users");
+        break;
+
+      // INVOICE → /dashboard/invoices list page
+      case "Invoice":
+        navigate(safeId ? `/dashboard/invoices?invoiceId=${safeId}` : "/dashboard/invoices");
+        break;
+
+      // QUOTATION → quotes live on the same invoices page
+      case "Quotation":
+        navigate(safeId ? `/dashboard/invoices?quoteId=${safeId}` : "/dashboard/invoices");
+        break;
+
+      // PRODUCT → /dashboard/products list page
+      case "Product":
+        navigate(safeId ? `/dashboard/products?productId=${safeId}` : "/dashboard/products");
+        break;
+
+      // ORDER → /dashboard/orders list page
+      case "Order":
+        navigate(safeId ? `/dashboard/orders?orderId=${safeId}` : "/dashboard/orders");
+        break;
+
+      // LEAD / Contact form → /dashboard/customers/contact-form
+      case "Lead":
+        navigate(safeId ? `/dashboard/customers/contact-form?contactId=${safeId}` : "/dashboard/customers/contact-form");
+        break;
+
+      default:
+        // Fallback: go to dashboard overview — never 404
+        navigate("/dashboard");
+        break;
+    }
+  };
+
   return (
     <header
       className={
@@ -56,7 +152,7 @@ export function DashboardNavbar({ premiumOverview = false }: DashboardNavbarProp
       <div className="flex h-16 items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-4">
           <SidebarTrigger />
-          <div className="hidden md:flex relative w-64 max-w-[min(16rem,100%)]">
+          <div className="hidden md:flex relative w-64 max-w-[min(16rem,100%)]" ref={searchRef}>
             <Search
               className={
                 premiumOverview
@@ -65,13 +161,73 @@ export function DashboardNavbar({ premiumOverview = false }: DashboardNavbarProp
               }
             />
             <Input
-              placeholder="Search analytics..."
+              placeholder="Search all..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowDropdown(true);
+              }}
+              onFocus={() => {
+                if (searchQuery.trim()) setShowDropdown(true);
+              }}
               className={
                 premiumOverview
                   ? 'pl-10 h-10 rounded-full border border-amber-200/40 bg-white/80 dark:bg-zinc-900/60 dark:border-amber-900/30 shadow-sm transition-all duration-300 focus-visible:ring-2 focus-visible:ring-amber-400/40 focus-visible:border-amber-300/60'
                   : 'pl-10 bg-gray-100/50 dark:bg-white/5 border-none focus-visible:ring-1 focus-visible:ring-blue-500 rounded-xl'
               }
             />
+            
+            <AnimatePresence>
+              {showDropdown && searchQuery.trim() && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.15 }}
+                  className={
+                    premiumOverview 
+                      ? "absolute top-full left-0 w-full mt-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-amber-200/40 dark:border-amber-900/30 rounded-2xl shadow-xl overflow-hidden z-50 max-h-96 flex flex-col"
+                      : "absolute top-full left-0 w-full mt-2 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl shadow-xl overflow-hidden z-50 max-h-96 flex flex-col"
+                  }
+                >
+                  <div className="overflow-y-auto custom-scrollbar flex-1">
+                    {isSearching ? (
+                      <div className="p-6 flex justify-center items-center">
+                        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : searchResults.length > 0 ? (
+                      <ul className="flex flex-col py-2">
+                        {searchResults.map((res, idx) => (
+                          <li 
+                            key={idx} 
+                            onClick={() => handleResultClick(res)}
+                            className={
+                              premiumOverview
+                                ? "px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/20 cursor-pointer flex flex-col gap-1 transition-colors"
+                                : "px-4 py-3 hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer flex flex-col gap-1 transition-colors"
+                            }
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{res.name}</span>
+                              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 bg-gray-100 dark:bg-zinc-800 rounded-md text-gray-500 dark:text-gray-400 shrink-0">
+                                {res.type}
+                              </span>
+                            </div>
+                            {res.secondary && (
+                              <span className="text-xs text-muted-foreground truncate">{res.secondary}</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="p-6 text-center text-sm text-muted-foreground">
+                        No results found for "{searchQuery}"
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 

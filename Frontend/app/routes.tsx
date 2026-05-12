@@ -42,6 +42,7 @@ import { DashboardAdminLogs } from './pages/dashboard/DashboardAdminLogs';
 import { DashboardSupport } from './pages/dashboard/DashboardSupport';
 import { DashboardClients } from './pages/dashboard/DashboardClients';
 import { DashboardAddEmployee } from './pages/dashboard/DashboardAddEmployee';
+import { DashboardCustomersContactForm } from './pages/dashboard/DashboardCustomersContactForm';
 import { Account } from './pages/Account';
 import { WishlistPage } from './pages/WishlistPage';
 import { TrackOrder } from './pages/TrackOrder';
@@ -80,7 +81,7 @@ export const router = createBrowserRouter([
         ),
       },
       { path: 'register', Component: Register },
-      { path: 'auth/google/success', Component: GoogleAuthCallback },
+      { path: 'google-auth-callback', Component: GoogleAuthCallback },
       { path: 'forgot-password', Component: ForgotPassword },
       { path: 'contact', Component: Contact },
       { path: 'about', Component: About },
@@ -142,6 +143,14 @@ export const router = createBrowserRouter([
               <SuperAdminOrClientRoute>
                 <DashboardCustomers />
               </SuperAdminOrClientRoute>
+            ),
+          },
+          {
+            path: 'dashboard/customers/contact-form',
+            element: (
+              <FullAdminOnlyRoute>
+                <DashboardCustomersContactForm />
+              </FullAdminOnlyRoute>
             ),
           },
           {
@@ -240,9 +249,9 @@ export const router = createBrowserRouter([
           {
             path: 'super-admin/custom-domain',
             element: (
-              <SuperAdminOrClientRoute>
+              <FullAdminOnlyRoute>
                 <CustomDomain />
-              </SuperAdminOrClientRoute>
+              </FullAdminOnlyRoute>
             ),
           },
           {

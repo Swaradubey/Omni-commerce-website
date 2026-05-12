@@ -2,6 +2,7 @@
  * Super Admin "Open …" actions on Users & roles: label, post-open route, and impersonation behavior.
  * Paths must match real router paths in `app/routes.tsx`.
  */
+import { normalizeRole } from './staffRoles';
 
 export type RoleOpenPanelConfig = {
   buttonLabel: string;
@@ -31,7 +32,8 @@ const ROLE_LABEL: Record<string, string> = {
 
 export function roleDisplayName(role: string | undefined): string {
   if (!role) return 'User';
-  return ROLE_LABEL[role] ?? role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const normalized = normalizeRole(role);
+  return ROLE_LABEL[normalized] ?? role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /** Maps saved account role → open action. Roles not listed fall back to generic staff/user dashboard + impersonation. */
@@ -52,11 +54,12 @@ const OPEN_PANEL: Record<string, Omit<RoleOpenPanelConfig, 'useImpersonation'>> 
 
 export function getRoleOpenPanelConfig(role: string | undefined): RoleOpenPanelConfig | null {
   if (!role) return null;
-  if (role === 'super_admin') {
+  const normalized = normalizeRole(role);
+  if (normalized === 'super_admin') {
     const base = OPEN_PANEL.super_admin;
     return { ...base, useImpersonation: false };
   }
-  const base = OPEN_PANEL[role];
+  const base = OPEN_PANEL[normalized];
   if (base) {
     return { ...base, useImpersonation: true };
   }

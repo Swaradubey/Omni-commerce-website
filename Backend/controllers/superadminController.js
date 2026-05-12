@@ -6,6 +6,7 @@ const Invoice = require("../models/Invoice");
 const ImpersonationAuditLog = require("../models/ImpersonationAuditLog");
 const generateToken = require("../utils/generateToken");
 const { isValidObjectId } = require("../utils/tenantResolver");
+const { normalizeRole } = require("../utils/clientScopedRoles");
 
 function resolveRequestMeta(req) {
   const xf = req.headers["x-forwarded-for"];
@@ -28,6 +29,7 @@ const IMPERSONATABLE_ROLES = new Set([
   "client",
   "store_manager",
   "employee",
+  "counter_manager",
 ]);
 
 // @route   POST /api/superadmin/impersonate/:adminId
@@ -43,7 +45,8 @@ const impersonateAdmin = async (req, res) => {
     if (!target) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
-    if (target.role === "super_admin" || !IMPERSONATABLE_ROLES.has(target.role)) {
+    const targetRole = normalizeRole(target.role);
+    if (targetRole === "super_admin" || !IMPERSONATABLE_ROLES.has(targetRole)) {
       return res.status(403).json({
         success: false,
         message:

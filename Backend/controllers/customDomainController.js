@@ -58,7 +58,7 @@ const resolveDomain = async (req, res) => {
 // @access  Private (Super Admin)
 const getAllCustomDomains = async (req, res) => {
   try {
-    const isSuperAdmin = req.user && req.user.role === "super_admin";
+    const isSuperAdmin = req.user && (req.user.role === "super_admin" || req.user.role === "admin");
     const clientId = req.user?.clientId || req.clientId;
 
     // Requirement 10 & 16: Log data retrieval details

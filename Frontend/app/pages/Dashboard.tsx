@@ -92,10 +92,19 @@ const sidebarItems = [
   { title: "Super Admin", icon: Shield, href: "/super-admin", superAdminOnly: true, hideForSuperAdmin: true },
   { title: "Orders", icon: ShoppingCart, href: "/dashboard/orders", hideForUser: false, hideForSuperAdmin: true },
   { title: "Invoice", icon: Receipt, href: "/dashboard/invoices", superAdminOnly: true },
-  { title: "Customers", icon: Users, href: "/dashboard/customers", adminOnly: true },
+  { 
+    title: "Customers", 
+    icon: Users, 
+    href: "/dashboard/customers", 
+    adminOnly: true,
+    subItems: [
+      { title: "All Customers", href: "/dashboard/customers", icon: Users },
+      { title: "Contact Form", href: "/dashboard/customers/contact-form", icon: Mail }
+    ]
+  },
   { title: "Users & roles", icon: UserCog, href: "/dashboard/users", adminOnly: true },
   { title: "Clients", icon: Building2, href: "/super-admin/clients", superAdminOnly: true },
-  { title: "Add Custom Domain", icon: Globe, href: "/super-admin/custom-domain", superAdminOnly: true },
+  { title: "Add Custom Domain", icon: Globe, href: "/super-admin/custom-domain", adminOnly: true },
   { title: "Employee", icon: UserPlus, href: "/dashboard/add-employee", staffOnly: true, hideForSuperAdmin: true, hideForUser: true },
   { title: "Analytics", icon: PieChartIcon, href: "/dashboard/analytics", superAdminOnly: true },
   { title: "Support", icon: Headphones, href: "/dashboard/support" },
@@ -493,7 +502,7 @@ export function Dashboard() {
                       const isActive = href === '/dashboard' ? location.pathname === '/dashboard' : (href ? location.pathname.startsWith(href) : item.title === 'Overview' && location.pathname === '/dashboard');
 
                       if ('subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0) {
-                        const isSubActive = item.subItems.some(sub => location.pathname.startsWith(sub.href));
+                        const isSubActive = item.subItems.some(sub => location.pathname === sub.href || location.pathname.startsWith(sub.href + '/'));
                         return (
                           <Collapsible key={item.title} defaultOpen={isActive || isSubActive} className="group/collapsible">
                             <SidebarMenuItem>
@@ -515,7 +524,9 @@ export function Dashboard() {
                               <CollapsibleContent>
                                 <SidebarMenuSub>
                                   {item.subItems.map(subItem => {
-                                    const subIsActive = location.pathname.startsWith(subItem.href);
+                                    const subIsActive = subItem.href === item.href 
+                                      ? location.pathname === subItem.href 
+                                      : location.pathname.startsWith(subItem.href);
                                     return (
                                       <SidebarMenuSubItem key={subItem.title}>
                                         <SidebarMenuSubButton asChild isActive={subIsActive} className="h-10 text-[15px] font-medium">

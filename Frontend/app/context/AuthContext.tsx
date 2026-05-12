@@ -59,8 +59,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const USER_STORAGE_KEY = 'eco_shop_user';
-const TOKEN_STORAGE_KEY = 'eco_shop_token';
+export const USER_STORAGE_KEY = 'eco_shop_user';
+export const TOKEN_STORAGE_KEY = 'eco_shop_token';
 
 /** Super Admin JWT stored while viewing the Admin Dashboard via impersonation (restore if needed). */
 export const IMPERSONATION_SUPER_TOKEN_BACKUP_KEY = 'eco_shop_impersonation_super_backup';
@@ -111,9 +111,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       try {
+        // Check for token in storage
         const storedUser = localStorage.getItem(USER_STORAGE_KEY);
         const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
         if (!storedToken) {
+          setIsLoading(false);
           return;
         }
 

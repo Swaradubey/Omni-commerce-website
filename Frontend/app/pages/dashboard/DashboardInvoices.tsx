@@ -605,7 +605,7 @@ export function DashboardInvoices() {
                         </td>
                         <td className="px-6 py-4">
                           <span
-                            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold tracking-wide ${getStatusColor(item.paymentStatus || item.status)}`}
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold tracking-wide capitalize ${getStatusColor(item.paymentStatus || item.status)}`}
                           >
                             {item.paymentStatus || item.status || 'Pending'}
                           </span>
@@ -709,7 +709,7 @@ export function DashboardInvoices() {
                     </div>
                     <div className="p-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
                       <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground mb-1">Payment Status</p>
-                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-black uppercase ${getStatusColor(viewInvoice.paymentStatus)}`}>
+                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-black capitalize ${getStatusColor(viewInvoice.paymentStatus)}`}>
                         {viewInvoice.paymentStatus || 'Pending'}
                       </span>
                     </div>
