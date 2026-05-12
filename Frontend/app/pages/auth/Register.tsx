@@ -4,6 +4,19 @@ import { useAuth } from '../../context/AuthContext';
 import { User, Mail, Lock, Eye, EyeOff, RefreshCw, ShieldCheck } from 'lucide-react';
 import { authApi } from '../../api/auth';
 
+/**
+ * Safe backend base URL helper.
+ * Vite bakes VITE_* env vars at build time — if the variable is not set in
+ * the Vercel dashboard the value becomes the literal string "undefined".
+ * We guard against that here so Google OAuth never redirects to
+ * /undefined/auth/google in production.
+ */
+const RAW_API_URL = import.meta.env.VITE_API_URL as string | undefined;
+const API_BASE_URL =
+  RAW_API_URL && RAW_API_URL !== 'undefined'
+    ? RAW_API_URL.replace(/\/$/, '') // strip any trailing slash
+    : 'https://omni-commerce-website.onrender.com'; // production Render backend fallback
+
 export function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -99,7 +112,7 @@ export function Register() {
         </div>
 
         {/* Google Sign-In */}
-        <a href={`${import.meta.env.VITE_API_URL}/auth/google`} className="google-signin-btn">
+        <a href={`${API_BASE_URL}/auth/google`} className="google-signin-btn">
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
           <span>Sign in with Google</span>
         </a>
