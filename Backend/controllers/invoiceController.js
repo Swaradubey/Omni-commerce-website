@@ -154,8 +154,9 @@ const sendInvoiceEmail = async (req, res) => {
     // Build the HTML email body
     const html = buildInvoiceEmailHtml(invoiceData);
 
-    // Send the email
-    const result = await sendEmail({
+    // Wrap email sending in a timeout so the API never hangs forever
+    const EMAIL_TIMEOUT_MS = 45000; // 45 seconds max
+    const emailPromise = sendEmail({
       to: recipientEmail,
       subject: `Invoice ${invoiceData.invoiceNumber} — ${
         invoiceData.customerName || "POS Customer"
@@ -164,6 +165,15 @@ const sendInvoiceEmail = async (req, res) => {
       text: `Invoice ${invoiceData.invoiceNumber}\nOrder ID: ${invoiceData.orderId}\nTotal: ₹${invoiceData.totalAmount}\n\nThank you for your business!`,
     });
 
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Email sending timed out. The SMTP server did not respond in time.")),
+        EMAIL_TIMEOUT_MS
+      )
+    );
+
+    const result = await Promise.race([emailPromise, timeoutPromise]);
+
     res.json({
       success: true,
       message: "Invoice sent successfully.",
@@ -171,14 +181,23 @@ const sendInvoiceEmail = async (req, res) => {
     });
   } catch (error) {
     console.error("[invoiceController] sendInvoiceEmail error:", error.message);
+    if (error.code) console.error("[invoiceController] Error code:", error.code);
 
     // Provide a user-friendly message for SMTP configuration issues
     const isConfigError =
       error.message && error.message.includes("not configured");
-    const statusCode = isConfigError ? 503 : 500;
-    const userMessage = isConfigError
-      ? "Email service is not configured. Please contact your administrator to set up SMTP settings."
-      : "Failed to send invoice email. Please try again.";
+    const isTimeout =
+      error.message && (error.message.includes("timed out") || error.code === "ETIMEDOUT" || error.code === "ESOCKET");
+    const statusCode = isConfigError ? 503 : isTimeout ? 504 : 500;
+
+    let userMessage;
+    if (isConfigError) {
+      userMessage = "Email service is not configured. Please contact your administrator to set up SMTP settings.";
+    } else if (isTimeout) {
+      userMessage = "Email sending timed out. The mail server did not respond. Please try again or contact support.";
+    } else {
+      userMessage = `Failed to send invoice email: ${error.message || "Unknown error"}. Please try again.`;
+    }
 
     res.status(statusCode).json({
       success: false,

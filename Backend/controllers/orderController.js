@@ -1309,9 +1309,10 @@ const getOrderById = async (req, res) => {
 
     const normalizedRole = normalizeRole(req.user?.role);
     const isSuperAdmin = normalizedRole === "super_admin";
+    const isAdmin = normalizedRole === "admin";
 
     let scopeQuery = {};
-    if (!isSuperAdmin) {
+    if (!isSuperAdmin && !isAdmin) {
       const resolvedClientId = await resolveClientId(req);
       scopeQuery = buildScopeQuery(req.user, resolvedClientId, true);
     }
@@ -1324,8 +1325,8 @@ const getOrderById = async (req, res) => {
       ]
     };
     
-    // Apply tenant scoping ONLY if not Super Admin
-    if (!isSuperAdmin) {
+    // Apply tenant scoping ONLY if not Super Admin and not Admin
+    if (!isSuperAdmin && !isAdmin) {
       applyScope(query, scopeQuery);
     }
 

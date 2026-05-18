@@ -263,7 +263,7 @@ function buildScopeQuery(user, resolvedClientId, strict = false) {
     if (isValidObjectId(resolvedClientId)) {
       return { clientId: new mongoose.Types.ObjectId(String(resolvedClientId)) };
     }
-    return strict ? { _id: null } : {};
+    return {};
   }
 
   // 4. Handle Customer / User (Non-staff)

@@ -273,6 +273,22 @@ const PORT = process.env.PORT || 5000;
           `[Shiprocket] Courier tracking disabled: set ${sr.missingAuthEnv.join(", ")} in .env`
         );
       }
+
+      // ── SMTP / Email diagnostics ──────────────────────────────────────────
+      const smtpHost = process.env.SMTP_HOST;
+      const smtpUser = process.env.SMTP_USER;
+      const smtpPass = process.env.SMTP_PASS;
+      const smtpPort = process.env.SMTP_PORT || "587";
+      const smtpSecure = process.env.SMTP_SECURE || "false";
+      if (smtpHost && smtpUser && smtpPass) {
+        console.log(`[SMTP] Email service configured — host=${smtpHost}, port=${smtpPort}, secure=${smtpSecure}, user=${smtpUser}`);
+      } else {
+        const missing = [];
+        if (!smtpHost) missing.push("SMTP_HOST");
+        if (!smtpUser) missing.push("SMTP_USER");
+        if (!smtpPass) missing.push("SMTP_PASS");
+        console.warn(`[SMTP] Email service NOT configured — missing env vars: ${missing.join(", ")}`);
+      }
     });
 
     // Handle server-level errors

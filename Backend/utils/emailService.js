@@ -16,23 +16,44 @@
 const nodemailer = require("nodemailer");
 
 let _transporter = null;
+let _transporterConfigHash = null;
+
+/**
+ * Build a simple hash of current SMTP config so we can detect env changes.
+ */
+function _smtpConfigHash() {
+  return [
+    process.env.SMTP_HOST,
+    process.env.SMTP_PORT,
+    process.env.SMTP_SECURE,
+    process.env.SMTP_USER,
+    process.env.SMTP_FROM,
+  ].join("|");
+}
 
 /**
  * Returns a lazily-created nodemailer transporter.
  * Throws a clear error when SMTP env vars are missing.
+ * Re-creates the transporter if environment variables change.
  */
 function getTransporter() {
-  if (_transporter) return _transporter;
+  const currentHash = _smtpConfigHash();
+  if (_transporter && _transporterConfigHash === currentHash) return _transporter;
 
   const host = process.env.SMTP_HOST;
-  const port = parseInt(process.env.SMTP_PORT || "587", 10);
-  const secure = process.env.SMTP_SECURE === "true";
+  const port = Number(process.env.SMTP_PORT) || 587;
+  const secure = process.env.SMTP_SECURE === "true"; // Gmail port 587 → false
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
+  // Diagnostic log (never print the password)
+  console.log(
+    `[emailService] SMTP Config Check — host=${host || "(missing)"}, port=${port}, secure=${secure}, user=${user || "(missing)"}, pass=${pass ? "***SET***" : "(missing)"}`
+  );
+
   if (!host || !user || !pass) {
     throw new Error(
-      "Email service is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS in Backend/.env"
+      "Email service is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS environment variables."
     );
   }
 
@@ -41,9 +62,16 @@ function getTransporter() {
     port,
     secure,
     auth: { user, pass },
+    // ── Timeouts so the request never hangs forever on Render / production ──
+    connectionTimeout: 15000,  // 15 s to establish TCP connection
+    greetingTimeout: 15000,    // 15 s for SMTP greeting
+    socketTimeout: 30000,      // 30 s for socket inactivity
+    // tls settings for services that need STARTTLS (port 587)
+    ...(!secure ? { tls: { rejectUnauthorized: false } } : {}),
   });
 
-  console.log(`[emailService] Transporter created — host=${host}, port=${port}, user=${user}`);
+  _transporterConfigHash = currentHash;
+  console.log(`[emailService] Transporter created — host=${host}, port=${port}, secure=${secure}, user=${user}`);
   return _transporter;
 }
 
@@ -55,18 +83,26 @@ function getTransporter() {
 async function sendEmail({ to, subject, html, text }) {
   const transporter = getTransporter();
   const fromName = process.env.SMTP_FROM_NAME || "RetailVerse";
-  const fromAddr = process.env.SMTP_USER;
+  const fromAddr = process.env.SMTP_FROM || process.env.SMTP_USER;
 
-  const info = await transporter.sendMail({
-    from: `"${fromName}" <${fromAddr}>`,
-    to,
-    subject,
-    html,
-    ...(text ? { text } : {}),
-  });
+  try {
+    const info = await transporter.sendMail({
+      from: `"${fromName}" <${fromAddr}>`,
+      to,
+      subject,
+      html,
+      ...(text ? { text } : {}),
+    });
 
-  console.log(`[emailService] Email sent to ${to} — messageId=${info.messageId}`);
-  return { messageId: info.messageId };
+    console.log(`[emailService] Email sent to ${to} — messageId=${info.messageId}`);
+    return { messageId: info.messageId };
+  } catch (err) {
+    // Log the real SMTP error on the server for debugging
+    console.error(`[emailService] sendMail FAILED — to=${to}, error=${err.message}`);
+    if (err.code) console.error(`[emailService] SMTP error code: ${err.code}`);
+    if (err.responseCode) console.error(`[emailService] SMTP response code: ${err.responseCode}`);
+    throw err;
+  }
 }
 
 /**

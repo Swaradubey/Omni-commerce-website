@@ -1106,11 +1106,16 @@ export function Pos() {
       return;
     }
     setEmailSending(true);
+
+    // Client-side timeout so the button never stays stuck on "Sending…"
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s
+
     try {
       const res = await ApiService.post('/invoices/send-email', {
         recipientEmail: trimmed,
         invoiceData: latestInvoiceData,
-      });
+      }, { signal: controller.signal } as any);
       if (res.success) {
         toast.success('Invoice sent successfully.');
         setEmailModalOpen(false);
@@ -1120,9 +1125,15 @@ export function Pos() {
         throw new Error(res.message || 'Failed to send invoice email.');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to send invoice email.';
+      let msg = 'Failed to send invoice email.';
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        msg = 'Email sending timed out. Please check your network or try again.';
+      } else if (err instanceof Error) {
+        msg = err.message;
+      }
       toast.error(msg);
     } finally {
+      clearTimeout(timeoutId);
       setEmailSending(false);
     }
   };
