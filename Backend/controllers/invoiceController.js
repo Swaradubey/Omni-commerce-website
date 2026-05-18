@@ -155,7 +155,8 @@ const sendInvoiceEmail = async (req, res) => {
     const html = buildInvoiceEmailHtml(invoiceData);
 
     // Wrap email sending in a timeout so the API never hangs forever
-    const EMAIL_TIMEOUT_MS = 45000; // 45 seconds max
+    const EMAIL_TIMEOUT_MS = 55000; // 55 seconds max (under Render's 60s request timeout)
+    let timeoutHandle;
     const emailPromise = sendEmail({
       to: recipientEmail,
       subject: `Invoice ${invoiceData.invoiceNumber} — ${
@@ -165,16 +166,19 @@ const sendInvoiceEmail = async (req, res) => {
       text: `Invoice ${invoiceData.invoiceNumber}\nOrder ID: ${invoiceData.orderId}\nTotal: ₹${invoiceData.totalAmount}\n\nThank you for your business!`,
     });
 
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutHandle = setTimeout(
         () => reject(new Error("Email sending timed out. The SMTP server did not respond in time.")),
         EMAIL_TIMEOUT_MS
-      )
-    );
+      );
+    });
 
     const result = await Promise.race([emailPromise, timeoutPromise]);
+    clearTimeout(timeoutHandle);
 
-    res.json({
+    console.log(`[invoiceController] sendInvoiceEmail SUCCESS — messageId: ${result.messageId}`);
+
+    return res.json({
       success: true,
       message: "Invoice sent successfully.",
       messageId: result.messageId,
@@ -182,24 +186,30 @@ const sendInvoiceEmail = async (req, res) => {
   } catch (error) {
     console.error("[invoiceController] sendInvoiceEmail error:", error.message);
     if (error.code) console.error("[invoiceController] Error code:", error.code);
+    if (error.responseCode) console.error("[invoiceController] SMTP response code:", error.responseCode);
+    if (error.response) console.error("[invoiceController] SMTP response:", error.response);
 
     // Provide a user-friendly message for SMTP configuration issues
     const isConfigError =
       error.message && error.message.includes("not configured");
     const isTimeout =
       error.message && (error.message.includes("timed out") || error.code === "ETIMEDOUT" || error.code === "ESOCKET");
-    const statusCode = isConfigError ? 503 : isTimeout ? 504 : 500;
+    const isAuthError =
+      error.responseCode === 535 || (error.message && error.message.includes("authentication"));
+    const statusCode = isConfigError ? 503 : isTimeout ? 504 : isAuthError ? 502 : 500;
 
     let userMessage;
     if (isConfigError) {
       userMessage = "Email service is not configured. Please contact your administrator to set up SMTP settings.";
     } else if (isTimeout) {
       userMessage = "Email sending timed out. The mail server did not respond. Please try again or contact support.";
+    } else if (isAuthError) {
+      userMessage = "Email authentication failed. Please contact your administrator to verify SMTP credentials.";
     } else {
       userMessage = `Failed to send invoice email: ${error.message || "Unknown error"}. Please try again.`;
     }
 
-    res.status(statusCode).json({
+    return res.status(statusCode).json({
       success: false,
       message: userMessage,
       detail: process.env.NODE_ENV === "development" ? error.message : undefined,

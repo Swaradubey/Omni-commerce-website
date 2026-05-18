@@ -41,14 +41,15 @@ function getTransporter() {
   if (_transporter && _transporterConfigHash === currentHash) return _transporter;
 
   const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT) || 587;
+  const rawPort = process.env.SMTP_PORT;
+  const port = Number(rawPort) || 587;
   const secure = process.env.SMTP_SECURE === "true"; // Gmail port 587 → false
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
   // Diagnostic log (never print the password)
   console.log(
-    `[emailService] SMTP Config Check — host=${host || "(missing)"}, port=${port}, secure=${secure}, user=${user || "(missing)"}, pass=${pass ? "***SET***" : "(missing)"}`
+    `[emailService] SMTP Config Check — host=${host || "(missing)"}, rawPort=${rawPort || "(missing)"}, port=${port}, secure=${secure}, user=${user || "(missing)"}, pass=${pass ? "***SET***" : "(missing)"}`
   );
 
   if (!host || !user || !pass) {
@@ -62,16 +63,30 @@ function getTransporter() {
     port,
     secure,
     auth: { user, pass },
+    pool: true,                // reuse connections — helps on Render / cloud
+    maxConnections: 3,
     // ── Timeouts so the request never hangs forever on Render / production ──
-    connectionTimeout: 15000,  // 15 s to establish TCP connection
-    greetingTimeout: 15000,    // 15 s for SMTP greeting
-    socketTimeout: 30000,      // 30 s for socket inactivity
+    connectionTimeout: 30000,  // 30 s to establish TCP connection
+    greetingTimeout: 30000,    // 30 s for SMTP greeting
+    socketTimeout: 60000,      // 60 s for socket inactivity
     // tls settings for services that need STARTTLS (port 587)
     ...(!secure ? { tls: { rejectUnauthorized: false } } : {}),
   });
 
   _transporterConfigHash = currentHash;
   console.log(`[emailService] Transporter created — host=${host}, port=${port}, secure=${secure}, user=${user}`);
+
+  // Non-blocking SMTP verification — logs result for diagnostics but does not
+  // block the transporter from being returned / used.
+  _transporter.verify()
+    .then(() => {
+      console.log("[emailService] ✅ SMTP transporter verified — ready to send emails");
+    })
+    .catch((err) => {
+      console.error(`[emailService] ⚠️ SMTP transporter verification FAILED: ${err.message}`);
+      if (err.code) console.error(`[emailService] Error code: ${err.code}`);
+    });
+
   return _transporter;
 }
 
