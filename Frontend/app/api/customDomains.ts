@@ -6,6 +6,7 @@ export interface CustomDomainData {
   clientId: string;
   clientName: string;
   status: 'Pending' | 'Verified' | 'Error';
+  sslStatus: 'Pending' | 'Active' | 'Error';
   dnsInstructions?: {
     root: { type: string; name: string; value: string };
     subdomain: { type: string; name: string; value: string };

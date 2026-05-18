@@ -172,19 +172,15 @@ export function Cart() {
                 Proceed to Checkout
               </Link>
 
-              <button
-                onClick={() => {
-                  if (!user) {
-                    toast.error('Please sign in to request a quote');
-                    return;
-                  }
-                  setIsQuoteDialogOpen(true);
-                }}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 text-white rounded-lg font-semibold hover:bg-amber-600 transition-colors mb-3"
-              >
-                <MessageSquare className="w-4 h-4" />
-                Request Custom Quote
-              </button>
+              {Boolean(user && ["admin", "client", "superadmin", "super_admin"].includes(String(user.role).toLowerCase())) && (
+                <button
+                  onClick={() => setIsQuoteDialogOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 text-white rounded-lg font-semibold hover:bg-amber-600 transition-colors mb-3"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Request Custom Quote
+                </button>
+              )}
 
               <div className="text-center">
                 <div className="flex items-center justify-center gap-2 text-sm text-gray-500">

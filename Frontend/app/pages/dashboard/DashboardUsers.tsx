@@ -1,10 +1,22 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
-import { ExternalLink, Search, Save, Shield, Phone, UserCheck, UserX, Lock, Clock, User as UserIcon } from 'lucide-react';
+import { ExternalLink, Search, Save, Shield, Phone, UserCheck, UserX, Lock, Clock, User as UserIcon, Trash2 } from 'lucide-react';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog";
+
 import { userApi, type PlatformUserRow } from '../../api/user';
 import { superadminApi } from '../../api/superadmin';
 import { useAuth, IMPERSONATION_SUPER_TOKEN_BACKUP_KEY } from '../../context/AuthContext';
@@ -14,6 +26,7 @@ import { toast } from 'sonner';
 import { EditUserModal } from '../../components/dashboard/EditUserModal';
 
 const ASSIGNABLE_ROLES = [
+  'super_admin',
   'admin',
   'counter_manager',
   'seo_manager',
@@ -21,6 +34,7 @@ const ASSIGNABLE_ROLES = [
   'inventory_manager',
   'employee',
   'user',
+  'client',
 ] as const;
 
 export function DashboardUsers() {
@@ -49,6 +63,9 @@ export function DashboardUsers() {
   const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<PlatformUserRow | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<PlatformUserRow | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
 
   const limit = 15;
 
@@ -187,7 +204,26 @@ export function DashboardUsers() {
     }
   };
 
+  const handleDeleteConfirm = async (userId: string) => {
+    setIsDeleting(true);
+    try {
+      const res = await userApi.deletePlatformUser(userId);
+      if (!res.success) {
+        throw new Error(res.message || 'Delete failed');
+      }
+      toast.success('User deleted successfully');
+      setUsers((prev) => prev.filter((u) => u._id !== userId));
+      setTotal((prev) => prev - 1);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete user');
+    } finally {
+      setIsDeleting(false);
+      setUserToDelete(null);
+    }
+  };
+
   return (
+
     <div className="space-y-6">
       <motion.div
         initial={{ opacity: 0, y: 8 }}
@@ -238,7 +274,7 @@ export function DashboardUsers() {
   }}
 >
 <option value="" className="text-base font-medium">All Roles</option>
-                 {ASSIGNABLE_ROLES.filter(r => isSA || r !== 'user').map(r => (
+                 {ASSIGNABLE_ROLES.filter(r => isSA || (user?.role === 'admin' && r === 'user') || r !== 'user').map(r => (
                    <option key={r} value={r} className="text-base font-medium">{roleDisplayName(r)}</option>
                  ))}
               </select>
@@ -295,7 +331,8 @@ export function DashboardUsers() {
                     const safeRole = u.role || 'Unknown Role';
                     const safeName = u.name || u.email || 'Unnamed User';
                     const current = pendingRole[id] ?? safeRole;
-                    const ADMIN_ALLOWED_ROLES = ['counter_manager', 'seo_manager', 'store_manager', 'inventory_manager', 'employee'];
+                    const isAdmin = user?.role === "admin" || user?.role === "Admin";
+                    const ADMIN_ALLOWED_ROLES = ['counter_manager', 'seo_manager', 'store_manager', 'inventory_manager', 'employee', 'user', 'client'];
 
                     let roleOptions: string[] = [];
                     if (safeRole === 'super_admin') {
@@ -304,8 +341,12 @@ export function DashboardUsers() {
                       // Tenant Admins (Admin, Client, etc.)
                       if (safeRole === 'admin') {
                         roleOptions = [safeRole];
-                      } else {
+                      } else if (isAdmin) {
+                        // Global Admin can manage employees and users
                         roleOptions = ADMIN_ALLOWED_ROLES;
+                      } else {
+                        // Other managers
+                        roleOptions = ADMIN_ALLOWED_ROLES.filter(r => r !== 'user');
                       }
                       roleOptions = roleOptions.filter(r => r !== 'admin' && r !== 'super_admin');
                     } else {
@@ -313,7 +354,9 @@ export function DashboardUsers() {
                       roleOptions = [...ASSIGNABLE_ROLES];
                     }
 
-                    const isOldRole = safeRole !== 'super_admin' && !ASSIGNABLE_ROLES.includes(safeRole as any) && !ADMIN_ALLOWED_ROLES.includes(safeRole as any);
+                    // "client" and all standard roles are known — only treat as isOldRole if it's a truly unknown custom value
+                    const ALL_KNOWN_ROLES = [...ASSIGNABLE_ROLES, ...ADMIN_ALLOWED_ROLES];
+                    const isOldRole = safeRole !== 'super_admin' && !ALL_KNOWN_ROLES.includes(safeRole as any);
 
                     const panelCfg = getRoleOpenPanelConfig(safeRole);
                     return (
@@ -379,7 +422,7 @@ export function DashboardUsers() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            {isSuperAdminRole(user?.role) && panelCfg ? (
+                            {(isSA || isAdmin) && panelCfg ? (
                               <Button
                                 type="button"
                                 size="sm"
@@ -420,7 +463,21 @@ export function DashboardUsers() {
                             >
                               <Lock className="w-4 h-4" />
                             </Button>
+                            {isSA && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-9 px-2.5 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                                disabled={safeRole === 'super_admin' || id === user?._id}
+                                onClick={() => setUserToDelete(u)}
+                                title="Delete User"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                           </div>
+
                         </td>
                         <td className="px-4 py-3">
                           {safeRole !== 'super_admin' ? (
@@ -477,6 +534,32 @@ export function DashboardUsers() {
           setUsers(prev => prev.map(u => u._id === updated._id ? { ...u, ...updated } : u));
         }}
       />
+
+      <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the account for{" "}
+              <span className="font-semibold">{userToDelete?.name || userToDelete?.email}</span>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (userToDelete) handleDeleteConfirm(userToDelete._id);
+              }}
+              disabled={isDeleting}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+

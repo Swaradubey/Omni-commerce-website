@@ -48,15 +48,7 @@ export function DashboardAddEmployee() {
 
     setSubmitting(true);
     try {
-      const roleMap: Record<string, string> = {
-        'employee': 'EMPLOYEE',
-        'seo_manager': 'SEO_MANAGER',
-        'store_manager': 'STORE_MANAGER',
-        'counter_manager': 'COUNTER_MANAGER',
-        'inventory_manager': 'INVENTORY_MANAGER'
-      };
-
-      const mappedRole = roleMap[formData.role] || 'EMPLOYEE';
+      const mappedRole = formData.role.trim();
 
       const payload: Record<string, any> = {
         name: formData.name.trim(),
@@ -198,21 +190,21 @@ export function DashboardAddEmployee() {
                 <div className="space-y-2.5">
                   <Label className="text-[11px] font-bold uppercase tracking-[0.15em] text-blue-600/70 dark:text-blue-400/70 ml-1">Assign Role</Label>
                   <div className="relative group">
-                    <Shield className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground group-focus-within:text-blue-500 transition-colors pointer-events-none" />
+                    <Shield className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground group-focus-within:text-blue-500 transition-colors pointer-events-none z-10" />
                     <select
-                      className="w-full h-13 pl-12 pr-10 rounded-2xl bg-white/50 dark:bg-zinc-950/30 border border-gray-200/80 dark:border-white/10 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 appearance-none transition-all cursor-pointer"
+                      className="w-full pl-12 pr-10 h-13 rounded-2xl bg-white/50 dark:bg-zinc-950/30 border border-gray-200/80 dark:border-white/10 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-sm font-medium appearance-none cursor-pointer outline-none"
                       value={formData.role}
                       onChange={e => setFormData({ ...formData, role: e.target.value })}
                     >
-                      <option value="employee">Employee</option>
-                      <option value="seo_manager">SEO Manager</option>
-                      <option value="store_manager">Store Manager</option>
                       <option value="counter_manager">Counter Manager</option>
+                      <option value="store_manager">Store Manager</option>
+                      <option value="seo_manager">SEO Manager</option>
                       <option value="inventory_manager">Inventory Manager</option>
+                      <option value="employee">Employee</option>
                     </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
-                      <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground group-focus-within:text-blue-500 transition-colors">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                     </div>
                   </div>

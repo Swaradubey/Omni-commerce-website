@@ -170,7 +170,7 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950 p-0">
+      <DialogContent className="max-w-5xl w-[95vw] sm:w-full max-h-[92vh] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950 p-0">
         <style
           dangerouslySetInnerHTML={{
             __html: `
@@ -219,17 +219,17 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
         />
         <form onSubmit={handleSubmit} className="flex flex-col h-full quote-modal-scroll overflow-y-auto">
           {/* Sticky Header */}
-          <div className="sticky top-0 z-10 flex items-center justify-between bg-white/95 backdrop-blur-sm border-b border-gray-100 px-8 py-5 dark:border-gray-800 dark:bg-gray-950/95">
+          <div className="sticky top-0 z-10 flex items-center justify-between bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 sm:px-8 py-4 sm:py-5 dark:border-gray-800 dark:bg-gray-950/95">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20">
                 <Plus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+              <div className="min-w-0">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight truncate">
                   Create New Quotation
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                  Fill in the details below to generate a new quote
+                <p className="text-[10px] sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                  Fill in the details to generate a quote
                 </p>
               </div>
             </div>
@@ -245,12 +245,12 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
           </div>
 
           {/* Main Content */}
-          <div className="flex-1 p-8">
+          <div className="flex-1 p-4 sm:p-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
               {/* Left Column: Customer & Notes */}
               <div className="space-y-6">
                 <div>
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 block">
+                  <Label className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 block">
                     Customer Name
                   </Label>
                   <Input
@@ -258,19 +258,19 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
                     placeholder="Enter customer name"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    className="quote-input h-11 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white dark:focus:bg-gray-900"
+                    className="quote-input h-10 sm:h-11 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4 text-sm sm:text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white dark:focus:bg-gray-900"
                   />
                 </div>
 
                 <div>
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 block">
+                  <Label className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 block">
                     Notes / Message
                   </Label>
                   <Textarea
-                    placeholder="Add special instructions or terms for this quotation..."
+                    placeholder="Add special instructions or terms..."
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    className="quote-input min-h-[128px] resize-none rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4 py-3 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white dark:focus:bg-gray-900"
+                    className="quote-input min-h-[100px] sm:min-h-[128px] resize-none rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4 py-3 text-sm sm:text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white dark:focus:bg-gray-900"
                   />
                 </div>
               </div>
@@ -279,17 +279,17 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
               <div className="space-y-6">
                 {/* Add Products Search */}
                 <div>
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 block">
+                  <Label className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 block">
                     Add Products
                   </Label>
                   <div className="relative">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-400 pointer-events-none" />
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                     <Input
-                      placeholder="Search products by name or SKU..."
+                      placeholder="Search products..."
                       value={productSearch}
                       onChange={(e) => setProductSearch(e.target.value)}
                       onFocus={() => setShowProductDropdown(true)}
-                      className="quote-input pl-11 h-11 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white dark:focus:bg-gray-900"
+                      className="quote-input pl-10 h-10 sm:h-11 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4 text-sm sm:text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white dark:focus:bg-gray-900"
                     />
                   </div>
 
@@ -331,11 +331,11 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
                 </div>
 
                 {/* Order Summary Card */}
-                <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700/60 p-5 flex flex-col" style={{ minHeight: 200 }}>
+                <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700/60 p-4 sm:p-5 flex flex-col" style={{ minHeight: 200 }}>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <Calculator className="h-4.5 w-4.5 text-gray-400" />
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                      <Calculator className="h-4 w-4 text-gray-400" />
+                      <h3 className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
                         Order Summary
                       </h3>
                     </div>
@@ -347,20 +347,17 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
                   {/* Items List */}
                   <div className="flex-1 space-y-2 overflow-y-auto quote-modal-scroll pr-1">
                     {selectedItems.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-600">
-                        <div className="h-14 w-14 rounded-2xl bg-gray-100 dark:bg-gray-800/60 flex items-center justify-center mb-3">
+                      <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-gray-400 dark:text-gray-600">
+                        <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-gray-100 dark:bg-gray-800/60 flex items-center justify-center mb-3">
                           <Package className="h-6 w-6 text-gray-300 dark:text-gray-600" />
                         </div>
-                        <p className="text-sm font-medium">No products added yet</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 max-w-[200px] text-center">
-                          Search and add products to build your quotation
-                        </p>
+                        <p className="text-xs sm:text-sm font-medium">No products added yet</p>
                       </div>
                     ) : (
                       selectedItems.map(item => (
                         <div
                           key={item.id}
-                          className="order-item-hover group flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-900/70 border border-gray-100 dark:border-gray-800/60 transition-colors relative"
+                          className="order-item-hover group flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl bg-white dark:bg-gray-900/70 border border-gray-100 dark:border-gray-800/60 transition-colors relative"
                         >
                           <button
                             type="button"
@@ -369,26 +366,26 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
                               e.preventDefault();
                               removeItem(item.id);
                             }}
-                            className="absolute top-2 right-2 text-gray-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-0.5 rounded"
+                            className="absolute top-1 right-1 text-gray-300 hover:text-rose-500 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity p-0.5 rounded"
                             aria-label="Remove product"
                           >
-                            <X className="h-3.5 w-3.5" />
+                            <X className="h-3 w-3" />
                           </button>
-                          <div className="h-10 w-10 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center overflow-hidden flex-shrink-0">
                             {item.image ? (
                               <img src={item.image} alt="" className="h-full w-full object-cover" />
                             ) : (
                               <Package className="h-4 w-4 text-amber-500" />
                             )}
                           </div>
-                          <div className="flex-1 min-w-0 pl-2 flex items-center justify-between">
-                            <p className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{item.name}</p>
-                            <div className="flex items-center gap-1.5">
+                          <div className="flex-1 min-w-0 pl-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <p className="font-medium text-xs sm:text-sm text-gray-900 dark:text-gray-100 truncate pr-4">{item.name}</p>
+                            <div className="flex items-center gap-1.5 self-start sm:self-auto">
                               <Input
                                 type="number"
                                 value={item.quantity}
                                 onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 0)}
-                                className="quantity-input w-14 h-7 text-[11px] text-center rounded-lg px-1 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                                className="quantity-input w-12 sm:w-14 h-7 text-[10px] sm:text-[11px] text-center rounded-lg px-1 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                               />
                               <span className="text-[10px] text-gray-400">×</span>
                               <div className="relative">
@@ -397,7 +394,7 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
                                   type="number"
                                   value={item.price}
                                   onChange={(e) => updatePrice(item.id, parseFloat(e.target.value) || 0)}
-                                  className="pl-7 w-20 h-7 text-[11px] rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                                  className="pl-6 sm:pl-7 w-16 sm:w-20 h-7 text-[10px] sm:text-[11px] rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                                 />
                               </div>
                             </div>
@@ -411,18 +408,18 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
                   {selectedItems.length > 0 && (
                     <div className="mt-5 pt-5 border-t border-gray-200 dark:border-gray-700/60 space-y-2.5">
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                           Subtotal
                         </span>
-                        <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                        <span className="text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-300">
                           ₹{totalAmount.toLocaleString()}
                         </span>
                       </div>
                       <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-800">
-                        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                        <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100">
                           Grand Total
                         </span>
-                        <span className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                        <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">
                           ₹{totalAmount.toLocaleString()}
                         </span>
                       </div>
@@ -434,12 +431,12 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
           </div>
 
           {/* Footer */}
-          <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 bg-white/95 backdrop-blur-sm border-t border-gray-100 px-8 py-4 dark:border-gray-800 dark:bg-gray-950/95">
+          <div className="sticky bottom-0 z-10 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 bg-white/95 backdrop-blur-sm border-t border-gray-100 px-4 sm:px-8 py-4 dark:border-gray-800 dark:bg-gray-950/95">
             <DialogClose asChild>
               <Button
                 type="button"
                 variant="ghost"
-                className="rounded-xl px-6 h-11 text-sm font-medium"
+                className="rounded-xl px-6 h-10 sm:h-11 text-sm font-medium w-full sm:w-auto order-2 sm:order-1"
               >
                 Cancel
               </Button>
@@ -447,7 +444,7 @@ export function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQuoteModa
             <Button
               type="submit"
               disabled={isSubmitting || selectedItems.length === 0 || !customerName.trim()}
-              className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-lg shadow-blue-600/20 disabled:opacity-60 disabled:shadow-none rounded-xl px-10 gap-2 h-12 text-sm font-semibold"
+              className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-lg shadow-blue-600/20 disabled:opacity-60 disabled:shadow-none rounded-xl px-8 sm:px-10 gap-2 h-11 sm:h-12 text-sm font-semibold w-full sm:w-auto order-1 sm:order-2"
             >
               {isSubmitting ? (
                 <>

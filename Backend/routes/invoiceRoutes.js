@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { getInvoices, getInvoiceById } = require("../controllers/invoiceController");
+const { getInvoices, getInvoiceById, sendInvoiceEmail, deleteInvoice } = require("../controllers/invoiceController");
 const { protect, allowRoles } = require("../middleware/authMiddleware");
 const tenantMiddleware = require("../middleware/tenantMiddleware");
 
@@ -8,6 +8,10 @@ const tenantMiddleware = require("../middleware/tenantMiddleware");
 router.use(protect, allowRoles("super_admin", "admin", "client", "store_manager", "client_admin"), tenantMiddleware);
 
 router.route("/").get(getInvoices);
-router.route("/:id").get(getInvoiceById);
+router.route("/send-email").post(sendInvoiceEmail);
+router.route("/:id")
+  .get(getInvoiceById)
+  .delete(deleteInvoice);
+
 
 module.exports = router;

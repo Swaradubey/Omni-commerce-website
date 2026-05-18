@@ -17,6 +17,7 @@ interface EditUserModalProps {
 }
 
 const ASSIGNABLE_ROLES = [
+  'super_admin',
   'admin',
   'counter_manager',
   'seo_manager',
@@ -24,9 +25,10 @@ const ASSIGNABLE_ROLES = [
   'inventory_manager',
   'employee',
   'user',
+  'client',
 ];
 
-const ADMIN_ALLOWED_ROLES = ['counter_manager', 'seo_manager', 'store_manager', 'inventory_manager', 'employee'];
+const ADMIN_ALLOWED_ROLES = ['admin', 'counter_manager', 'seo_manager', 'store_manager', 'inventory_manager', 'employee', 'user', 'client'];
 
 export function EditUserModal({ isOpen, onClose, user, onUpdate, isSuperAdmin }: EditUserModalProps) {
   const [formData, setFormData] = useState({
@@ -56,12 +58,19 @@ export function EditUserModal({ isOpen, onClose, user, onUpdate, isSuperAdmin }:
       toast.error('Name is required');
       return;
     }
+    if (!formData.role.trim()) {
+      toast.error('Role is required');
+      return;
+    }
+
+    // Normalize role to lowercase before saving (e.g. "Client" → "client")
+    const normalizedRole = formData.role.trim().toLowerCase();
 
     setSubmitting(true);
     try {
-      // For now, let's update the role if it changed.
-      if (formData.role !== user.role) {
-        const roleRes = await userApi.patchPlatformUserRole(user._id, formData.role);
+      // Update the role if it changed.
+      if (normalizedRole !== user.role) {
+        const roleRes = await userApi.patchPlatformUserRole(user._id, normalizedRole);
         if (!roleRes.success) throw new Error(roleRes.message || 'Failed to update role');
       }
       
@@ -150,24 +159,22 @@ export function EditUserModal({ isOpen, onClose, user, onUpdate, isSuperAdmin }:
               <div className="space-y-2">
                 <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Assign Role</Label>
                 <div className="relative">
-                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <select
-                    className="w-full h-12 pl-10 pr-10 rounded-xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-black/20 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer"
+                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
+                  <Input
+                    className="pl-10 h-12 rounded-xl border-gray-200 dark:border-white/10 bg-white/50 dark:bg-black/20"
+                    placeholder="Type or select a role..."
                     value={formData.role}
+                    list="role-suggestions"
                     onChange={e => setFormData({ ...formData, role: e.target.value })}
                     disabled={user.role === 'super_admin'}
-                  >
-                    {user.role && !roleOptions.includes(user.role) && user.role !== 'super_admin' && (
-                      <option value={user.role} disabled hidden>
-                        {roleDisplayName(user.role)}
-                      </option>
-                    )}
+                  />
+                  <datalist id="role-suggestions">
                     {roleOptions.map((r) => (
                       <option key={r} value={r}>
                         {roleDisplayName(r)}
                       </option>
                     ))}
-                  </select>
+                  </datalist>
                 </div>
               </div>
             </div>

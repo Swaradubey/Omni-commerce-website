@@ -106,6 +106,7 @@ async function userCategoryDistribution(userId) {
         },
       },
     },
+    // Use safe localField/foreignField — pidForLookup was guarded by $regexMatch above.
     {
       $lookup: {
         from: "products",
@@ -117,36 +118,11 @@ async function userCategoryDistribution(userId) {
     {
       $addFields: {
         categoryName: {
-          $let: {
-            vars: {
-              categoryRaw: {
-                $ifNull: [{ $arrayElemAt: ["$p.category", 0] }, ""],
-              },
-            },
-            in: {
-              $cond: {
-                if: {
-                  $gt: [
-                    {
-                      $strLenCP: {
-                        $trim: {
-                          input: { $toString: "$$categoryRaw" },
-                        },
-                      },
-                    },
-                    0,
-                  ],
-                },
-                then: {
-                  $trim: {
-                    input: { $toString: "$$categoryRaw" },
-                  },
-                },
-                else: "Uncategorized",
-              },
-            },
-          },
-        },
+          $ifNull: [
+            "$items.category",
+            { $ifNull: [{ $arrayElemAt: ["$p.category", 0] }, "Uncategorized"] }
+          ]
+        }
       },
     },
     {

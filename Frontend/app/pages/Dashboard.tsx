@@ -27,6 +27,7 @@ import {
   RefreshCw,
   Clock,
   ChevronRight,
+  Search,
 } from 'lucide-react';
 import { useNavigate, useLocation, Outlet, Link, Navigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -56,7 +57,6 @@ import {
 } from '../components/ui/collapsible';
 import { DashboardStats } from '../components/DashboardStats';
 import { DashboardCharts } from '../components/DashboardCharts';
-import { DashboardRecentActivity } from '../components/DashboardRecentActivity';
 import { DashboardRecentTickets } from '../components/DashboardRecentTickets';
 import { DashboardQuickActions } from '../components/DashboardQuickActions';
 import { DashboardContactSummary } from '../components/DashboardContactSummary';
@@ -92,10 +92,10 @@ const sidebarItems = [
   { title: "Super Admin", icon: Shield, href: "/super-admin", superAdminOnly: true, hideForSuperAdmin: true },
   { title: "Orders", icon: ShoppingCart, href: "/dashboard/orders", hideForUser: false, hideForSuperAdmin: true },
   { title: "Invoice", icon: Receipt, href: "/dashboard/invoices", superAdminOnly: true },
-  { 
-    title: "Customers", 
-    icon: Users, 
-    href: "/dashboard/customers", 
+  {
+    title: "Customers",
+    icon: Users,
+    href: "/dashboard/customers",
     adminOnly: true,
     subItems: [
       { title: "All Customers", href: "/dashboard/customers", icon: Users },
@@ -109,7 +109,9 @@ const sidebarItems = [
   { title: "Analytics", icon: PieChartIcon, href: "/dashboard/analytics", superAdminOnly: true },
   { title: "Support", icon: Headphones, href: "/dashboard/support" },
   { title: "Help Center", icon: HelpCircle, href: "/dashboard/help-center", helpCenter: true },
-  { title: "Swipe Machine", icon: CreditCard, href: "/pos", counterManagerOnly: true },
+  { title: "POS", icon: ShoppingCart, href: "/pos", counterManagerOnly: true },
+
+
 ];
 
 const secondaryItems = [
@@ -273,7 +275,7 @@ export function Dashboard() {
       return (
         item.href === '/dashboard/products' ||
         item.href === '/dashboard/inventory' ||
-        item.title === 'Swipe Machine'
+        item.title === 'POS' && item.counterManagerOnly
       );
     }
     if ('counterManagerOnly' in item && item.counterManagerOnly) {
@@ -283,7 +285,8 @@ export function Dashboard() {
       return (
         item.href === '/dashboard/products' ||
         item.href === '/dashboard/inventory' ||
-        (isStoreManagerRole(user?.role) && item.href === '/pos')
+        (isStoreManagerRole(user?.role) && item.href === '/pos') ||
+        (normalizeRole(user?.role) === 'seo_manager' && item.href === '/dashboard/seo')
       );
     }
     if (isClientRole(user?.role)) {
@@ -307,7 +310,8 @@ export function Dashboard() {
         item.title === 'Track Order' ||
         item.title === 'Customers' ||
         item.title === 'Wishlist' ||
-        item.title === 'Wishlist Activity'
+        item.title === 'Wishlist Activity' ||
+        item.title === 'SEO'
       ) {
         return false;
       }
@@ -379,12 +383,15 @@ export function Dashboard() {
     isOverview &&
     ((staff && (overviewLoading || (!overviewData && !overviewError))) || userOverviewPending);
 
+  const isAdminRole = normalizeRole(user?.role) === 'admin';
+
   const canAccessCurrentDashboardRoute =
     location.pathname === '/dashboard/products' ||
     location.pathname.startsWith('/dashboard/products/') ||
     location.pathname === '/dashboard/inventory' ||
     location.pathname.startsWith('/dashboard/inventory/') ||
-    (isStoreManagerRole(user?.role) && (location.pathname === '/pos' || location.pathname.startsWith('/pos/')));
+    ((isStoreManagerRole(user?.role) || isCounterManagerRole(user?.role)) && (location.pathname === '/pos' || location.pathname.startsWith('/pos/'))) ||
+    (normalizeRole(user?.role) === 'seo_manager' && (location.pathname === '/dashboard/seo' || location.pathname.startsWith('/dashboard/seo/')));
 
   const shouldRedirectRestrictedRole =
     (restrictedInventoryDashboardRole || isCounterManagerRole(user?.role)) && !canAccessCurrentDashboardRoute;
@@ -400,6 +407,11 @@ export function Dashboard() {
     location.pathname.startsWith('/pos/');
   if (isCashierRole(user?.role) && !cashierAllowedRoute) {
     return <Navigate to="/dashboard/products" replace />;
+  }
+
+  // Admin SEO Access Guard - prevent admins from accessing SEO page
+  if (isAdminRole && (location.pathname === '/dashboard/seo' || location.pathname.startsWith('/dashboard/seo/'))) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   // Trial Expiration Guard
@@ -514,7 +526,7 @@ export function Dashboard() {
                                   }}
                                   className={dashboardSidebarNavButtonClass(isActive || isSubActive, false)}
                                 >
-                                  <item.icon className={`w-5 h-5 shrink-0 ${isActive || isSubActive ? 'text-[#b8860b] dark:text-amber-300' : ''}`} />
+                                  {item.icon && <item.icon className={`w-5 h-5 shrink-0 ${isActive || isSubActive ? 'text-[#b8860b] dark:text-amber-300' : ''}`} />}
                                   <span className="group-data-[collapsible=icon]:hidden flex-1 min-w-0 text-left text-[16px] font-semibold tracking-wide leading-snug">
                                     {item.title}
                                   </span>
@@ -524,14 +536,14 @@ export function Dashboard() {
                               <CollapsibleContent>
                                 <SidebarMenuSub>
                                   {item.subItems.map(subItem => {
-                                    const subIsActive = subItem.href === item.href 
-                                      ? location.pathname === subItem.href 
+                                    const subIsActive = subItem.href === item.href
+                                      ? location.pathname === subItem.href
                                       : location.pathname.startsWith(subItem.href);
                                     return (
                                       <SidebarMenuSubItem key={subItem.title}>
                                         <SidebarMenuSubButton asChild isActive={subIsActive} className="h-10 text-[15px] font-medium">
                                           <Link to={subItem.href}>
-                                            <subItem.icon className={`w-4 h-4 mr-2 ${subIsActive ? 'text-[#b8860b] dark:text-amber-300' : ''}`} />
+                                            {subItem.icon && <subItem.icon className={`w-4 h-4 mr-2 ${subIsActive ? 'text-[#b8860b] dark:text-amber-300' : ''}`} />}
                                             <span>{subItem.title}</span>
                                           </Link>
                                         </SidebarMenuSubButton>
@@ -560,12 +572,12 @@ export function Dashboard() {
                             className={dashboardSidebarNavButtonClass(isActive, false)}
                           >
                             <Link to={href || '#'}>
-                              <item.icon
+                              {item.icon && <item.icon
                                 className={`w-5 h-5 shrink-0 ${isActive
                                   ? 'text-[#b8860b] dark:text-amber-300'
                                   : ''
                                   }`}
-                              />
+                              />}
                               <span className="group-data-[collapsible=icon]:hidden flex-1 min-w-0 text-left text-[16px] font-semibold tracking-wide leading-snug">
                                 {item.title === 'Orders' && (isSuperAdminRole(user?.role) || isClientRole(user?.role))
                                   ? 'Sale'
@@ -809,11 +821,6 @@ export function Dashboard() {
                           <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
                             <DashboardQuickActions onSync={handleDashboardSync} syncing={syncing} />
                           </motion.div>
-                          {(isSuperAdminRole(user?.role) || isClientRole(user?.role)) && (
-                            <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
-                              <DashboardRecentActivity indianRupee={isSuperAdminRole(user?.role) || isClientRole(user?.role)} />
-                            </motion.div>
-                          )}
                           {(isSuperAdminRole(user?.role) || isClientRole(user?.role)) && (
                             <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } } }}>
                               <DashboardRecentTickets />

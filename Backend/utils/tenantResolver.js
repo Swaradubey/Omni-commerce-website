@@ -233,15 +233,18 @@ async function buildProductVisibilityFilter(req) {
 }
 
 /**
- * Builds a scoping query for multi-tenant isolation. (Legacy/General usage)
+ * Builds a scoping query for multi-tenant isolation.
+ * @param {Object} user 
+ * @param {string} resolvedClientId 
+ * @param {boolean} strict If true, excludes global data (clientId: null). Defaults to false.
  */
-function buildScopeQuery(user, resolvedClientId) {
+function buildScopeQuery(user, resolvedClientId, strict = false) {
   // 1. Public visitor / Guest checkout: Scope to domain clientId if present
   if (!user) {
     if (isValidObjectId(resolvedClientId)) {
       return { clientId: new mongoose.Types.ObjectId(String(resolvedClientId)) };
     }
-    return {};
+    return strict ? { _id: null } : {};
   }
   
   const role = normalizeRole(user.role);
@@ -260,7 +263,7 @@ function buildScopeQuery(user, resolvedClientId) {
     if (isValidObjectId(resolvedClientId)) {
       return { clientId: new mongoose.Types.ObjectId(String(resolvedClientId)) };
     }
-    return {};
+    return strict ? { _id: null } : {};
   }
 
   // 4. Handle Customer / User (Non-staff)
@@ -274,6 +277,9 @@ function buildScopeQuery(user, resolvedClientId) {
     const targetClientId = resolvedClientId || user.clientId || user.linkedClientId;
     if (isValidObjectId(targetClientId)) {
       const cId = new mongoose.Types.ObjectId(String(targetClientId));
+      if (strict) {
+        return { clientId: cId };
+      }
       return { $or: [{ clientId: cId }, { clientId: null }, { clientId: { $exists: false } }] };
     }
     return { _id: null }; // Return nothing if we can't identify the user
@@ -296,12 +302,14 @@ function buildScopeQuery(user, resolvedClientId) {
 
   if (sIdStr) {
     const sId = new mongoose.Types.ObjectId(sIdStr);
-    orConditions.push({ clientId: sId });
+    // For staff, we also want to see their own created items
     orConditions.push({ createdBy: sId });
   }
 
-  orConditions.push({ clientId: null });
-  orConditions.push({ clientId: { $exists: false } });
+  if (!strict) {
+    orConditions.push({ clientId: null });
+    orConditions.push({ clientId: { $exists: false } });
+  }
 
   const uniqueOr = Array.from(new Set(orConditions.map(c => JSON.stringify(c)))).map(s => JSON.parse(s));
   // Convert back to ObjectIds after JSON parsing (JSON.stringify loses ObjectId type)
@@ -315,7 +323,7 @@ function buildScopeQuery(user, resolvedClientId) {
     return cond;
   });
 
-  return finalOr.length > 0 ? { $or: finalOr } : {};
+  return finalOr.length > 0 ? { $or: finalOr } : { _id: null };
 }
 
 /**

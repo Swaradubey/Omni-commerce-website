@@ -39,7 +39,8 @@ export function normalizeRole(role: string | undefined): string {
 }
 
 export function isClientRole(role: string | undefined): boolean {
-  return normalizeRole(role) === 'client';
+  const n = normalizeRole(role);
+  return n === 'client' || n === 'client_admin';
 }
 
 /** Storefront shopper accounts (User dashboard overview, not staff). */
@@ -50,7 +51,11 @@ export function isCustomerAccountRole(role: string | undefined): boolean {
 
 export function isStaffRole(role: string | undefined): boolean {
   const normalized = normalizeRole(role);
-  return !!normalized && (STAFF_ROLES as readonly string[]).includes(normalized);
+  if (!normalized) return false;
+  // Non-staff roles are explicitly 'user' and 'customer'.
+  // Any other role (including custom ones) assigned by an admin is treated as staff.
+  if (normalized === 'user' || normalized === 'customer') return false;
+  return true;
 }
 
 export function isSuperAdminRole(role: string | undefined): boolean {
@@ -90,10 +95,10 @@ export function hasOperationalAdminAccess(role: string | undefined): boolean {
   return normalized === 'admin' || normalized === 'super_admin' || normalized === 'client';
 }
 
-/** Full admin dashboard privileges (admin + super admin + client). */
+/** Full admin dashboard privileges (admin + super admin + client + client_admin). */
 export function hasFullAdminPrivileges(role: string | undefined): boolean {
   const normalized = normalizeRole(role);
-  return normalized === 'admin' || normalized === 'super_admin' || normalized === 'client';
+  return normalized === 'admin' || normalized === 'super_admin' || normalized === 'client' || normalized === 'client_admin';
 }
 
 /** Compact badge label for header/nav (null = no badge). */
@@ -128,6 +133,23 @@ export function resolvePostLoginPath(role: string | undefined, fromPath: string)
   const normalized = normalizeRole(role);
   if (isRestrictedInventoryDashboardRole(normalized) || normalized === 'client') {
     const blocked = fromPath.startsWith('/login') || fromPath.startsWith('/register');
+    
+    // Counter Manager should prefer POS
+    if (normalized === 'counter_manager') {
+      if (!blocked && (fromPath.startsWith('/pos') || fromPath.startsWith('/dashboard/inventory') || fromPath.startsWith('/dashboard/products'))) {
+        return fromPath;
+      }
+      return '/pos';
+    }
+
+    // SEO Manager should prefer SEO page
+    if (normalized === 'seo_manager') {
+      if (!blocked && (fromPath.startsWith('/dashboard/seo') || fromPath.startsWith('/dashboard/inventory') || fromPath.startsWith('/dashboard/products'))) {
+        return fromPath;
+      }
+      return '/dashboard/seo';
+    }
+
     if (!blocked && (fromPath.startsWith('/dashboard/inventory') || fromPath.startsWith('/dashboard/products'))) {
       return fromPath;
     }

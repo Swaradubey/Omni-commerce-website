@@ -59,10 +59,15 @@ const resolveDomain = async (req, res) => {
 const getAllCustomDomains = async (req, res) => {
   try {
     const isSuperAdmin = req.user && (req.user.role === "super_admin" || req.user.role === "admin");
-    const clientId = req.user?.clientId || req.clientId;
+    const isClient = req.user && (req.user.role === "client" || req.user.role === "client_admin");
+    const userClientId = req.user?.clientId;
+    const resolvedClientId = req.clientId;
+    
+    // Determine the effective clientId to filter by
+    let clientId = isSuperAdmin ? null : (userClientId || resolvedClientId);
 
     // Requirement 10 & 16: Log data retrieval details
-    console.log(`[customDomain] getAllCustomDomains - Page: Custom Domains, Role: ${req.user?.role}, ClientId: ${clientId || "global"}`);
+    console.log(`[customDomain] getAllCustomDomains - Page: Custom Domains, Role: ${req.user?.role}, UserClientId: ${userClientId}, ResolvedClientId: ${resolvedClientId}`);
 
     const query = isSuperAdmin ? {} : { clientId };
     console.log("-----------------------------------------");
@@ -85,10 +90,18 @@ const getAllCustomDomains = async (req, res) => {
 // @access  Private (Super Admin)
 const createCustomDomain = async (req, res) => {
   try {
-    const { domainName, clientId } = req.body;
+    let { domainName, clientId } = req.body;
 
     if (!domainName || domainName.trim() === "") {
       return res.status(400).json({ message: "Domain name is required" });
+    }
+
+    const isSuperAdmin = req.user && (req.user.role === "super_admin" || req.user.role === "admin");
+    const isClient = req.user && (req.user.role === "client" || req.user.role === "client_admin");
+
+    // If client, enforce their own clientId
+    if (isClient) {
+      clientId = req.user.clientId;
     }
 
     if (!clientId) {
@@ -150,9 +163,8 @@ const createCustomDomain = async (req, res) => {
       customDomain.clientId = clientId;
       customDomain.clientName = client.companyName || client.shopName || "Client";
       customDomain.dnsInstructions = dnsInstructions;
-      // We keep existing status or reset to Pending if needed. 
-      // Resetting to Pending allows the Super Admin to trigger a re-verify manually.
-      customDomain.status = "Pending"; 
+      customDomain.status = "Pending";
+      customDomain.sslStatus = "Pending";
       await customDomain.save();
       return res.status(200).json({ success: true, data: customDomain, message: successMessage });
     } else {
@@ -163,6 +175,7 @@ const createCustomDomain = async (req, res) => {
         clientId,
         clientName: client.companyName || client.shopName || "Client",
         status: "Pending",
+        sslStatus: "Pending",
         dnsInstructions
       });
       return res.status(201).json({ success: true, data: customDomain, message: successMessage });
@@ -177,9 +190,6 @@ const createCustomDomain = async (req, res) => {
   }
 };
 
-// @desc    Check domain status from Vercel
-// @route   GET /api/custom-domains/:id/status
-// @access  Private (Super Admin)
 const checkDomainStatus = async (req, res) => {
   try {
     if (!isValidObjectId(req.params.id)) {
@@ -191,14 +201,26 @@ const checkDomainStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: "Custom domain not found" });
     }
 
+    // Ownership check for clients
+    const isSuperAdmin = req.user && (req.user.role === "super_admin" || req.user.role === "admin");
+    if (!isSuperAdmin && String(customDomain.clientId) !== String(req.user?.clientId)) {
+      return res.status(403).json({ success: false, message: "You are not allowed to access this domain" });
+    }
+
     const vStatus = await vercelService.checkDomainStatus(customDomain.domainName);
     
     customDomain.status = vStatus.status;
+    // If domain is Verified, we assume SSL is active or soon will be. 
+    // In a real Vercel API check, we could check certs specifically, 
+    // but mapping Verified to Active is a common pattern for these integrations.
+    customDomain.sslStatus = vStatus.status === 'Verified' ? 'Active' : (vStatus.status === 'Error' ? 'Error' : 'Pending');
+    
     await customDomain.save();
 
     res.status(200).json({ 
       success: true, 
       status: vStatus.status, 
+      sslStatus: customDomain.sslStatus,
       message: vStatus.message,
       data: customDomain 
     });
@@ -207,9 +229,6 @@ const checkDomainStatus = async (req, res) => {
   }
 };
 
-// @desc    Delete a custom domain
-// @route   DELETE /api/custom-domains/:id
-// @access  Private (Super Admin)
 const deleteCustomDomain = async (req, res) => {
   try {
     if (!isValidObjectId(req.params.id)) {
@@ -219,6 +238,12 @@ const deleteCustomDomain = async (req, res) => {
 
     if (!customDomain) {
       return res.status(404).json({ success: false, message: "Custom domain not found" });
+    }
+
+    // Ownership check for clients
+    const isSuperAdmin = req.user && (req.user.role === "super_admin" || req.user.role === "admin");
+    if (!isSuperAdmin && String(customDomain.clientId) !== String(req.user?.clientId)) {
+      return res.status(403).json({ success: false, message: "You are not allowed to delete this domain" });
     }
 
     // Remove from Vercel

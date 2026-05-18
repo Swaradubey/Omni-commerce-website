@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import {
@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   Clock,
 } from 'lucide-react';
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Separator } from '../../components/ui/separator';
@@ -24,7 +26,9 @@ export function InvoiceDetail() {
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const invoiceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchInvoice = async () => {
@@ -54,6 +58,140 @@ export function InvoiceDetail() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      setIsDownloading(true);
+
+      const doc = new jsPDF("p", "mm", "a4");
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      const invoiceNo =
+        invoice?.invoiceNo ||
+        invoice?.invoiceNumber ||
+        invoice?.orderId ||
+        "invoice";
+
+      const orderId = invoice?.orderId || "N/A";
+
+      const customerName = invoice?.customerName || "N/A";
+      const customerEmail = invoice?.customerEmail || "N/A";
+      const paymentMethod = invoice?.paymentMethod || "N/A";
+      const paymentStatus = invoice?.paymentStatus || "Paid";
+
+      const items = invoice?.items || [];
+
+      const subtotal =
+        invoice?.subtotal ||
+        items.reduce((sum: number, item: any) => {
+          const qty = item.quantity || item.qty || 1;
+          const price = item.price || item.unitPrice || 0;
+          return sum + qty * price;
+        }, 0);
+
+      const tax = invoice?.tax || 0;
+
+      const total =
+        invoice?.total ||
+        invoice?.totalAmount ||
+        subtotal + tax;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(22);
+      doc.text("RETAIL VERSE", 14, 20);
+
+      doc.setFontSize(18);
+      doc.text("INVOICE", pageWidth - 14, 20, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text("Premium E-Commerce", 14, 27);
+      doc.text("123 Business Avenue Suite 500", 14, 34);
+      doc.text("New Delhi, India 110001", 14, 40);
+      doc.text("contact@retailverse.com", 14, 46);
+
+      doc.setFont("helvetica", "bold");
+      doc.text(`Invoice No: ${invoiceNo}`, pageWidth - 14, 34, { align: "right" });
+      doc.text(`Order ID: ${orderId}`, pageWidth - 14, 42, { align: "right" });
+
+      doc.line(14, 55, pageWidth - 14, 55);
+
+      doc.setFontSize(12);
+      doc.text("Billed To", 14, 65);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(String(customerName), 14, 73);
+      doc.text(String(customerEmail), 14, 80);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Payment Details", pageWidth - 14, 65, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.text(`Method: ${paymentMethod}`, pageWidth - 14, 73, { align: "right" });
+      doc.text(`Status: ${paymentStatus}`, pageWidth - 14, 80, { align: "right" });
+
+      const tableBody = items.map((item: any) => {
+        const name =
+          item.name ||
+          item.productName ||
+          item.title ||
+          item.product?.name ||
+          "Item";
+
+        const qty = item.quantity || item.qty || 1;
+        const price = item.price || item.unitPrice || item.product?.price || 0;
+        const amount = qty * price;
+
+        return [
+          name,
+          String(qty),
+          `Rs. ${Number(price).toFixed(2)}`,
+          `Rs. ${Number(amount).toFixed(2)}`
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 92,
+        head: [["Item", "Qty", "Price", "Amount"]],
+        body: tableBody,
+        theme: "grid",
+        styles: {
+          font: "helvetica",
+          fontSize: 10,
+          cellPadding: 4
+        },
+        headStyles: {
+          fillColor: [245, 245, 245],
+          textColor: [0, 0, 0]
+        }
+      });
+
+      let finalY = (doc as any).lastAutoTable.finalY + 10;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Subtotal:", pageWidth - 60, finalY);
+      doc.text(`Rs. ${Number(subtotal).toFixed(2)}`, pageWidth - 14, finalY, { align: "right" });
+
+      finalY += 8;
+      doc.text("Tax:", pageWidth - 60, finalY);
+      doc.text(`Rs. ${Number(tax).toFixed(2)}`, pageWidth - 14, finalY, { align: "right" });
+
+      finalY += 10;
+      doc.setFontSize(14);
+      doc.text("Total Amount:", pageWidth - 60, finalY);
+      doc.text(`Rs. ${Number(total).toFixed(2)}`, pageWidth - 14, finalY, { align: "right" });
+
+      doc.save(`receipt-${invoiceNo}.pdf`);
+
+      toast.success("PDF downloaded successfully.");
+    } catch (error: any) {
+      console.error("PDF generation failed:", error);
+      toast.error(error?.message || "Failed to generate PDF. Please try again.");
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   if (isLoading) {
@@ -112,11 +250,21 @@ export function InvoiceDetail() {
               Print
             </Button>
             <Button
-              className="rounded-xl bg-[#D4AF37] text-white shadow-lg shadow-[#D4AF37]/20 hover:bg-[#B8860B]"
-              onClick={() => toast.info('PDF download started...')}
+              className="rounded-xl bg-[#D4AF37] text-white shadow-lg shadow-[#D4AF37]/20 hover:bg-[#B8860B] disabled:opacity-70"
+              onClick={handleDownloadPDF}
+              disabled={isDownloading}
             >
-              <Download className="mr-2 h-4 w-4" />
-              Download PDF
+              {isDownloading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Downloading...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download PDF
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -126,7 +274,8 @@ export function InvoiceDetail() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <Card className="overflow-hidden rounded-[2rem] border-[#EADFBF] bg-white shadow-2xl dark:border-[#3d3522] dark:bg-[#1a1610] print:border-none print:shadow-none">
+          <div ref={invoiceRef} className="invoice-pdf-content">
+            <Card className="overflow-hidden rounded-[2rem] border-[#EADFBF] bg-white shadow-2xl dark:border-[#3d3522] dark:bg-[#1a1610] print:border-none print:shadow-none">
             {/* Invoice Header */}
             <div className="bg-[#1a1610] p-8 text-white sm:p-12 dark:bg-[#0c0a08]">
               <div className="flex flex-col justify-between gap-8 sm:flex-row sm:items-start">
@@ -248,6 +397,7 @@ export function InvoiceDetail() {
               </div>
             </CardContent>
           </Card>
+          </div>
         </motion.div>
       </div>
 

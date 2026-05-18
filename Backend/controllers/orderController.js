@@ -773,6 +773,8 @@ const createOrder = async (req, res) => {
 
       const resolvedProductId = item.productId || item._id || item.id || `unknown-${Date.now()}`;
 
+      let itemCategory = item.category || "Uncategorized";
+
       // 5. Finalize items and check stock (if product exists in DB)
       if (mongoose.Types.ObjectId.isValid(resolvedProductId)) {
         // Build query to find product (matching client or global)
@@ -788,6 +790,9 @@ const createOrder = async (req, res) => {
         const product = await Product.findOne(stockQuery);
         
         if (product) {
+          if (product.category) {
+            itemCategory = product.category;
+          }
           const availableStock = Number(product.stock || 0);
           const orderedQty = Number(item.quantity || 0);
           
@@ -811,6 +816,7 @@ const createOrder = async (req, res) => {
         price: Number(item.price),
         quantity: Number(item.quantity),
         image: item.image || "",
+        category: itemCategory,
       });
     }
 
@@ -1106,7 +1112,7 @@ const getOrders = async (req, res) => {
     } else {
       // For other roles, use the standard scoping logic
       const resolvedClientId = await resolveClientId(req);
-      scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+      scopeQuery = buildScopeQuery(req.user, resolvedClientId, true);
     }
 
     const query = { isDeleted: { $ne: true } };
@@ -1218,7 +1224,7 @@ const getLatestTransactions = async (req, res) => {
       }
     } else {
       const resolvedClientId = await resolveClientId(req);
-      scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+      scopeQuery = buildScopeQuery(req.user, resolvedClientId, true);
     }
 
     const query = { isDeleted: { $ne: true } };
@@ -1307,7 +1313,7 @@ const getOrderById = async (req, res) => {
     let scopeQuery = {};
     if (!isSuperAdmin) {
       const resolvedClientId = await resolveClientId(req);
-      scopeQuery = buildScopeQuery(req.user, resolvedClientId);
+      scopeQuery = buildScopeQuery(req.user, resolvedClientId, true);
     }
 
     // Build a flexible query to find by orderId or Mongo _id

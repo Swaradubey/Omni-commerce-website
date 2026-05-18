@@ -73,13 +73,13 @@ export function QuoteRequestDialog({ isOpen, onClose, products, onSuccess }: Quo
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[500px] rounded-3xl p-0 overflow-hidden border-stone-200">
-        <form onSubmit={handleSubmit}>
-          <div className="p-8">
+      <DialogContent className="w-[95vw] sm:max-w-[500px] rounded-3xl p-0 overflow-hidden border-stone-200 max-h-[95vh] flex flex-col">
+<form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+           <div className="p-4 sm:p-8 overflow-y-auto flex-1">
             <DialogHeader className="mb-6">
-              <DialogTitle className="flex items-center gap-3 text-2xl font-black text-[#1F1F1F]">
-                <div className="p-3 bg-blue-50 rounded-2xl">
-                  <MessageSquare className="h-6 w-6 text-blue-600" />
+              <DialogTitle className="flex items-center gap-3 text-xl sm:text-2xl font-black text-[#1F1F1F]">
+                <div className="p-2 sm:p-3 bg-blue-50 rounded-2xl">
+                  <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
                 </div>
                 Request a Quote
               </DialogTitle>
@@ -132,21 +132,21 @@ export function QuoteRequestDialog({ isOpen, onClose, products, onSuccess }: Quo
                 />
               </div>
             </div>
-          </div>
+</div>
 
-          <DialogFooter className="bg-gray-50 p-6 border-t border-gray-100">
+           <DialogFooter className="bg-gray-50 p-4 sm:p-6 border-t border-gray-100 flex-shrink-0 flex flex-col sm:flex-row gap-2">
             <Button
               type="button"
               variant="ghost"
               onClick={onClose}
-              className="rounded-xl"
+              className="rounded-xl w-full sm:w-auto order-2 sm:order-1"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8 gap-2 shadow-lg shadow-blue-600/20"
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8 gap-2 shadow-lg shadow-blue-600/20 w-full sm:w-auto order-1 sm:order-2"
             >
               {isSubmitting ? (
                 <div className="h-4 w-4 border-2 border-white/30 border-t-white animate-spin rounded-full" />

@@ -114,6 +114,7 @@ export function Checkout() {
                   price: Number(item.salePrice || item.price),
                   quantity: Number(item.quantity),
                   image: item.image,
+                  category: item.category || 'Uncategorized',
                 })),
                 shippingAddress: {
                   fullName: `${formData.firstName} ${formData.lastName}`,

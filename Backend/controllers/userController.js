@@ -15,6 +15,7 @@ const ASSIGNABLE_ROLES = [
   "inventory_manager",
   "employee",
   "user",
+  "client",
 ];
 
 const getMe = async (req, res) => {
@@ -200,12 +201,10 @@ const updateUserRole = async (req, res) => {
     if (!role || typeof role !== "string") {
       return res.status(400).json({ success: false, message: "Role is required" });
     }
-    const nextRole = role.trim();
-    if (!ASSIGNABLE_ROLES.includes(nextRole)) {
-      return res.status(400).json({
-        success: false,
-        message: `Role must be one of: ${ASSIGNABLE_ROLES.join(", ")}`,
-      });
+    // Normalize to lowercase so "Client" → "client", etc.
+    const nextRole = role.trim().toLowerCase();
+    if (!nextRole) {
+      return res.status(400).json({ success: false, message: "Role cannot be empty" });
     }
 
     const target = await User.findById(id);
@@ -241,11 +240,11 @@ const updateUserRole = async (req, res) => {
         });
       }
 
-      const ADMIN_ALLOWED_ROLES = ["counter_manager", "seo_manager", "store_manager", "inventory_manager", "employee"];
+      const ADMIN_ALLOWED_ROLES = ["counter_manager", "seo_manager", "store_manager", "inventory_manager", "employee", "client", "user"];
       if (!ADMIN_ALLOWED_ROLES.includes(nextRole)) {
         return res.status(403).json({
           success: false,
-          message: "Access denied. You can only assign Counter Manager, SEO Manager, Store Manager, Inventory Manager, or Employee roles.",
+          message: "Access denied. You can only assign Counter Manager, SEO Manager, Store Manager, Inventory Manager, Employee, Client, or User roles.",
         });
       }
     }
@@ -363,4 +362,43 @@ const resetUserPassword = async (req, res) => {
   }
 };
 
-module.exports = { getMe, updateMe, listPlatformUsers, updateUserRole, updateUserStatus, resetUserPassword };
+// @route   DELETE /api/users/platform/:id
+// @access  Super Admin
+const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "Invalid user id" });
+    }
+
+    // Do not allow Super Admin to delete their own account
+    if (String(id) === String(req.user._id)) {
+      return res.status(400).json({ success: false, message: "You cannot delete your own account" });
+    }
+
+    const target = await User.findById(id);
+    if (!target) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const userRole = normalizeRole(req.user?.role);
+    if (userRole !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Access denied. Only Super Admin can delete users." });
+    }
+
+    // Protect seeded Super Admin
+    if (target.role === "super_admin" || target.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase().trim()) {
+      return res.status(403).json({ success: false, message: "The seeded Super Admin account cannot be deleted" });
+    }
+
+    await User.findByIdAndDelete(id);
+
+    res.json({ success: true, message: "User deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { getMe, updateMe, listPlatformUsers, updateUserRole, updateUserStatus, resetUserPassword, deleteUser };
+

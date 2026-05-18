@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router';
 import {
   Plus,
@@ -20,7 +20,11 @@ import {
   Printer,
   ArrowLeft,
   Download,
+  Mail,
+  X,
 } from 'lucide-react';
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Button } from '../components/ui/button';
 import {
   Dialog,
@@ -56,7 +60,7 @@ import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { getFullImageUrl } from '../utils/imageUrl';
 import ApiService from '../api/apiService';
-import { isStaffRole, isStoreManagerRole } from '../utils/staffRoles';
+import { isStaffRole } from '../utils/staffRoles';
 
 interface CartItem extends Product {
   cartQuantity: number;
@@ -188,6 +192,12 @@ export function Pos() {
   const [latestOrderData, setLatestOrderData] = useState<any | null>(null);
   const [latestInvoiceData, setLatestInvoiceData] = useState<any | null>(null);
   const [isFetchingInvoice, setIsFetchingInvoice] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const posInvoiceRef = useRef<HTMLDivElement>(null);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailInputValue, setEmailInputValue] = useState('');
+  const [emailInputError, setEmailInputError] = useState('');
 
   const wishlistPool = useMemo(
     () => products.map(posProductToShopProduct),
@@ -277,7 +287,7 @@ export function Pos() {
         updatedAt: new Date().toISOString()
       } as Product));
 
-      const merged = isStoreManagerRole(user?.role) ? dbProducts : [...dbProducts, ...normalizedStatic];
+      const merged = [...dbProducts, ...normalizedStatic];
       
       // Deduplicate by Name (case insensitive) or SKU
       const unique: Product[] = [];
@@ -747,12 +757,13 @@ export function Pos() {
 
     const orderTotal = cart.reduce((total, item) => total + item.price * item.cartQuantity, 0);
     const subtotal = orderTotal;
-    const itemsPayload = cart.map(({ _id, name, price, cartQuantity, image }) => ({
+    const itemsPayload = cart.map(({ _id, name, price, cartQuantity, image, category }) => ({
       productId: String(_id ?? ''),
       name,
       price,
       quantity: cartQuantity,
       image: image ?? '',
+      category: category ?? 'Uncategorized',
     }));
     const offline = typeof navigator === 'undefined' ? false : !navigator.onLine;
 
@@ -1081,6 +1092,221 @@ export function Pos() {
   const handleContinueShopping = () => {
     setCheckoutComplete(false);
     setLastCheckoutOffline(false);
+  };
+
+  /** Send invoice to a given email via backend. */
+  const sendInvoiceToEmail = async (email: string) => {
+    if (!latestInvoiceData) {
+      toast.error('No invoice data available.');
+      return;
+    }
+    const trimmed = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
+    setEmailSending(true);
+    try {
+      const res = await ApiService.post('/invoices/send-email', {
+        recipientEmail: trimmed,
+        invoiceData: latestInvoiceData,
+      });
+      if (res.success) {
+        toast.success('Invoice sent successfully.');
+        setEmailModalOpen(false);
+        setEmailInputValue('');
+        setEmailInputError('');
+      } else {
+        throw new Error(res.message || 'Failed to send invoice email.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to send invoice email.';
+      toast.error(msg);
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  /** Handler for "Send via Email" button click. */
+  const handleSendInvoiceEmail = () => {
+    // Try to use the customer email from the invoice / payment form
+    const autoEmail =
+      latestInvoiceData?.customerEmail?.trim() ||
+      posCustomerEmail.trim() ||
+      codEmail.trim();
+
+    if (autoEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(autoEmail)) {
+      // Automatically send to the known email
+      void sendInvoiceToEmail(autoEmail);
+    } else {
+      // No email available — show input modal
+      setEmailInputValue('');
+      setEmailInputError('');
+      setEmailModalOpen(true);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      setIsDownloading(true);
+
+      const doc = new jsPDF("p", "mm", "a4");
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      const invoice = latestInvoiceData;
+      const order = latestOrderData;
+
+      const invoiceNo =
+        invoice?.invoiceNumber ||
+        order?.invoiceNumber ||
+        order?.invoiceId ||
+        order?._id ||
+        "invoice";
+
+      const orderId = order?.orderId || order?._id || invoice?.orderId || "N/A";
+
+      const customerName =
+        order?.customer?.name ||
+        invoice?.customer?.name ||
+        order?.customerName ||
+        "N/A";
+
+      const customerEmail =
+        order?.customer?.email ||
+        invoice?.customer?.email ||
+        order?.email ||
+        "N/A";
+
+      const paymentMethod =
+        order?.paymentMethod ||
+        invoice?.paymentMethod ||
+        "N/A";
+
+      const paymentStatus =
+        order?.paymentStatus ||
+        invoice?.paymentStatus ||
+        order?.status ||
+        "Paid";
+
+      const items =
+        order?.items ||
+        invoice?.items ||
+        order?.products ||
+        [];
+
+      const subtotal =
+        order?.subtotal ||
+        invoice?.subtotal ||
+        items.reduce((sum: number, item: any) => {
+          const qty = item.quantity || item.qty || 1;
+          const price = item.price || item.unitPrice || 0;
+          return sum + qty * price;
+        }, 0);
+
+      const tax = order?.tax || invoice?.tax || 0;
+
+      const total =
+        order?.total ||
+        order?.totalAmount ||
+        invoice?.total ||
+        invoice?.totalAmount ||
+        subtotal + tax;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(22);
+      doc.text("RETAIL VERSE", 14, 20);
+
+      doc.setFontSize(18);
+      doc.text("INVOICE", pageWidth - 14, 20, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text("Premium E-Commerce", 14, 27);
+      doc.text("123 Business Avenue Suite 500", 14, 34);
+      doc.text("New Delhi, India 110001", 14, 40);
+      doc.text("contact@retailverse.com", 14, 46);
+
+      doc.setFont("helvetica", "bold");
+      doc.text(`Invoice No: ${invoiceNo}`, pageWidth - 14, 34, { align: "right" });
+      doc.text(`Order ID: ${orderId}`, pageWidth - 14, 42, { align: "right" });
+
+      doc.line(14, 55, pageWidth - 14, 55);
+
+      doc.setFontSize(12);
+      doc.text("Billed To", 14, 65);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(String(customerName), 14, 73);
+      doc.text(String(customerEmail), 14, 80);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Payment Details", pageWidth - 14, 65, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.text(`Method: ${paymentMethod}`, pageWidth - 14, 73, { align: "right" });
+      doc.text(`Status: ${paymentStatus}`, pageWidth - 14, 80, { align: "right" });
+
+      const tableBody = items.map((item: any) => {
+        const name =
+          item.name ||
+          item.productName ||
+          item.title ||
+          item.product?.name ||
+          "Item";
+
+        const qty = item.quantity || item.qty || 1;
+        const price = item.price || item.unitPrice || item.product?.price || 0;
+        const amount = qty * price;
+
+        return [
+          name,
+          String(qty),
+          `Rs. ${Number(price).toFixed(2)}`,
+          `Rs. ${Number(amount).toFixed(2)}`
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 92,
+        head: [["Item", "Qty", "Price", "Amount"]],
+        body: tableBody,
+        theme: "grid",
+        styles: {
+          font: "helvetica",
+          fontSize: 10,
+          cellPadding: 4
+        },
+        headStyles: {
+          fillColor: [245, 245, 245],
+          textColor: [0, 0, 0]
+        }
+      });
+
+      let finalY = (doc as any).lastAutoTable.finalY + 10;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Subtotal:", pageWidth - 60, finalY);
+      doc.text(`Rs. ${Number(subtotal).toFixed(2)}`, pageWidth - 14, finalY, { align: "right" });
+
+      finalY += 8;
+      doc.text("Tax:", pageWidth - 60, finalY);
+      doc.text(`Rs. ${Number(tax).toFixed(2)}`, pageWidth - 14, finalY, { align: "right" });
+
+      finalY += 10;
+      doc.setFontSize(14);
+      doc.text("Total Amount:", pageWidth - 60, finalY);
+      doc.text(`Rs. ${Number(total).toFixed(2)}`, pageWidth - 14, finalY, { align: "right" });
+
+      doc.save(`receipt-${invoiceNo}.pdf`);
+
+      toast.success("PDF downloaded successfully.");
+    } catch (error: any) {
+      console.error("PDF generation failed:", error);
+      toast.error(error?.message || "Failed to generate PDF. Please try again.");
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
@@ -1458,7 +1684,11 @@ export function Pos() {
                   <p className="text-sm font-medium text-gray-500">Preparing your premium invoice...</p>
                 </div>
               ) : latestInvoiceData ? (
-                <div id="pos-invoice-content" className="bg-[#fffcf5] rounded-2xl border border-[#e6d5b8] p-6 shadow-xl relative overflow-hidden print:shadow-none print:border-none print:p-0 print:bg-white">
+                  <div 
+                    id="pos-invoice-content" 
+                    ref={posInvoiceRef}
+                    className="invoice-pdf-content bg-[#fffcf5] rounded-2xl border border-[#e6d5b8] p-6 shadow-xl relative overflow-hidden print:shadow-none print:border-none print:p-0 print:bg-white"
+                  >
                   {/* Premium Accent Corner */}
                   <div className="absolute top-0 right-0 w-32 h-32 bg-[#b89146]/5 -mr-16 -mt-16 rounded-full blur-2xl print:hidden"></div>
                   
@@ -1569,28 +1799,43 @@ export function Pos() {
 
               {/* Action Buttons */}
               <div className="flex flex-col gap-3 pt-2 print:hidden">
-                <div className="flex gap-3">
+                <div className="grid grid-cols-3 gap-2">
                   <Button 
                     variant="outline"
                     type="button"
-                    className="flex-1 h-12 rounded-xl border-[#e6d5b8] bg-white text-[#b89146] hover:bg-[#b89146]/5 hover:text-[#b89146] gap-2 font-bold transition-all active:scale-[0.98]"
-                    onClick={() => window.print()}
+                    disabled={isDownloading}
+                    className="h-12 rounded-xl border-[#e6d5b8] bg-white text-[#b89146] hover:bg-[#b89146]/5 hover:text-[#b89146] gap-1.5 font-bold transition-all active:scale-[0.98] text-xs sm:text-sm px-2 disabled:opacity-70"
+                    onClick={handleDownloadPDF}
                   >
-                    <Printer className="h-4 w-4" />
-                    Print Invoice
+                    {isDownloading ? (
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 shrink-0" />
+                    )}
+                    {isDownloading ? 'Downloading...' : 'Download PDF'}
                   </Button>
                   <Button 
                     variant="outline"
                     type="button"
-                    className="flex-1 h-12 rounded-xl border-[#e6d5b8] bg-white text-[#b89146] hover:bg-[#b89146]/5 hover:text-[#b89146] gap-2 font-bold transition-all active:scale-[0.98]"
-                    onClick={() => {
-                      // Basic download implementation using print as well, 
-                      // but visually distinct for the user. In many browsers, print allows saving as PDF.
-                      window.print();
-                    }}
+                    className="h-12 rounded-xl border-[#e6d5b8] bg-white text-[#b89146] hover:bg-[#b89146]/5 hover:text-[#b89146] gap-1.5 font-bold transition-all active:scale-[0.98] text-xs sm:text-sm px-2"
+                    onClick={() => window.print()}
                   >
-                    <Download className="h-4 w-4" />
-                    Download
+                    <Printer className="h-4 w-4 shrink-0" />
+                    Print
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    type="button"
+                    disabled={emailSending}
+                    className="h-12 rounded-xl border-[#b89146] bg-[#b89146]/5 text-[#b89146] hover:bg-[#b89146]/10 hover:text-[#96762e] gap-1.5 font-bold transition-all active:scale-[0.98] text-xs sm:text-sm px-2 disabled:opacity-60"
+                    onClick={handleSendInvoiceEmail}
+                  >
+                    {emailSending ? (
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                    ) : (
+                      <Mail className="h-4 w-4 shrink-0" />
+                    )}
+                    {emailSending ? 'Sending…' : 'Email'}
                   </Button>
                 </div>
                 <Button 
@@ -1605,6 +1850,101 @@ export function Pos() {
                   Continue Shopping
                 </Button>
               </div>
+
+              {/* Email Input Modal — shown when no customer email is available */}
+              {emailModalOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+                  <div className="relative w-full max-w-sm mx-4 bg-white rounded-2xl border border-[#e6d5b8] shadow-2xl p-6 animate-in zoom-in-95 slide-in-from-bottom-2 duration-300">
+                    <button
+                      type="button"
+                      className="absolute right-3 top-3 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                      onClick={() => {
+                        setEmailModalOpen(false);
+                        setEmailInputValue('');
+                        setEmailInputError('');
+                      }}
+                      aria-label="Close"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                    <div className="flex items-center gap-2.5 mb-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#b89146]/10 text-[#b89146]">
+                        <Mail className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-bold text-[#111111]">Send Invoice via Email</h4>
+                        <p className="text-xs text-gray-500">Enter the customer's email address</p>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Input
+                        type="email"
+                        autoFocus
+                        placeholder="customer@example.com"
+                        value={emailInputValue}
+                        onChange={(e) => {
+                          setEmailInputValue(e.target.value);
+                          if (emailInputError) setEmailInputError('');
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !emailSending) {
+                            e.preventDefault();
+                            const v = emailInputValue.trim();
+                            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+                              setEmailInputError('Please enter a valid email address.');
+                            } else {
+                              setEmailInputError('');
+                              void sendInvoiceToEmail(v);
+                            }
+                          }
+                        }}
+                        disabled={emailSending}
+                        aria-invalid={Boolean(emailInputError)}
+                        className="h-11 rounded-xl border-black/15 bg-[#f7f6f2]/50 text-sm"
+                      />
+                      {emailInputError && (
+                        <p className="text-xs font-medium text-red-600">{emailInputError}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1 h-10 rounded-xl border-black/15 font-semibold text-sm"
+                        disabled={emailSending}
+                        onClick={() => {
+                          setEmailModalOpen(false);
+                          setEmailInputValue('');
+                          setEmailInputError('');
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        className="flex-1 h-10 rounded-xl bg-[#b89146] hover:bg-[#a07d3a] text-white font-semibold text-sm gap-2 disabled:opacity-60"
+                        disabled={emailSending || !emailInputValue.trim()}
+                        onClick={() => {
+                          const v = emailInputValue.trim();
+                          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+                            setEmailInputError('Please enter a valid email address.');
+                          } else {
+                            setEmailInputError('');
+                            void sendInvoiceToEmail(v);
+                          }
+                        }}
+                      >
+                        {emailSending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Mail className="h-4 w-4" />
+                        )}
+                        {emailSending ? 'Sending…' : 'Send Invoice'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <>

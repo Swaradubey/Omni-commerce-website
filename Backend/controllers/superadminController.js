@@ -57,19 +57,20 @@ const impersonateAdmin = async (req, res) => {
       return res.status(403).json({ success: false, message: "Target admin account is inactive" });
     }
 
-    const superAdminId = req.user._id;
-    if (String(target._id) === String(superAdminId)) {
+    const performerId = req.user._id;
+    const performerRole = normalizeRole(req.user.role);
+    if (String(target._id) === String(performerId)) {
       return res.status(400).json({ success: false, message: "Cannot impersonate your own account" });
     }
 
     const expiresIn = process.env.IMPERSONATION_JWT_EXPIRES || "8h";
     const token = generateToken(target._id, target.email, target.role, {
-      impersonatedBy: superAdminId,
+      impersonatedBy: performerId,
       expiresIn,
     });
 
     await ImpersonationAuditLog.create({
-      superAdminId,
+      superAdminId: performerId, // Use the field for the performer regardless of role
       targetAdminId: target._id,
       actionType: "impersonate_start",
       timestamp: new Date(),
@@ -77,7 +78,7 @@ const impersonateAdmin = async (req, res) => {
 
     const { ipAddress, userAgent } = resolveRequestMeta(req);
     console.log(
-      `[Impersonation] start superAdmin=${superAdminId} admin=${target._id} ip=${ipAddress} ua=${userAgent ? "yes" : "no"}`
+      `[Impersonation] start performer=${performerId} (${performerRole}) target=${target._id} ip=${ipAddress} ua=${userAgent ? "yes" : "no"}`
     );
 
     res.json({
@@ -96,7 +97,7 @@ const impersonateAdmin = async (req, res) => {
         },
         impersonation: {
           active: true,
-          superAdminId: String(superAdminId),
+          superAdminId: String(performerId),
           superAdminName: req.user.name,
           superAdminEmail: req.user.email,
         },
@@ -112,13 +113,13 @@ const impersonateAdmin = async (req, res) => {
 // @access  Valid impersonation JWT (admin session opened by Super Admin)
 const stopImpersonation = async (req, res) => {
   try {
-    const superAdminId = req.tokenPayload.impersonatedBy;
-    const superAdmin = await User.findById(superAdminId).select("-password");
+    const performerId = req.tokenPayload.impersonatedBy;
+    const originalUser = await User.findById(performerId).select("-password");
 
-    if (!superAdmin || superAdmin.role !== "super_admin" || !superAdmin.isActive) {
+    if (!originalUser || !originalUser.isActive || (normalizeRole(originalUser.role) !== "super_admin" && normalizeRole(originalUser.role) !== "admin")) {
       return res.status(403).json({
         success: false,
-        message: "Original Super Admin session is no longer valid",
+        message: "Original session is no longer valid",
       });
     }
 
@@ -136,20 +137,20 @@ const stopImpersonation = async (req, res) => {
       `[Impersonation] end superAdmin=${superAdminId} admin=${targetAdminId} ip=${ipAddress} ua=${userAgent ? "yes" : "no"}`
     );
 
-    const token = generateToken(superAdmin._id, superAdmin.email, "super_admin");
+    const token = generateToken(originalUser._id, originalUser.email, originalUser.role);
 
     res.json({
       success: true,
-      message: "Returned to Super Admin session",
+      message: `Returned to ${originalUser.role} session`,
       data: {
         token,
         user: {
-          _id: superAdmin._id,
-          name: superAdmin.name,
-          email: superAdmin.email,
-          role: "super_admin",
-          isAdmin: true,
-          isSuperAdmin: true,
+          _id: originalUser._id,
+          name: originalUser.name,
+          email: originalUser.email,
+          role: originalUser.role,
+          isAdmin: originalUser.role === "admin" || originalUser.role === "super_admin",
+          isSuperAdmin: originalUser.role === "super_admin",
         },
       },
     });
@@ -593,18 +594,43 @@ const getOverview = async (req, res) => {
 
     // 9. Category Distribution
     const categoryDistributionAgg = await Order.aggregate([
+      { $match: monthOrdersMatch },
       { $unwind: "$items" },
+      // Step 1: stringify productId so we can regex-test it safely
+      {
+        $addFields: {
+          _catPidStr: { $toString: "$items.productId" },
+        },
+      },
+      // Step 2: only convert to ObjectId if it's a valid 24-char hex string
+      // ($and inside $expr does NOT short-circuit in MongoDB, so we must guard here)
+      {
+        $addFields: {
+          _catPidForLookup: {
+            $cond: {
+              if: { $regexMatch: { input: "$_catPidStr", regex: /^[a-fA-F0-9]{24}$/ } },
+              then: { $toObjectId: "$_catPidStr" },
+              else: null,
+            },
+          },
+        },
+      },
       {
         $lookup: {
           from: "products",
-          localField: "items.productId",
+          localField: "_catPidForLookup",
           foreignField: "_id",
-          as: "p"
-        }
+          as: "p",
+        },
       },
       {
         $addFields: {
-          categoryName: { $ifNull: [{ $arrayElemAt: ["$p.category", 0] }, "Uncategorized"] }
+          categoryName: {
+            $ifNull: [
+              "$items.category",
+              { $ifNull: [{ $arrayElemAt: ["$p.category", 0] }, "Uncategorized"] }
+            ]
+          }
         }
       },
       {
@@ -615,7 +641,7 @@ const getOverview = async (req, res) => {
         }
       },
       { $sort: { totalSales: -1 } },
-      { $limit: 8 }
+      { $limit: 10 }
     ]);
 
     const categoryDistribution = categoryDistributionAgg.map(c => ({

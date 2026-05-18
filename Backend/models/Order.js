@@ -65,6 +65,7 @@ const orderSchema = new mongoose.Schema(
         price: { type: Number, required: true },
         quantity: { type: Number, required: true },
         image: { type: String, required: true },
+        category: { type: String, required: false },
       },
     ],
     /** Set to "pos" for in-store sales; website checkout omits (legacy orders have no value). */

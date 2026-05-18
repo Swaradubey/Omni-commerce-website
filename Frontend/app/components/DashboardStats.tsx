@@ -236,47 +236,49 @@ export function DashboardStats({
     }
 
     const s = analytics?.summary;
+    // Clean fallback: never show raw backend error text inside stat cards
+    const cardErrorDesc = error ? 'Could not load' : 'Loading\u2026';
     if (!s) {
       return [
         {
           title: 'Total Revenue',
-          value: error ? 'Error' : '—',
+          value: error ? '0' : '—',
           change: '—',
           isPositive: true,
           icon: DollarSign,
           iconTint: 'from-[#d4af37] to-amber-700',
           ringAccent: 'from-amber-300/70 via-amber-100/40 to-amber-400/50',
-          description: error || 'Loading…',
+          description: cardErrorDesc,
         },
         {
           title: superAdminOverview ? 'Active Customers' : 'Active Orders',
-          value: error ? '—' : '—',
+          value: '—',
           change: '—',
           isPositive: true,
           icon: superAdminOverview ? UserCheck : ShoppingCart,
           iconTint: 'from-teal-600 to-emerald-700',
           ringAccent: 'from-teal-300/50 via-emerald-100/30 to-teal-400/40',
-          description: error || 'This month',
+          description: cardErrorDesc,
         },
         {
           title: 'New Customers',
-          value: error ? '—' : '—',
+          value: '—',
           change: '—',
           isPositive: true,
           icon: Users,
           iconTint: 'from-amber-600 to-orange-700',
           ringAccent: 'from-orange-300/50 via-amber-100/35 to-orange-400/45',
-          description: error || 'This month',
+          description: cardErrorDesc,
         },
         {
           title: 'Conversion Rate',
-          value: error ? '—' : '—',
+          value: '—',
           change: '—',
           isPositive: true,
           icon: TrendingUp,
           iconTint: 'from-violet-600 to-indigo-700',
           ringAccent: 'from-violet-300/45 via-indigo-100/25 to-violet-400/40',
-          description: error || 'Registered customers',
+          description: cardErrorDesc,
         },
       ];
     }

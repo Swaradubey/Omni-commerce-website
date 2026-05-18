@@ -443,6 +443,8 @@ async function topCategoriesForWindow(start, end, scopeQuery, limit = 8) {
         },
       },
     },
+    // Use safe localField/foreignField lookup — pidForLookup was already
+    // guarded by $regexMatch (valid 24-char hex only), so no $toObjectId crash risk.
     {
       $lookup: {
         from: "products",
@@ -454,35 +456,10 @@ async function topCategoriesForWindow(start, end, scopeQuery, limit = 8) {
     {
       $addFields: {
         categoryName: {
-          $let: {
-            vars: {
-              categoryRaw: {
-                $ifNull: [{ $arrayElemAt: ["$p.category", 0] }, ""],
-              },
-            },
-            in: {
-              $cond: {
-                if: {
-                  $gt: [
-                    {
-                      $strLenCP: {
-                        $trim: {
-                          input: { $toString: "$$categoryRaw" },
-                        },
-                      },
-                    },
-                    0,
-                  ],
-                },
-                then: {
-                  $trim: {
-                    input: { $toString: "$$categoryRaw" },
-                  },
-                },
-                else: "Uncategorized",
-              },
-            },
-          },
+          $ifNull: [
+            "$items.category",
+            { $ifNull: [{ $arrayElemAt: ["$p.category", 0] }, "Uncategorized"] }
+          ]
         },
       },
     },
@@ -623,7 +600,7 @@ const getAdminAnalytics = async (req, res) => {
     const isSuperAdmin = userRole.toLowerCase() === "super_admin" || userRole.toLowerCase() === "superadmin" || userRole.toLowerCase() === "super admin";
     
     const resolvedClientId = await resolveTenant(req);
-    const scopeQuery = isSuperAdmin ? {} : buildScopeQuery(req.user, resolvedClientId);
+    const scopeQuery = isSuperAdmin ? {} : buildScopeQuery(req.user, resolvedClientId, true);
 
     console.log("ADMIN OVERVIEW DEBUG", {
       userRole,

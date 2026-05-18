@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Receipt,
@@ -17,7 +17,12 @@ import {
   ArrowRight,
   MessageSquare,
   CreditCard,
+  Download,
+  Printer,
+  Trash2,
 } from 'lucide-react';
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { createRazorpayOrder, verifyRazorpayPayment } from '../../api/orders';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -68,8 +73,11 @@ export function DashboardInvoices() {
   const [isRazorpayOpen, setIsRazorpayOpen] = useState(false);
 
   // Refs to hold quote/invoice data while dialog is closed during Razorpay payment
-  const paymentQuoteRef = React.useRef<any>(null);
-  const paymentInvoiceRef = React.useRef<any>(null);
+  const paymentQuoteRef = useRef<any>(null);
+  const paymentInvoiceRef = useRef<any>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const invoiceRef = useRef<HTMLDivElement>(null);
 
   // DEV NOTE: Test mode credentials for Razorpay:
   // Card: 4111 1111 1111 1111 | Any future expiry | Any CVV | OTP: any 6 digits
@@ -326,6 +334,172 @@ export function DashboardInvoices() {
       toast.error(err.message || `An error occurred while ${action}ing quote`);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteInvoice = async () => {
+    const invoiceId = viewInvoice?._id || viewInvoice?.id;
+
+    if (!invoiceId) {
+      toast.error("Invoice ID not found");
+      return;
+    }
+
+    const confirmed = window.confirm("Are you sure you want to delete this invoice?");
+    if (!confirmed) return;
+
+    try {
+      setIsDeleting(true);
+      const res = await ApiService.delete(`/invoices/${invoiceId}`, { pageName: 'DashboardInvoices' });
+
+      if (res.success) {
+        toast.success("Invoice deleted successfully");
+        setViewInvoice(null);
+        setInvoices((prev) => prev.filter((item) => (item._id || item.id) !== invoiceId));
+      } else {
+        toast.error(res.message || "Failed to delete invoice");
+      }
+    } catch (error: any) {
+      console.error("Delete invoice failed:", error);
+      toast.error(error.message || "Failed to delete invoice");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      setIsDownloading(true);
+
+      const doc = new jsPDF("p", "mm", "a4");
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      const invoice = viewInvoice;
+
+      const invoiceNo =
+        invoice?.invoiceNumber ||
+        invoice?.invoiceNo ||
+        invoice?._id ||
+        "invoice";
+
+      const orderId = invoice?.orderId || "N/A";
+
+      const customerName = invoice?.customerName || "N/A";
+      const customerEmail = invoice?.customerEmail || "N/A";
+      const paymentMethod = invoice?.paymentMethod || "N/A";
+      const paymentStatus = invoice?.paymentStatus || "Paid";
+
+      const items = invoice?.items || [];
+
+      const subtotal =
+        invoice?.subtotal ||
+        items.reduce((sum: number, item: any) => {
+          const qty = item.quantity || item.qty || 1;
+          const price = item.price || item.unitPrice || 0;
+          return sum + qty * price;
+        }, 0);
+
+      const tax = invoice?.tax || 0;
+
+      const total =
+        invoice?.total ||
+        invoice?.totalAmount ||
+        subtotal + tax;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(22);
+      doc.text("RETAIL VERSE", 14, 20);
+
+      doc.setFontSize(18);
+      doc.text("INVOICE", pageWidth - 14, 20, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text("Premium E-Commerce", 14, 27);
+      doc.text("123 Business Avenue Suite 500", 14, 34);
+      doc.text("New Delhi, India 110001", 14, 40);
+      doc.text("contact@retailverse.com", 14, 46);
+
+      doc.setFont("helvetica", "bold");
+      doc.text(`Invoice No: ${invoiceNo}`, pageWidth - 14, 34, { align: "right" });
+      doc.text(`Order ID: ${orderId}`, pageWidth - 14, 42, { align: "right" });
+
+      doc.line(14, 55, pageWidth - 14, 55);
+
+      doc.setFontSize(12);
+      doc.text("Billed To", 14, 65);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(String(customerName), 14, 73);
+      doc.text(String(customerEmail), 14, 80);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Payment Details", pageWidth - 14, 65, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.text(`Method: ${paymentMethod}`, pageWidth - 14, 73, { align: "right" });
+      doc.text(`Status: ${paymentStatus}`, pageWidth - 14, 80, { align: "right" });
+
+      const tableBody = items.map((item: any) => {
+        const name =
+          item.name ||
+          item.productName ||
+          item.title ||
+          item.product?.name ||
+          "Item";
+
+        const qty = item.quantity || item.qty || 1;
+        const price = item.price || item.unitPrice || item.product?.price || 0;
+        const amount = qty * price;
+
+        return [
+          name,
+          String(qty),
+          `Rs. ${Number(price).toFixed(2)}`,
+          `Rs. ${Number(amount).toFixed(2)}`
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 92,
+        head: [["Item", "Qty", "Price", "Amount"]],
+        body: tableBody,
+        theme: "grid",
+        styles: {
+          font: "helvetica",
+          fontSize: 10,
+          cellPadding: 4
+        },
+        headStyles: {
+          fillColor: [245, 245, 245],
+          textColor: [0, 0, 0]
+        }
+      });
+
+      let finalY = (doc as any).lastAutoTable.finalY + 10;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Subtotal:", pageWidth - 60, finalY);
+      doc.text(`Rs. ${Number(subtotal).toFixed(2)}`, pageWidth - 14, finalY, { align: "right" });
+
+      finalY += 8;
+      doc.text("Tax:", pageWidth - 60, finalY);
+      doc.text(`Rs. ${Number(tax).toFixed(2)}`, pageWidth - 14, finalY, { align: "right" });
+
+      finalY += 10;
+      doc.setFontSize(14);
+      doc.text("Total Amount:", pageWidth - 60, finalY);
+      doc.text(`Rs. ${Number(total).toFixed(2)}`, pageWidth - 14, finalY, { align: "right" });
+
+      doc.save(`receipt-${invoiceNo}.pdf`);
+
+      toast.success("PDF downloaded successfully.");
+    } catch (error: any) {
+      console.error("PDF generation failed:", error);
+      toast.error(error?.message || "Failed to generate PDF. Please try again.");
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -636,78 +810,95 @@ export function DashboardInvoices() {
           </CardContent>
         </Card>
 
-         {/* Invoice Detail Dialog */}
-         <Dialog open={!!viewInvoice} onOpenChange={(open) => !open && setViewInvoice(null)}>
-           <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-stone-200 sm:max-w-2xl bg-white dark:bg-zinc-950 p-0 pb-4">
-             <div className="p-8">
-               <DialogHeader className="mb-6">
-                 <DialogTitle className="flex items-center gap-3 text-3xl font-black text-[#1F1F1F] dark:text-[#F9FAFB]">
-                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl">
-                     <Receipt className="h-7 w-7 text-blue-600 dark:text-blue-400" />
-                   </div>
-                   Invoice Details
-                 </DialogTitle>
-               </DialogHeader>
+        {/* Invoice Detail Dialog */}
+        <Dialog open={!!viewInvoice} onOpenChange={(open) => !open && setViewInvoice(null)}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-stone-200 w-[95vw] sm:max-w-2xl bg-white dark:bg-zinc-950 p-0 pb-4">
+            <div className="p-4 sm:p-8">
+              <DialogHeader className="mb-6 flex flex-row items-center justify-between pr-10">
+                <DialogTitle className="flex flex-col sm:flex-row items-start sm:items-center gap-3 text-2xl sm:text-3xl font-black text-[#1F1F1F] dark:text-[#F9FAFB]">
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl">
+                    <Receipt className="h-6 w-6 sm:h-7 sm:w-7 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  Invoice Details
+                </DialogTitle>
+                {viewInvoice && (user?.role === 'admin' || user?.role === 'super_admin') && (
+                  <button
+                    type="button"
+                    title="Delete Invoice"
+                    onClick={handleDeleteInvoice}
+                    disabled={isDeleting}
+                    className="p-2 rounded-full text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+                  >
+                    {isDeleting ? (
+                      <RefreshCcw className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Trash2 size={22} />
+                    )}
+                  </button>
+                )}
+              </DialogHeader>
 
               {viewInvoice && (
-                <div className="space-y-8 text-sm">
-                  <div className="grid grid-cols-2 gap-8 p-6 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-gray-100 dark:border-white/5">
+                <div ref={invoiceRef} className="invoice-pdf-content space-y-8 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 p-4 sm:p-6 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-gray-100 dark:border-white/5">
                     <div className="space-y-2">
                       <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">Billed To</p>
-                      <p className="font-bold text-lg text-[#1F1F1F] dark:text-[#F9FAFB]">{viewInvoice.customerName}</p>
-                      <p className="text-muted-foreground">{viewInvoice.customerEmail}</p>
+                      <p className="font-bold text-base sm:text-lg text-[#1F1F1F] dark:text-[#F9FAFB] break-words">{viewInvoice.customerName}</p>
+                      <p className="text-muted-foreground break-words">{viewInvoice.customerEmail}</p>
                     </div>
-                    <div className="space-y-2 text-right">
+                    <div className="space-y-2 sm:text-right">
                       <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">Reference</p>
-                      <p className="font-bold text-lg text-blue-600 dark:text-blue-400">{viewInvoice.invoiceNumber}</p>
-                      <p className="text-muted-foreground">Order: {viewInvoice.orderId}</p>
+                      <p className="font-bold text-base sm:text-lg text-blue-600 dark:text-blue-400 break-words">{viewInvoice.invoiceNumber}</p>
+                      <p className="text-muted-foreground break-words">Order: {viewInvoice.orderId}</p>
                       <p className="text-muted-foreground">{new Date(viewInvoice.createdAt).toLocaleString()}</p>
                     </div>
                   </div>
 
                   <div className="border border-gray-100 dark:border-white/5 rounded-3xl overflow-hidden shadow-sm">
-                    <table className="w-full text-left">
-                      <thead className="bg-gray-50 dark:bg-white/5 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
-                        <tr>
-                          <th className="px-6 py-4">Item</th>
-                          <th className="px-6 py-4 text-center">Qty</th>
-                          <th className="px-6 py-4 text-right">Price</th>
-                          <th className="px-6 py-4 text-right">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-white/5">
-                        {viewInvoice.items?.map((item: any, i: number) => (
-                          <tr key={i}>
-                            <td className="px-6 py-4 font-semibold text-[#1F1F1F] dark:text-[#F9FAFB]">{item.name}</td>
-                            <td className="px-6 py-4 text-center text-[#6B7280]">{item.quantity}</td>
-                            <td className="px-6 py-4 text-right text-[#6B7280]">₹{Number(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="px-6 py-4 text-right font-bold text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(item.subtotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left min-w-[500px]">
+                        <thead className="bg-gray-50 dark:bg-white/5 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+                          <tr>
+                            <th className="px-4 sm:px-6 py-4">Item</th>
+                            <th className="px-4 sm:px-6 py-4 text-center">Qty</th>
+                            <th className="px-4 sm:px-6 py-4 text-right">Price</th>
+                            <th className="px-4 sm:px-6 py-4 text-right">Amount</th>
                           </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-gray-50/30 dark:bg-white/2 font-bold border-t border-gray-100 dark:border-white/5">
-                        <tr>
-                          <td colSpan={3} className="px-6 py-3 text-right text-muted-foreground">Subtotal</td>
-                          <td className="px-6 py-3 text-right text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(viewInvoice.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        </tr>
-                        <tr>
-                          <td colSpan={3} className="px-6 py-3 text-right text-muted-foreground">Tax</td>
-                          <td className="px-6 py-3 text-right text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(viewInvoice.tax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        </tr>
-                        <tr className="text-lg bg-blue-50/50 dark:bg-blue-900/10">
-                          <td colSpan={3} className="px-6 py-5 text-right font-black text-blue-700 dark:text-blue-400">Total Amount</td>
-                          <td className="px-6 py-5 text-right font-black text-blue-700 dark:text-blue-400">₹{Number(viewInvoice.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50 dark:divide-white/5">
+                          {viewInvoice.items?.map((item: any, i: number) => (
+                            <tr key={i}>
+                              <td className="px-4 sm:px-6 py-4 font-semibold text-[#1F1F1F] dark:text-[#F9FAFB] break-words">{item.name}</td>
+                              <td className="px-4 sm:px-6 py-4 text-center text-[#6B7280]">{item.quantity}</td>
+                              <td className="px-4 sm:px-6 py-4 text-right text-[#6B7280]">₹{Number(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              <td className="px-4 sm:px-6 py-4 text-right font-bold text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(item.subtotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50/30 dark:bg-white/2 font-bold border-t border-gray-100 dark:border-white/5">
+                          <tr>
+                            <td colSpan={3} className="px-4 sm:px-6 py-3 text-right text-muted-foreground">Subtotal</td>
+                            <td className="px-4 sm:px-6 py-3 text-right text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(viewInvoice.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="px-4 sm:px-6 py-3 text-right text-muted-foreground">Tax</td>
+                            <td className="px-4 sm:px-6 py-3 text-right text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(viewInvoice.tax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                          <tr className="text-base sm:text-lg bg-blue-50/50 dark:bg-blue-900/10">
+                            <td colSpan={3} className="px-4 sm:px-6 py-5 text-right font-black text-blue-700 dark:text-blue-400">Total Amount</td>
+                            <td className="px-4 sm:px-6 py-5 text-right font-black text-blue-700 dark:text-blue-400">₹{Number(viewInvoice.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 sm:p-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
                       <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground mb-1">Payment Method</p>
                       <p className="font-bold text-[#1F1F1F] dark:text-[#F9FAFB] capitalize">{viewInvoice.paymentMethod || 'N/A'}</p>
                     </div>
-                    <div className="p-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
+                    <div className="p-4 sm:p-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
                       <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground mb-1">Payment Status</p>
                       <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-black capitalize ${getStatusColor(viewInvoice.paymentStatus)}`}>
                         {viewInvoice.paymentStatus || 'Pending'}
@@ -717,12 +908,30 @@ export function DashboardInvoices() {
                 </div>
               )}
 
-              <DialogFooter className="mt-10 gap-3 border-t border-gray-100 dark:border-white/5 pt-6">
-                <Button type="button" variant="ghost" onClick={() => setViewInvoice(null)} className="rounded-xl px-6">
+              <DialogFooter className="mt-10 flex flex-col sm:flex-row gap-3 border-t border-gray-100 dark:border-white/5 pt-6">
+                <Button type="button" variant="ghost" onClick={() => setViewInvoice(null)} className="rounded-xl px-6 w-full sm:w-auto">
                   Close
                 </Button>
-                <Button type="button" className="gap-2 bg-[#1F1F1F] hover:bg-[#333] text-white dark:bg-blue-600 dark:hover:bg-blue-700 rounded-xl px-6" onClick={() => window.print()}>
-                  <FileText className="w-4 h-4" /> Print Receipt
+                <Button 
+                  type="button" 
+                  disabled={isDownloading}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-6 w-full sm:w-auto disabled:opacity-70" 
+                  onClick={handleDownloadPDF}
+                >
+                  {isDownloading ? (
+                    <>
+                      <RefreshCcw className="h-4 w-4 animate-spin" />
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Download PDF
+                    </>
+                  )}
+                </Button>
+                <Button type="button" className="gap-2 bg-[#1F1F1F] hover:bg-[#333] text-white dark:bg-blue-600 dark:hover:bg-blue-700 rounded-xl px-6 w-full sm:w-auto" onClick={() => window.print()}>
+                  <Printer className="w-4 h-4" /> Print Receipt
                 </Button>
               </DialogFooter>
             </div>
@@ -738,22 +947,22 @@ export function DashboardInvoices() {
             setAdminMessage('');
           }
         }}>
-           <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-stone-200 sm:max-w-3xl bg-white dark:bg-zinc-950 p-0 pb-4">
-            <div className="p-8">
+          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-stone-200 w-[95vw] sm:max-w-3xl bg-white dark:bg-zinc-950 p-0 pb-4">
+            <div className="p-4 sm:p-8">
               <DialogHeader className="mb-6">
-                <div className="flex items-center justify-between">
-                  <DialogTitle className="flex items-center gap-3 text-3xl font-black text-[#1F1F1F] dark:text-[#F9FAFB]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <DialogTitle className="flex items-center gap-3 text-2xl sm:text-3xl font-black text-[#1F1F1F] dark:text-[#F9FAFB]">
                     <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-2xl">
-                      <FileText className="h-7 w-7 text-amber-600 dark:text-amber-400" />
+                      <FileText className="h-6 w-6 sm:h-7 sm:w-7 text-amber-600 dark:text-amber-400" />
                     </div>
                     Quotation Details
                   </DialogTitle>
-                  <div className="flex gap-2">
-                    <span className={`inline-flex items-center rounded-full px-4 py-1.5 text-xs font-black uppercase border ${getStatusColor(viewQuote?.status)}`}>
+                  <div className="flex flex-wrap gap-2">
+                    <span className={`inline-flex items-center rounded-full px-3 sm:px-4 py-1 sm:py-1.5 text-[10px] sm:text-xs font-black uppercase border ${getStatusColor(viewQuote?.status)}`}>
                       {viewQuote?.status || 'Pending'}
                     </span>
                     {viewQuote?.paymentStatus && viewQuote.paymentStatus !== 'pending' && (
-                      <span className={`inline-flex items-center rounded-full px-4 py-1.5 text-xs font-black uppercase border ${getStatusColor(viewQuote.paymentStatus)}`}>
+                      <span className={`inline-flex items-center rounded-full px-3 sm:px-4 py-1 sm:py-1.5 text-[10px] sm:text-xs font-black uppercase border ${getStatusColor(viewQuote.paymentStatus)}`}>
                         {viewQuote.paymentStatus}
                       </span>
                     )}
@@ -764,16 +973,16 @@ export function DashboardInvoices() {
               {viewQuote && (
                 <div className="space-y-6 text-sm">
                   {/* Info Grid */}
-                  <div className="grid grid-cols-2 gap-6 p-6 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-gray-100 dark:border-white/5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-4 sm:p-6 bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-gray-100 dark:border-white/5">
                     <div className="space-y-2">
                       <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">Prepared For</p>
-                      <p className="font-bold text-lg text-[#1F1F1F] dark:text-[#F9FAFB]">{viewQuote.customerName}</p>
-                      <p className="text-muted-foreground">{viewQuote.customerEmail}</p>
+                      <p className="font-bold text-base sm:text-lg text-[#1F1F1F] dark:text-[#F9FAFB] break-words">{viewQuote.customerName}</p>
+                      <p className="text-muted-foreground break-words">{viewQuote.customerEmail}</p>
                     </div>
-                    <div className="space-y-2 text-right">
+                    <div className="space-y-2 sm:text-right">
                       <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">Reference</p>
-                      <p className="font-bold text-lg text-amber-600 dark:text-amber-400">{viewQuote.quoteNumber}</p>
-                      <p className="text-muted-foreground">Valid Until: {viewQuote.validUntil ? new Date(viewQuote.validUntil).toLocaleDateString() : 'N/A'}</p>
+                      <p className="font-bold text-base sm:text-lg text-amber-600 dark:text-amber-400 break-words">{viewQuote.quoteNumber}</p>
+                      <p className="text-muted-foreground break-words">Valid Until: {viewQuote.validUntil ? new Date(viewQuote.validUntil).toLocaleDateString() : 'N/A'}</p>
                       <p className="text-muted-foreground">{new Date(viewQuote.createdAt).toLocaleString()}</p>
                     </div>
                   </div>
@@ -815,44 +1024,46 @@ export function DashboardInvoices() {
 
                   {/* Products Table */}
                   <div className="border border-gray-100 dark:border-white/5 rounded-3xl overflow-hidden shadow-sm">
-                    <table className="w-full text-left">
-                      <thead className="bg-gray-50 dark:bg-white/5 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
-                        <tr>
-                          <th className="px-6 py-4">Product</th>
-                          <th className="px-6 py-4 text-center">Qty</th>
-                          <th className="px-6 py-4 text-right">Original Price</th>
-                          <th className="px-6 py-4 text-right">Subtotal</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-white/5">
-                        {viewQuote.products?.map((item: any, i: number) => (
-                          <tr key={i}>
-                            <td className="px-6 py-4 font-semibold text-[#1F1F1F] dark:text-[#F9FAFB]">{item.name}</td>
-                            <td className="px-6 py-4 text-center text-[#6B7280]">{item.quantity}</td>
-                            <td className="px-6 py-4 text-right text-[#6B7280]">₹{Number(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="px-6 py-4 text-right font-bold text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(item.price * item.quantity).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left min-w-[550px]">
+                        <thead className="bg-gray-50 dark:bg-white/5 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+                          <tr>
+                            <th className="px-4 sm:px-6 py-4">Product</th>
+                            <th className="px-4 sm:px-6 py-4 text-center">Qty</th>
+                            <th className="px-4 sm:px-6 py-4 text-right">Original Price</th>
+                            <th className="px-4 sm:px-6 py-4 text-right">Subtotal</th>
                           </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-gray-50/30 dark:bg-white/2 font-bold border-t border-gray-100 dark:border-white/5">
-                        <tr className="bg-gray-50/50 dark:bg-white/5">
-                          <td colSpan={3} className="px-6 py-4 text-right text-muted-foreground uppercase tracking-wider text-[10px]">Requested Price</td>
-                          <td className="px-6 py-4 text-right text-blue-600 dark:text-blue-400 font-black text-lg">₹{Number(viewQuote.requestedPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        </tr>
-                        {viewQuote.counterPrice && (
-                          <tr className="bg-amber-50/50 dark:bg-amber-900/10">
-                            <td colSpan={3} className="px-6 py-4 text-right text-amber-700 dark:text-amber-400 uppercase tracking-wider text-[10px]">Counter Offer</td>
-                            <td className="px-6 py-4 text-right text-amber-700 dark:text-amber-400 font-black text-lg">₹{Number(viewQuote.counterPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50 dark:divide-white/5">
+                          {viewQuote.products?.map((item: any, i: number) => (
+                            <tr key={i}>
+                              <td className="px-4 sm:px-6 py-4 font-semibold text-[#1F1F1F] dark:text-[#F9FAFB] break-words">{item.name}</td>
+                              <td className="px-4 sm:px-6 py-4 text-center text-[#6B7280]">{item.quantity}</td>
+                              <td className="px-4 sm:px-6 py-4 text-right text-[#6B7280]">₹{Number(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              <td className="px-4 sm:px-6 py-4 text-right font-bold text-[#1F1F1F] dark:text-[#F9FAFB]">₹{Number(item.price * item.quantity).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50/30 dark:bg-white/2 font-bold border-t border-gray-100 dark:border-white/5">
+                          <tr className="bg-gray-50/50 dark:bg-white/5">
+                            <td colSpan={3} className="px-4 sm:px-6 py-4 text-right text-muted-foreground uppercase tracking-wider text-[10px]">Requested Price</td>
+                            <td className="px-4 sm:px-6 py-4 text-right text-blue-600 dark:text-blue-400 font-black text-base sm:text-lg">₹{Number(viewQuote.requestedPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           </tr>
-                        )}
-                        {viewQuote.finalPrice && (
-                          <tr className="bg-emerald-50/50 dark:bg-emerald-900/10">
-                            <td colSpan={3} className="px-6 py-5 text-right text-emerald-700 dark:text-emerald-400 uppercase tracking-wider text-[10px]">Final Accepted Price</td>
-                            <td className="px-6 py-5 text-right text-emerald-700 dark:text-emerald-400 font-black text-2xl">₹{Number(viewQuote.finalPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          </tr>
-                        )}
-                      </tfoot>
-                    </table>
+                          {viewQuote.counterPrice && (
+                            <tr className="bg-amber-50/50 dark:bg-amber-900/10">
+                              <td colSpan={3} className="px-4 sm:px-6 py-4 text-right text-amber-700 dark:text-amber-400 uppercase tracking-wider text-[10px]">Counter Offer</td>
+                              <td className="px-4 sm:px-6 py-4 text-right text-amber-700 dark:text-amber-400 font-black text-base sm:text-lg">₹{Number(viewQuote.counterPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          )}
+                          {viewQuote.finalPrice && (
+                            <tr className="bg-emerald-50/50 dark:bg-emerald-900/10">
+                              <td colSpan={3} className="px-4 sm:px-6 py-5 text-right text-emerald-700 dark:text-emerald-400 uppercase tracking-wider text-[10px]">Final Accepted Price</td>
+                              <td className="px-4 sm:px-6 py-5 text-right text-emerald-700 dark:text-emerald-400 font-black text-xl sm:text-2xl">₹{Number(viewQuote.finalPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          )}
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
 
                   {/* Bargaining Input (Admin only) */}
@@ -903,23 +1114,23 @@ export function DashboardInvoices() {
                 </div>
               )}
 
-              <DialogFooter className="mt-8 flex flex-wrap items-center gap-3 border-t border-gray-100 dark:border-white/5 pt-6">
-                <div className="flex gap-2 mr-auto">
-                  <Button type="button" variant="ghost" onClick={() => setViewQuote(null)} className="rounded-xl px-4">
+              <DialogFooter className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 border-t border-gray-100 dark:border-white/5 pt-6">
+                <div className="flex gap-2 justify-between sm:justify-start w-full sm:w-auto">
+                  <Button type="button" variant="ghost" onClick={() => setViewQuote(null)} className="rounded-xl px-4 flex-1 sm:flex-none">
                     Close
                   </Button>
-                  <Button type="button" variant="outline" className="gap-2 rounded-xl border-stone-200 dark:border-white/10" onClick={() => window.print()}>
+                  <Button type="button" variant="outline" className="gap-2 rounded-xl border-stone-200 dark:border-white/10 flex-1 sm:flex-none" onClick={() => window.print()}>
                     <FileText className="w-4 h-4" /> Print
                   </Button>
                 </div>
-
+ 
                 {viewQuote && !showCounterInput && (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                     {/* User Actions */}
                     {!isAdmin && viewQuote.status === 'countered' && (
                       <>
                         <Button 
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-6 gap-2"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-6 gap-2 w-full sm:w-auto"
                           onClick={() => handleBargainAction('accept')}
                           disabled={isSubmitting}
                         >
@@ -927,7 +1138,7 @@ export function DashboardInvoices() {
                         </Button>
                         <Button 
                           variant="outline"
-                          className="border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl px-6 gap-2"
+                          className="border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl px-6 gap-2 w-full sm:w-auto"
                           onClick={() => handleBargainAction('reject')}
                           disabled={isSubmitting}
                         >
@@ -935,11 +1146,11 @@ export function DashboardInvoices() {
                         </Button>
                       </>
                     )}
-
+ 
                     {/* Pay Now Button */}
                     {viewQuote.status === 'accepted' && viewQuote.paymentStatus !== 'paid' && (
                       <Button 
-                        className="bg-[#D4AF37] hover:bg-[#B8962E] text-white rounded-xl px-6 gap-2 shadow-lg shadow-[#D4AF37]/20"
+                        className="bg-[#D4AF37] hover:bg-[#B8962E] text-white rounded-xl px-6 gap-2 shadow-lg shadow-[#D4AF37]/20 w-full sm:w-auto"
                         onClick={handlePayment}
                         disabled={isRazorpayLoading || isSubmitting}
                       >
@@ -951,39 +1162,39 @@ export function DashboardInvoices() {
                         Pay Now
                       </Button>
                     )}
-
+ 
                     {/* Admin Actions */}
                     {isAdmin && (
                       <>
                         {viewQuote.status === 'pending' && (
-                          <>
+                          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                             <Button 
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-6 gap-2"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-6 gap-2 w-full sm:w-auto"
                               onClick={() => handleBargainAction('accept')}
                               disabled={isSubmitting}
                             >
-                              <Check className="w-4 h-4" /> Accept Price
+                              <Check className="w-4 h-4" /> Accept
                             </Button>
                             <Button 
-                              className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-6 gap-2"
+                              className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-6 gap-2 w-full sm:w-auto"
                               onClick={() => setShowCounterInput(true)}
                               disabled={isSubmitting}
                             >
-                              <ArrowRight className="w-4 h-4" /> Send Counter
+                              <ArrowRight className="w-4 h-4" /> Counter
                             </Button>
                             <Button 
                               variant="outline"
-                              className="border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl px-6 gap-2"
+                              className="border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl px-6 gap-2 w-full sm:w-auto"
                               onClick={() => handleBargainAction('reject')}
                               disabled={isSubmitting}
                             >
-                              <X className="w-4 h-4" /> Reject Quote
+                              <X className="w-4 h-4" /> Reject
                             </Button>
-                          </>
+                          </div>
                         )}
                         {viewQuote.status === 'accepted' && (
                           <Button 
-                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-6 gap-2"
+                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-6 gap-2 w-full sm:w-auto"
                             onClick={() => handleBargainAction('convert')}
                             disabled={isSubmitting}
                           >

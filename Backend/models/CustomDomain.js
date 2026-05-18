@@ -29,6 +29,11 @@ const customDomainSchema = new mongoose.Schema(
       enum: ["Pending", "Verified", "Error"],
       default: "Pending",
     },
+    sslStatus: {
+      type: String,
+      enum: ["Pending", "Active", "Error"],
+      default: "Pending",
+    },
     dnsInstructions: {
       type: Object,
       default: null,

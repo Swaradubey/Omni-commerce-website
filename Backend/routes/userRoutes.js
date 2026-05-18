@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { protect, allowRoles } = require("../middleware/authMiddleware");
 const tenantMiddleware = require("../middleware/tenantMiddleware");
-const { getMe, updateMe, listPlatformUsers, updateUserRole, updateUserStatus, resetUserPassword } = require("../controllers/userController");
+const { getMe, updateMe, listPlatformUsers, updateUserRole, updateUserStatus, resetUserPassword, deleteUser } = require("../controllers/userController");
 const { getUserAnalytics } = require("../controllers/userAnalyticsController");
 
 router.get("/me", protect, tenantMiddleware, getMe);
@@ -24,5 +24,7 @@ router.get("/platform/list", protect, allowRoles("super_admin", "admin", "client
 router.patch("/platform/:id/role", protect, allowRoles("super_admin", "admin", "client", "client_admin"), tenantMiddleware, updateUserRole);
 router.patch("/platform/:id/status", protect, allowRoles("super_admin", "admin", "client", "client_admin"), tenantMiddleware, updateUserStatus);
 router.post("/platform/:id/reset-password", protect, allowRoles("super_admin", "admin", "client", "client_admin"), tenantMiddleware, resetUserPassword);
+router.delete("/platform/:id", protect, allowRoles("super_admin"), tenantMiddleware, deleteUser);
+
 
 module.exports = router;

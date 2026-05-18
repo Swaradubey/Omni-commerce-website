@@ -67,4 +67,8 @@ export const userApi = {
 
   postPlatformUserResetPassword: (id: string, password: string) =>
     ApiService.post<{ success: boolean; message: string }>(`/api/users/platform/${id}/reset-password`, { password }),
+
+  deletePlatformUser: (id: string) =>
+    ApiService.delete<{ success: boolean; message: string }>(`/api/users/platform/${id}`),
 };
+

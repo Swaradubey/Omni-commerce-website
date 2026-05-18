@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Plus, CheckCircle2, AlertCircle, Trash2, ExternalLink, Loader2, RefreshCw, Info } from 'lucide-react';
+import { Globe, Plus, CheckCircle2, AlertCircle, Trash2, ExternalLink, Loader2, RefreshCw, Info, Lock, ShieldCheck, Calendar, ShieldAlert } from 'lucide-react';
 import { customDomainApi, CustomDomainData } from '../../api/customDomains';
 import { clientsApi, ClientRow } from '../../api/clients';
 import { useAuth } from '../../context/AuthContext';
-import { isSuperAdminRole, hasFullAdminPrivileges } from '../../utils/staffRoles';
+import { isSuperAdminRole, hasFullAdminPrivileges, normalizeRole, isClientRole } from '../../utils/staffRoles';
+import { toast } from 'sonner';
 
 export function CustomDomain() {
   const { user } = useAuth();
-  const isSuper = hasFullAdminPrivileges(user?.role);
+  const isSuper = isSuperAdminRole(user?.role) || normalizeRole(user?.role) === 'admin';
   const [domains, setDomains] = useState<CustomDomainData[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,8 +16,7 @@ export function CustomDomain() {
   const [checkingStatus, setCheckingStatus] = useState<string | null>(null);
   const [domainInput, setDomainInput] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [showInstructions, setShowInstructions] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -27,7 +27,7 @@ export function CustomDomain() {
       setLoading(true);
       const [domainsRes, clientsRes] = await Promise.all([
         customDomainApi.getAll({ pageName: 'Custom Domain' }),
-        isSuper ? clientsApi.list() : Promise.resolve({ success: true, data: [] })
+        isSuper ? clientsApi.list() : Promise.resolve({ success: true, data: [] as ClientRow[] })
       ]);
 
       if (domainsRes.success && domainsRes.data) {
@@ -37,7 +37,7 @@ export function CustomDomain() {
         setClients(clientsRes.data);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch data');
+      toast.error(err.message || 'Failed to fetch data');
     } finally {
       setLoading(false);
     }
@@ -45,25 +45,35 @@ export function CustomDomain() {
 
   const handleAddDomain = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!domainInput.trim() || !selectedClientId) return;
+    // For super admins, a client must be selected. For clients, their own ID is used automatically.
+    if (!domainInput.trim()) return;
+    if (isSuper && !selectedClientId) return;
 
     try {
       setAdding(true);
-      setError(null);
-      setSuccess(null);
       const response = await customDomainApi.create({
         domainName: domainInput.trim(),
         clientId: isSuper ? selectedClientId : (user?.clientId || '')
       }, { pageName: 'Custom Domain' });
+      
       if (response.success) {
-        setSuccess(response.message || 'Domain added successfully and sent to Vercel');
+        toast.success(response.message || 'Domain added successfully and sent to Vercel');
         setDomainInput('');
-        setSelectedClientId('');
+        if (isSuper) setSelectedClientId('');
+        // Optimistic update: immediately show the new domain from API response
+        if (response.data) {
+          setDomains(prev => {
+            // Avoid duplicate if already present
+            const exists = prev.some(d => d._id === response.data!._id);
+            return exists ? prev : [response.data!, ...prev];
+          });
+        }
+        // Then re-fetch to ensure latest data from backend
         fetchData();
       }
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to add domain';
-      setError(
+      toast.error(
         errorMessage.includes('E11000') || errorMessage.includes('duplicate')
           ? 'Domain already exists'
           : errorMessage
@@ -76,18 +86,14 @@ export function CustomDomain() {
   const handleCheckStatus = async (id: string) => {
     try {
       setCheckingStatus(id);
-      setError(null);
       const response = await customDomainApi.checkStatus(id, { pageName: 'Custom Domain' });
       if (response.success) {
-        setSuccess(`Status updated: ${response.status}`);
+        toast.success(`Status updated: ${response.status}`);
         // Refresh domains list to show updated status
-        const domainsRes = await customDomainApi.getAll({ pageName: 'Custom Domain' });
-        if (domainsRes.success && domainsRes.data) {
-          setDomains(domainsRes.data);
-        }
+        fetchData();
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to check status');
+      toast.error(err.message || 'Failed to check status');
     } finally {
       setCheckingStatus(null);
     }
@@ -99,11 +105,11 @@ export function CustomDomain() {
     try {
       const response = await customDomainApi.delete(id, { pageName: 'Custom Domain' });
       if (response.success) {
-        setSuccess('Domain removed successfully');
+        toast.success('Domain removed successfully');
         fetchData();
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to delete domain');
+      toast.error(err.message || 'Failed to delete domain');
     }
   };
 
@@ -180,98 +186,43 @@ export function CustomDomain() {
 
               <div className="flex-[3] space-y-2 w-full">
                 <label className="block text-lg font-medium text-slate-700">
-                  Domain Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="laxmi.com"
-                  value={domainInput}
-                  onChange={(e) => setDomainInput(e.target.value)}
-                  disabled={adding}
-                  className="w-full px-5 py-3 rounded-xl border transition-all duration-300 disabled:opacity-50"
-                  style={{
-                    background: '#ffffff',
-                    borderColor: error ? 'rgba(239, 68, 68, 0.5)' : 'rgba(212, 175, 55, 0.25)',
-                    color: '#1e293b',
-                  }}
-                />
-              </div>
-
-              <div className="w-full lg:w-auto">
-                <button
-                  type="submit"
-                  disabled={adding || !domainInput.trim() || (isSuper && !selectedClientId)}
-                  className="w-full lg:w-auto px-8 py-3 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  style={{
-                    background: 'linear-gradient(135deg, #d4af37 0%, #f5d76e 100%)',
-                    color: '#111827',
-                    border: '1px solid rgba(212, 175, 55, 0.4)',
-                    boxShadow: '0 4px 14px rgba(212, 175, 55, 0.3)',
-                  }}
-                >
-                  {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  Add Domain
-                </button>
-              </div>
-            </form>
-
-            <div className="mt-4">
-              {error && <p className="text-xs sm:text-sm text-rose-500 flex items-center gap-1.5 mb-2"><AlertCircle className="w-4 h-4" />{error}</p>}
-              {success && <p className="text-xs sm:text-sm text-emerald-500 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" />{success}</p>}
-            </div>
-          </div>
-        </div>
-
-        {/* DNS Configuration Box */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="rounded-2xl border border-slate-200 p-6" style={{ background: 'rgba(255, 255, 255, 0.85)', boxShadow: '0 10px 30px rgba(212, 175, 55, 0.15)' }}>
-            <h3 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Info className="w-5 h-5 text-amber-600" />
-              Root Domain Setup
-            </h3>
-            <div className="space-y-4">
-              <p className="text-lg text-slate-600">For root domains like <code className="bg-slate-100 px-1 rounded">laxmi.com</code>:</p>
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-slate-400 uppercase">Type</span>
-                  <span className="text-slate-800 font-bold">A</span>
+                    Domain Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="laxmi.com"
+                    value={domainInput}
+                    onChange={(e) => setDomainInput(e.target.value)}
+                    disabled={adding}
+                    className="w-full px-5 py-3 rounded-xl border transition-all duration-300 disabled:opacity-50"
+                    style={{
+                      background: '#ffffff',
+                      borderColor: 'rgba(212, 175, 55, 0.25)',
+                      color: '#1e293b',
+                    }}
+                  />
                 </div>
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-slate-400 uppercase">Name</span>
-                  <span className="text-slate-800 font-bold">@</span>
+
+                <div className="w-full lg:w-auto">
+                  <button
+                    type="submit"
+                    disabled={adding || !domainInput.trim() || (isSuper && !selectedClientId)}
+                    className="w-full lg:w-auto px-8 py-3 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    style={{
+                      background: 'linear-gradient(135deg, #d4af37 0%, #f5d76e 100%)',
+                      color: '#111827',
+                      border: '1px solid rgba(212, 175, 55, 0.4)',
+                      boxShadow: '0 4px 14px rgba(212, 175, 55, 0.3)',
+                    }}
+                  >
+                    {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Add Domain
+                  </button>
                 </div>
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-slate-400 uppercase">Value</span>
-                  <span className="text-slate-800 font-bold">76.76.21.21</span>
-                </div>
-              </div>
+              </form>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 p-6" style={{ background: 'rgba(255, 255, 255, 0.85)', boxShadow: '0 10px 30px rgba(212, 175, 55, 0.15)' }}>
-            <h3 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Info className="w-5 h-5 text-amber-600" />
-              WWW / Subdomain Setup
-            </h3>
-            <div className="space-y-4">
-              <p className="text-lg text-slate-600">For subdomains or <code className="bg-slate-100 px-1 rounded">www.laxmi.com</code>:</p>
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-slate-400 uppercase">Type</span>
-                  <span className="text-slate-800 font-bold">CNAME</span>
-                </div>
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-slate-400 uppercase">Name</span>
-                  <span className="text-slate-800 font-bold">www</span>
-                </div>
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-slate-400 uppercase">Value</span>
-                  <span className="text-slate-800 font-bold">cname.vercel-dns.com</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* Connected Domains Section */}
         <div className="relative overflow-hidden rounded-2xl border transition-all duration-300" style={{
@@ -311,11 +262,19 @@ export function CustomDomain() {
                       <th className="text-left py-3 pl-12 pr-4 text-sm font-semibold text-slate-600 uppercase tracking-wider border-b" style={{ borderColor: 'rgba(212, 175, 55, 0.25)' }}>
                         Domain
                       </th>
+                      {isSuper && (
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600 uppercase tracking-wider border-b" style={{ borderColor: 'rgba(212, 175, 55, 0.25)' }}>
+                          Client
+                        </th>
+                      )}
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600 uppercase tracking-wider border-b" style={{ borderColor: 'rgba(212, 175, 55, 0.25)' }}>
-                        Client
+                        Created
                       </th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600 uppercase tracking-wider border-b" style={{ borderColor: 'rgba(212, 175, 55, 0.25)' }}>
                         Status
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600 uppercase tracking-wider border-b" style={{ borderColor: 'rgba(212, 175, 55, 0.25)' }}>
+                        SSL
                       </th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600 uppercase tracking-wider border-b" style={{ borderColor: 'rgba(212, 175, 55, 0.25)' }}>
                         Actions
@@ -340,8 +299,16 @@ export function CustomDomain() {
                             </button>
                           </div>
                         </td>
+                        {isSuper && (
+                          <td className="py-4 px-4">
+                            <span className="text-slate-600 text-sm font-medium">{item.clientName}</span>
+                          </td>
+                        )}
                         <td className="py-4 px-4">
-                          <span className="text-slate-600 text-sm font-medium">{item.clientName}</span>
+                          <div className="flex items-center gap-1.5 text-slate-500 text-sm">
+                            <Calendar className="w-3.5 h-3.5" />
+                            {new Date(item.createdAt).toLocaleDateString()}
+                          </div>
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-2">
@@ -364,14 +331,34 @@ export function CustomDomain() {
                             </button>
                           </div>
                         </td>
+                        <td className="py-4 px-4">
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${item.sslStatus === 'Active'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : item.sslStatus === 'Error'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}>
+                            {item.sslStatus === 'Active' ? <ShieldCheck className="w-3.5 h-3.5" /> : item.sslStatus === 'Error' ? <ShieldAlert className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                            <span>{item.sslStatus || 'Pending'}</span>
+                          </div>
+                        </td>
                         <td className="py-4 px-4 text-left">
-                          <button
-                            onClick={() => handleDeleteDomain(item._id)}
-                            className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 transition-all duration-200 rounded-lg border border-transparent hover:border-rose-200"
-                            aria-label="Delete domain"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setShowInstructions(showInstructions === item._id ? null : item._id)}
+                              className="p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 transition-all duration-200 rounded-lg border border-transparent hover:border-amber-200"
+                              title="DNS Instructions"
+                            >
+                              <Info className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDomain(item._id)}
+                              className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 transition-all duration-200 rounded-lg border border-transparent hover:border-rose-200"
+                              aria-label="Delete domain"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -381,6 +368,68 @@ export function CustomDomain() {
             )}
           </div>
         </div>
+        
+        {/* Domain Specific DNS Instructions Modal/Overlay */}
+        {showInstructions && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-amber-50/30">
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-amber-600" />
+                  DNS Instructions for {domains.find(d => d._id === showInstructions)?.domainName}
+                </h3>
+                <button 
+                  onClick={() => setShowInstructions(null)}
+                  className="p-2 hover:bg-amber-100 rounded-full transition-colors text-amber-600"
+                >
+                  <Plus className="w-5 h-5 rotate-45" />
+                </button>
+              </div>
+              <div className="p-8 space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-amber-100 flex items-center justify-center text-amber-700 text-xs">1</div>
+                      Root Domain
+                    </h4>
+                    <p className="text-sm text-slate-500">Add an A record to your domain registrar's DNS settings.</p>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono text-sm space-y-2">
+                      <div className="flex justify-between"><span className="text-slate-400">Type:</span> <span className="font-bold">A</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Name:</span> <span className="font-bold">@</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Value:</span> <span className="font-bold">76.76.21.21</span></div>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-amber-100 flex items-center justify-center text-amber-700 text-xs">2</div>
+                      WWW Subdomain
+                    </h4>
+                    <p className="text-sm text-slate-500">Add a CNAME record to point your www traffic to Vercel.</p>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono text-sm space-y-2">
+                      <div className="flex justify-between"><span className="text-slate-400">Type:</span> <span className="font-bold">CNAME</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Name:</span> <span className="font-bold">www</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Value:</span> <span className="font-bold">cname.vercel-dns.com</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex gap-3">
+                  <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-800">
+                    DNS changes can take up to 48 hours to propagate globally, but usually happen within minutes. Once updated, click "Refresh Status" in the domain list.
+                  </p>
+                </div>
+              </div>
+              <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+                <button 
+                  onClick={() => setShowInstructions(null)}
+                  className="px-6 py-2.5 rounded-xl font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -14,7 +14,7 @@ const {
   updateClientTrial
 } = require("../controllers/superadminController");
 
-router.post("/impersonate/:adminId", protect, allowRoles("super_admin"), impersonateAdmin);
+router.post("/impersonate/:adminId", protect, allowRoles("super_admin", "admin"), impersonateAdmin);
 router.post("/impersonate/stop", protect, requireImpersonationToken, stopImpersonation);
 
 // Overview
